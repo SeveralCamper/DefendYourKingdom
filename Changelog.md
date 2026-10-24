@@ -16,3 +16,7 @@
 **Changed**
 - "Бэклог вынесен из PRD" - Задачи перенесены из `docs/prd_architecture.md` в `docs/mvp_task_plan.md`; архитектурные решения PRD отмечены как требующие проверки.
 - "Видение MVP связано с планом" - В `docs/mvp_vision.md` добавлена ссылка на план задач.
+
+**0.0.4.0**
+**Added**
+- "Коммит e92788e (Task-003)" - Добавлен каркас UE5-проекта: `.uproject`, `Config`, `Source` и `.vsconfig`; `.gitignore` исключает генерируемые каталоги и неиспользуемый Starter Content.
