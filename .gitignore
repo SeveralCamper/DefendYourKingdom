@@ -1,0 +1,22 @@
+# Unreal Engine generated files and local caches
+**/Binaries/
+**/DerivedDataCache/
+**/Intermediate/
+**/Saved/
+**/.vs/
+
+# Generated IDE project files
+*.sln
+*.suo
+*.user
+*.VC.db
+*.VC.VC.opendb
+*.sdf
+*.opensdf
+
+# Per-user Unreal Editor content
+**/Content/Developers/
+**/Content/Collections/
+
+# Optional template pack; the game has no references to Starter Content
+/DefendYourKingdom/Content/StarterContent/
