@@ -2,7 +2,15 @@
 
 #include "DYKCityGameMode.h"
 
+#include "../Core/Interaction/DYKSelectionPlayerController.h"
+#include "../Core/Interaction/DYKStrategyCameraPawn.h"
 #include "../Saving/DYKSaveSubsystem.h"
+
+ADYKCityGameMode::ADYKCityGameMode()
+{
+	PlayerControllerClass = ADYKSelectionPlayerController::StaticClass();
+	DefaultPawnClass = ADYKStrategyCameraPawn::StaticClass();
+}
 
 void ADYKCityGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
