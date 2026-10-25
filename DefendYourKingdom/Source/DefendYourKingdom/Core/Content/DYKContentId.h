@@ -26,11 +26,11 @@ struct DEFENDYOURKINGDOM_API FDYKContentId
 {
 	GENERATED_BODY()
 
-	UPROPERTY()
+	UPROPERTY(SaveGame)
 	EDYKContentKind Kind = EDYKContentKind::None;
 
 	// Treat Kind and Name as persistent identifiers; don't rename or reuse assigned values.
-	UPROPERTY()
+	UPROPERTY(SaveGame)
 	FName Name = NAME_None;
 
 	bool IsValid() const;
