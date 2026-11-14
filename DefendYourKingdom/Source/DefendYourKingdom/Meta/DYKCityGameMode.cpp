@@ -2,9 +2,10 @@
 
 #include "DYKCityGameMode.h"
 
+#include "../DefendYourKingdom.h"
+#include "../Core/DYKGameInstance.h"
 #include "../Core/Interaction/DYKSelectionPlayerController.h"
 #include "../Core/Interaction/DYKStrategyCameraPawn.h"
-#include "../Saving/DYKSaveSubsystem.h"
 
 ADYKCityGameMode::ADYKCityGameMode()
 {
@@ -16,30 +17,41 @@ void ADYKCityGameMode::InitGame(const FString& MapName, const FString& Options, 
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
 
-	UGameInstance* GameInstance = GetGameInstance();
-	if (!GameInstance)
+	StartupError = ErrorMessage;
+	const UDYKGameInstance* Session = Cast<UDYKGameInstance>(GetGameInstance());
+	if (StartupError.IsEmpty() && !Session)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Citadel started without a game instance; local profile is unavailable."));
+		StartupError = TEXT("The city requires DYKGameInstance.");
+	}
+	if (StartupError.IsEmpty())
+	{
+		Session->IsLocalSessionReady(StartupError);
+	}
+	ErrorMessage = StartupError;
+	if (!StartupError.IsEmpty())
+	{
+		// The local controller otherwise creates a freely moving spectator camera.
+		SpectatorClass = nullptr;
+		UE_LOG(LogDYK, Error, TEXT("City startup blocked: %s"), *StartupError);
+	}
+}
+
+void ADYKCityGameMode::RestartPlayer(AController* NewPlayer)
+{
+	if (!StartupError.IsEmpty())
+	{
 		return;
 	}
+	Super::RestartPlayer(NewPlayer);
+}
 
-	const UDYKSaveSubsystem* SaveSubsystem = GameInstance->GetSubsystem<UDYKSaveSubsystem>();
-	if (!SaveSubsystem)
+void ADYKCityGameMode::StartPlay()
+{
+	// UE does not abort world startup on InitGame's ErrorMessage alone.
+	if (!StartupError.IsEmpty())
 	{
-		UE_LOG(LogTemp, Error, TEXT("Citadel started without the local profile subsystem."));
 		return;
 	}
-
-	switch (SaveSubsystem->GetLoadStatus())
-	{
-	case EDYKProfileLoadStatus::Loaded:
-		UE_LOG(LogTemp, Log, TEXT("Citadel started with the existing local profile."));
-		break;
-	case EDYKProfileLoadStatus::Created:
-		UE_LOG(LogTemp, Log, TEXT("Citadel started with a newly created local profile."));
-		break;
-	default:
-		UE_LOG(LogTemp, Error, TEXT("Citadel started without a usable local profile: %s"), *SaveSubsystem->GetLoadError());
-		break;
-	}
+	Super::StartPlay();
+	UE_LOG(LogDYK, Log, TEXT("City started with a ready local session."));
 }

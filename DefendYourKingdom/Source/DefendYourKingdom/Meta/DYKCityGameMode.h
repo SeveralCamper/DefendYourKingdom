@@ -14,4 +14,9 @@ class DEFENDYOURKINGDOM_API ADYKCityGameMode : public AGameModeBase
 public:
 	ADYKCityGameMode();
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
+	virtual void RestartPlayer(AController* NewPlayer) override;
+	virtual void StartPlay() override;
+
+private:
+	FString StartupError;
 };
