@@ -126,6 +126,24 @@ struct DEFENDYOURKINGDOM_API FDYKCurrentMissionSaveData
 };
 
 USTRUCT()
+struct DEFENDYOURKINGDOM_API FDYKMissionCompletionSaveData
+{
+	GENERATED_BODY()
+	UPROPERTY(SaveGame) FDYKContentId CampaignId;
+	UPROPERTY(SaveGame) FDYKContentId MissionId;
+};
+
+USTRUCT()
+struct DEFENDYOURKINGDOM_API FDYKMissionRewardSaveData
+{
+	GENERATED_BODY()
+	// A retained receipt is the issued flag, even when Remaining is empty.
+	UPROPERTY(SaveGame) FName RewardId;
+	UPROPERTY(SaveGame) FDYKContentId CampaignId;
+	UPROPERTY(SaveGame) TArray<FDYKResourceSaveData> Remaining;
+};
+
+USTRUCT()
 struct DEFENDYOURKINGDOM_API FDYKPlayerProfileSaveData
 {
 	GENERATED_BODY()
@@ -163,6 +181,10 @@ struct DEFENDYOURKINGDOM_API FDYKPlayerProfileSaveData
 
 	UPROPERTY(SaveGame)
 	FDYKCitySaveData CityEconomy;
+
+	// Additive schema-1 fields; older local snapshots default to empty ledgers.
+	UPROPERTY(SaveGame) TArray<FDYKMissionCompletionSaveData> MissionCompletions;
+	UPROPERTY(SaveGame) TArray<FDYKMissionRewardSaveData> MissionRewards;
 };
 
 UCLASS()

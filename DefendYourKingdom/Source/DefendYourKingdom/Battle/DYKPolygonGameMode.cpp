@@ -5,6 +5,9 @@
 #include "DYKDefenderActor.h"
 #include "DYKUnitSlot.h"
 #include "DYKPlacementWidget.h"
+#include "../Core/DYKGameInstance.h"
+#include "../Meta/DYKMissionRewards.h"
+#include "../Saving/DYKSaveSubsystem.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -52,11 +55,44 @@ void ADYKPolygonGameMode::InitGame(const FString& MapName, const FString& Option
 	BattleSession.OnFinished.AddLambda([this](const FDYKBattleResult& Result)
 	{
 		StopEnemies();
+		SettleMissionResult();
 		UE_LOG(LogDYK, Log, TEXT("Battle finished once: attempt=%s outcome=%d waves=%d kills=%d activeSeconds=%.3f"),
 			*Result.AttemptId.ToString(), static_cast<int32>(Result.Outcome), Result.CompletedWaves,
 			Result.EnemiesKilled, Result.ActiveSeconds);
 	});
 	UE_LOG(LogDYK, Log, TEXT("Polygon battle ready in initial preparation (DEV_PLACEHOLDER mission data)."));
+}
+
+bool ADYKPolygonGameMode::SettleMissionResult()
+{
+	if (bMissionResultSaved) return true;
+	const auto* Result = BattleSession.GetResult();
+	if (!Result) return false;
+	MissionResultError.Reset();
+	if (Result->Outcome != EDYKBattlePhase::Victory)
+	{
+		bMissionResultSaved = true;
+		return true;
+	}
+	auto* Save = GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
+	bMissionResultSaved = Save && DYKMissionRewards::Settle(*Save, *Result, DYKMissionRewards::PolygonDEV_PLACEHOLDER());
+	if (!bMissionResultSaved) MissionResultError = TEXT("Не удалось сохранить награду. Повторите возврат в город.");
+	return bMissionResultSaved;
+}
+
+bool ADYKPolygonGameMode::ReturnToCity(FString& OutError)
+{
+	OutError.Reset();
+	const auto* Result = BattleSession.GetResult();
+	if (!Result || (Result->Outcome != EDYKBattlePhase::Victory && Result->Outcome != EDYKBattlePhase::Defeat))
+	{
+		OutError = TEXT("Возврат из результата доступен после победы или поражения.");
+		return false;
+	}
+	if (!SettleMissionResult()) { OutError = MissionResultError; return false; }
+	auto* Session = GetGameInstance<UDYKGameInstance>();
+	if (!Session) { OutError = TEXT("Локальная сессия недоступна."); return false; }
+	return Session->RequestLevelTravel(EDYKLocalLevel::City, OutError);
 }
 
 void ADYKPolygonGameMode::StartPlay()

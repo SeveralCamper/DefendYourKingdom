@@ -19,11 +19,13 @@ public:
 	UFUNCTION() void SellClicked();
 	UFUNCTION() void ResurrectClicked();
 	UFUNCTION() void StartClicked();
+	UFUNCTION() void ReturnClicked();
 	UFUNCTION() void Refresh();
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UButton> PlaceButton;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UButton> SellButton;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UButton> ResurrectButton;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UButton> StartButton;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UButton> ReturnButton;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UTextBlock> StatusText;
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -34,4 +36,5 @@ private:
 	TWeakObjectPtr<ADYKUnitSlot> SelectedSlot;
 	FGuid DisplayedPreparation;
 	FTimerHandle RefreshTimer;
+	FString ReturnError;
 };

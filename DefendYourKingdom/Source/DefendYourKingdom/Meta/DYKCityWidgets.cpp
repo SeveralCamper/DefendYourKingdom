@@ -1,5 +1,6 @@
 #include "DYKCityWidgets.h"
 #include "DYKCityEconomy.h"
+#include "DYKMissionRewards.h"
 #include "../Saving/DYKSaveSubsystem.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -100,9 +101,20 @@ TSharedRef<SWidget> UDYKCityResourceWidget::RebuildWidget()
 		CanvasSlot->SetPosition(FVector2D(0.f, 16.f));
 		CanvasSlot->SetAutoSize(true);
 		ResourceText = WidgetTree->ConstructWidget<UTextBlock>();
-		Border->AddChild(ResourceText);
+		auto* Panel = WidgetTree->ConstructWidget<UVerticalBox>();
+		Border->AddChild(Panel);
+		Panel->AddChild(ResourceText);
+		RewardText = WidgetTree->ConstructWidget<UTextBlock>();
+		RewardText->SetJustification(ETextJustify::Center);
+		Panel->AddChild(RewardText);
+		CollectRewardsButton = WidgetTree->ConstructWidget<UButton>();
+		auto* RewardLabel = WidgetTree->ConstructWidget<UTextBlock>();
+		RewardLabel->SetText(FText::FromString(TEXT("Собрать награды — полигон")));
+		RewardLabel->SetJustification(ETextJustify::Center);
+		CollectRewardsButton->AddChild(RewardLabel);
+		CollectRewardsButton->OnClicked.AddDynamic(this, &ThisClass::CollectRewardsClicked);
+		Panel->AddChild(CollectRewardsButton);
 		Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		Border->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 	return Super::RebuildWidget();
 }
@@ -133,4 +145,32 @@ void UDYKCityResourceWidget::Refresh()
 		}
 	}
 	ResourceText->SetText(FText::FromString(Text));
+	const auto Campaign = DYKMissionRewards::PolygonDEV_PLACEHOLDER().Campaign;
+	bool Pending = false;
+	FString Remaining;
+	for (const auto& Receipt : P->MissionRewards)
+	{
+		if (Receipt.CampaignId != Campaign.ToContentId()) continue;
+		for (const auto& Row : Receipt.Remaining)
+		{
+			Pending = true;
+			const auto Id = FDYKResourceId::FromContentId(Row.ResourceId);
+			if (!Id) continue;
+			Remaining += FString::Printf(TEXT(" %s: %lld"), DYKCityCatalog::ResourceName(Id.GetValue()), Row.Amount);
+		}
+	}
+	CollectRewardsButton->SetVisibility(Pending ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	CollectRewardsButton->SetIsEnabled(DYKMissionRewards::HasCollectable(*P, Campaign));
+	RewardText->SetText(FText::FromString(bRewardSaveFailed ? TEXT("Не удалось сохранить. Повторите сбор награды.")
+		: Pending ? TEXT("Ожидает места на складе:") + Remaining : FString()));
+}
+
+void UDYKCityResourceWidget::CollectRewardsClicked()
+{
+	auto* Save = GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
+	if (!Save) return;
+	if (!RewardCommand.IsValid()) RewardCommand = FGuid::NewGuid();
+	bRewardSaveFailed = !DYKMissionRewards::Collect(*Save, RewardCommand, DYKMissionRewards::PolygonDEV_PLACEHOLDER().Campaign);
+	if (!bRewardSaveFailed) RewardCommand.Invalidate();
+	Refresh();
 }

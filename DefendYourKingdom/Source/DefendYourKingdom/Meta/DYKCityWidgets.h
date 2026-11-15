@@ -37,11 +37,16 @@ class DEFENDYOURKINGDOM_API UDYKCityResourceWidget : public UUserWidget
 	GENERATED_BODY()
 public:
 	UFUNCTION() void Refresh();
+	UFUNCTION() void CollectRewardsClicked();
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UTextBlock> ResourceText;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UButton> CollectRewardsButton;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UTextBlock> RewardText;
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 private:
 	FTimerHandle RefreshTimer;
+	FGuid RewardCommand;
+	bool bRewardSaveFailed = false;
 };

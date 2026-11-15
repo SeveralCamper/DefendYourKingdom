@@ -27,6 +27,10 @@ public:
 	bool SellDefender(ADYKUnitSlot* Slot, const FGuid& PreparationToken);
 	void RegisterCombatUnit(ADYKCombatUnit* Unit);
 	void MarkCombatTargetsDirty() { bCombatTargetsDirty = true; }
+	bool SettleMissionResult();
+	bool ReturnToCity(FString& OutError);
+	bool IsMissionResultSaved() const { return bMissionResultSaved; }
+	const FString& GetMissionResultError() const { return MissionResultError; }
 
 private:
 	void QueueWaveResolution(const FGuid& WaveToken);
@@ -42,4 +46,6 @@ private:
 	bool bCombatTargetsDirty = false;
 	TArray<TWeakObjectPtr<ADYKCombatUnit>> CombatUnits;
 	FDelegateHandle CombatStepHandle;
+	bool bMissionResultSaved = false;
+	FString MissionResultError;
 };

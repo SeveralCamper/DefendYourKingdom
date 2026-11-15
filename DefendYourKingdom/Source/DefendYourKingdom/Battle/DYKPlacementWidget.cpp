@@ -2,6 +2,7 @@
 #include "DYKPolygonGameMode.h"
 #include "DYKUnitSlot.h"
 #include "DYKDefenderActor.h"
+#include "../Core/DYKGameInstance.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "../Core/Interaction/DYKSelectionPlayerController.h"
 #include "Blueprint/WidgetTree.h"
@@ -52,10 +53,12 @@ TSharedRef<SWidget> UDYKPlacementWidget::RebuildWidget()
 		SellButton = Button(TEXT("Продать"));
 		ResurrectButton = Button(TEXT("Воскресить"));
 		StartButton = Button(TEXT("Начать волну"));
+		ReturnButton = Button(TEXT("В город"));
 		PlaceButton->OnClicked.AddDynamic(this, &ThisClass::PlaceClicked);
 		SellButton->OnClicked.AddDynamic(this, &ThisClass::SellClicked);
 		ResurrectButton->OnClicked.AddDynamic(this, &ThisClass::ResurrectClicked);
 		StartButton->OnClicked.AddDynamic(this, &ThisClass::StartClicked);
+		ReturnButton->OnClicked.AddDynamic(this, &ThisClass::ReturnClicked);
 	}
 	return Super::RebuildWidget();
 }
@@ -99,6 +102,18 @@ void UDYKPlacementWidget::Refresh()
 	SellButton->SetIsEnabled(bPreparation && Placement && Placement->bPlayerEditable && Unit);
 	ResurrectButton->SetIsEnabled(Unit && Unit->CanResurrect());
 	StartButton->SetIsEnabled(Battle.CanStartWave() && !UGameplayStatics::IsGamePaused(this));
+	const auto* Result = Battle.GetResult();
+	ReturnButton->SetVisibility(Result && Result->Outcome != EDYKBattlePhase::Aborted ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	const auto* Local = GetGameInstance<UDYKGameInstance>();
+	ReturnButton->SetIsEnabled(Local && !Local->IsLevelTravelPending());
+	if (Result)
+	{
+		const TCHAR* Outcome = Result->Outcome == EDYKBattlePhase::Victory ? TEXT("Победа") : Result->Outcome == EDYKBattlePhase::Defeat ? TEXT("Поражение") : TEXT("Миссия прервана");
+		const FString Error = !ReturnError.IsEmpty() ? ReturnError : GameMode->GetMissionResultError();
+		StatusText->SetText(FText::FromString(FString::Printf(TEXT("%s · Время: %.1f с · Убито: %d%s%s"),
+			Outcome, Result->ActiveSeconds, Result->EnemiesKilled, Error.IsEmpty() ? TEXT("") : TEXT("\n"), *Error)));
+		return;
+	}
 	const TCHAR* Phase = Battle.IsPreparation() ? TEXT("Подготовка") : Battle.IsTerminal() ? TEXT("Бой завершён") : TEXT("Волна идёт");
 	const FString Selection = Unit ? FString::Printf(TEXT("%s · HP %d / %d"), *Placement->SlotId.ToString(), Unit->GetHP(), Unit->GetUnitDefinition()->Base.MaxHP.Value)
 		: Placement ? Placement->SlotId.ToString() : TEXT("Выберите круглую площадку");
@@ -124,5 +139,11 @@ void UDYKPlacementWidget::StartClicked()
 {
 	if (!UGameplayStatics::IsGamePaused(this))
 		if (auto* GameMode = GetWorld()->GetAuthGameMode<ADYKPolygonGameMode>()) GameMode->GetBattleSession().StartWave(DisplayedPreparation, GetWorld()->GetTimeSeconds());
+	Refresh();
+}
+
+void UDYKPlacementWidget::ReturnClicked()
+{
+	if (auto* Mode = GetWorld()->GetAuthGameMode<ADYKPolygonGameMode>()) Mode->ReturnToCity(ReturnError);
 	Refresh();
 }

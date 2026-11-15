@@ -1,4 +1,5 @@
 #include "DYKGameInstance.h"
+#include "../Battle/DYKPolygonGameMode.h"
 
 #include "../DefendYourKingdom.h"
 #include "../Saving/DYKOfflineClockSubsystem.h"
@@ -84,6 +85,14 @@ bool UDYKGameInstance::RequestLevelTravel(const EDYKLocalLevel Destination, FStr
 	if (!FPackageName::DoesPackageExist(Package.ToString()))
 	{
 		OutError = TEXT("The requested local map package is missing.");
+		return false;
+	}
+	// Preserve a terminal victory before any caller unloads its world. Failed IO
+	// leaves the result available for retry instead of silently discarding it.
+	if (auto* Battle = World->GetAuthGameMode<ADYKPolygonGameMode>(); Battle &&
+		Battle->GetBattleSession().GetResult() && !Battle->SettleMissionResult())
+	{
+		OutError = Battle->GetMissionResultError();
 		return false;
 	}
 	bLevelTravelPending = true;
