@@ -69,7 +69,28 @@ bool FDYKBattleSession::AddDefense(const FGuid& DefenseId)
 
 bool FDYKBattleSession::RemoveDefense(const FGuid& DefenseId)
 {
-	return !bDispatching && IsPreparation() && Defenses.Remove(DefenseId) > 0;
+	return !bDispatching && IsPreparation() && !PurchasedDefenses.Contains(DefenseId) && Defenses.Remove(DefenseId) > 0;
+}
+
+bool FDYKBattleSession::PurchaseDefense(const FGuid& DefenseId, int32 Cost, const FGuid& PreparationToken)
+{
+	if (bDispatching || !IsPreparation() || PreparationToken != PreparationId || Cost < 0 || Supplies < Cost ||
+		!DefenseId.IsValid() || Defenses.Contains(DefenseId)) return false;
+	Defenses.Add(DefenseId);
+	PurchasedDefenses.Add(DefenseId, Cost);
+	Supplies -= Cost;
+	return true;
+}
+
+bool FDYKBattleSession::SellDefense(const FGuid& DefenseId, const FGuid& PreparationToken)
+{
+	const int32* Cost = PurchasedDefenses.Find(DefenseId);
+	if (bDispatching || !IsPreparation() || PreparationToken != PreparationId || !Cost ||
+		!Defenses.Contains(DefenseId) || int64(Supplies) + *Cost > MAX_int32) return false;
+	Supplies += *Cost;
+	PurchasedDefenses.Remove(DefenseId);
+	Defenses.Remove(DefenseId);
+	return true;
 }
 
 bool FDYKBattleSession::CanStartWave() const

@@ -1,6 +1,7 @@
 #include "DYKEnemyActor.h"
 #include "DYKEnemyRoute.h"
 #include "DYKPolygonGameMode.h"
+#include "DYKCombatRules.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "Components/SplineComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -11,8 +12,6 @@
 
 namespace
 {
-	// World scale is replaceable DEV_PLACEHOLDER; passport speed remains 10.
-	constexpr float RouteCentimetersPerUnitDEV_PLACEHOLDER = 30.f;
 	const FDYKUnitBaseStats& GoblinStats() { return DYKUnitCatalog::Find(DYKUnitIds::Goblin())->Base; }
 }
 
@@ -36,10 +35,10 @@ bool ADYKEnemyActor::Initialize(ADYKPolygonGameMode* OwnerMode, ADYKEnemyRoute* 
 		OwnerMode->GetBattleSession().GetProtectedObjectHP(AssignedRoute->ProtectedObjectId) <= 0) return false;
 	const FGuid NewId = FGuid::NewGuid();
 	if (!OwnerMode->GetBattleSession().RegisterEnemy(Token, Group, NewId)) return false;
-	Mode = OwnerMode; Route = AssignedRoute; WaveToken = Token; EnemyId = NewId;
+	Route = AssignedRoute; WaveToken = Token; EnemyId = NewId;
 	ObjectiveId = AssignedRoute->ProtectedObjectId;
-	HP = GoblinStats().MaxHP.Value;
 	bRegistered = true;
+	InitializeCombat(OwnerMode, DYKUnitCatalog::Find(DYKUnitIds::Goblin()));
 	SetActorLocation(AssignedRoute->Path->GetLocationAtDistanceAlongSpline(0, ESplineCoordinateSpace::World));
 	SetActorRotation(AssignedRoute->Path->GetRotationAtDistanceAlongSpline(0, ESplineCoordinateSpace::World));
 	SetActorTickEnabled(true);
@@ -48,13 +47,14 @@ bool ADYKEnemyActor::Initialize(ADYKPolygonGameMode* OwnerMode, ADYKEnemyRoute* 
 
 bool ADYKEnemyActor::CanAct() const
 {
-	return bRegistered && HP > 0 && Mode.IsValid() && Mode->GetBattleSession().IsEnemyActive(WaveToken, EnemyId);
+	return bRegistered && Super::CanAct() && Mode->GetBattleSession().IsEnemyActive(WaveToken, EnemyId);
 }
 
 void ADYKEnemyActor::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	if (!CanAct()) { StopCombat(); return; }
+	if (GetCurrentTarget()) return;
 	if (!Route.IsValid() || !Route->IsUsable())
 	{
 		Mode->GetBattleSession().Abort(GetWorld()->GetTimeSeconds());
@@ -63,44 +63,45 @@ void ADYKEnemyActor::Tick(float DeltaSeconds)
 	if (!FMath::IsFinite(DeltaSeconds) || DeltaSeconds <= 0) return;
 	const auto* Path = Route->Path.Get();
 	const float Length = Path->GetSplineLength();
-	Distance = FMath::Min(Length, Distance + GoblinStats().MovementSpeed.Value * RouteCentimetersPerUnitDEV_PLACEHOLDER * DeltaSeconds);
+	Distance = FMath::Min(Length, Distance + GoblinStats().MovementSpeed.Value * DYKCombatRules::CentimetersPerUnitDEV_PLACEHOLDER * DeltaSeconds);
 	SetActorLocation(Path->GetLocationAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::World));
 	SetActorRotation(Path->GetRotationAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::World));
+	Mode->MarkCombatTargetsDirty();
 	if (Distance >= Length)
 	{
 		bAtObjective = true;
 		SetActorTickEnabled(false); // Only moving actors tick; stationary attacks use game-time timers.
-		const auto& Attack = GoblinStats().Attack;
-		GetWorldTimerManager().SetTimer(AttackTimer, this, &ThisClass::HitObjective,
-			Attack.IntervalSeconds.Value, true, Attack.FirstHitDelaySeconds.Value);
 	}
 }
 
-void ADYKEnemyActor::HitObjective()
+bool ADYKEnemyActor::HasFallbackTarget() const
 {
-	if (!CanAct() || Mode->GetBattleSession().GetProtectedObjectHP(ObjectiveId) <= 0) { StopCombat(); return; }
+	return bAtObjective && Mode.IsValid() && Mode->GetBattleSession().GetProtectedObjectHP(ObjectiveId) > 0;
+}
+
+void ADYKEnemyActor::HitFallbackTarget()
+{
+	if (!HasFallbackTarget()) return;
 	Mode->GetBattleSession().DamageProtectedObject(WaveToken, ObjectiveId, GoblinStats().Attack.DamagePerHit.Value, GetWorld()->GetTimeSeconds());
 	if (!CanAct()) StopCombat();
 }
 
-bool ADYKEnemyActor::ApplyDamage(int32 Damage)
+void ADYKEnemyActor::OnDeath()
 {
-	if (!CanAct() || Damage <= 0) return false;
-	HP = FMath::Max(0, HP - Damage);
-	if (HP == 0)
-	{
-		StopCombat();
-		bRegistered = false; // Commit death before notifications or Actor teardown.
-		Mode->GetBattleSession().RemoveEnemy(WaveToken, EnemyId, true);
-		Destroy();
-	}
-	return true;
+	bRegistered = false; // Commit death before notifications or Actor teardown.
+	Mode->GetBattleSession().RemoveEnemy(WaveToken, EnemyId, true);
+	Destroy();
+}
+
+void ADYKEnemyActor::OnTargetsUpdated()
+{
+	SetActorTickEnabled(CanAct() && !bAtObjective && !GetCurrentTarget());
 }
 
 void ADYKEnemyActor::StopCombat()
 {
 	SetActorTickEnabled(false);
-	GetWorldTimerManager().ClearTimer(AttackTimer);
+	Super::StopCombat();
 }
 
 void ADYKEnemyActor::EndPlay(const EEndPlayReason::Type Reason)

@@ -1,6 +1,12 @@
 #include "DYKPolygonGameMode.h"
 #include "DYKEnemyActor.h"
 #include "DYKEnemyRoute.h"
+#include "DYKCombatUnit.h"
+#include "DYKDefenderActor.h"
+#include "DYKUnitSlot.h"
+#include "DYKPlacementWidget.h"
+#include "../Core/Content/DYKUnitCatalog.h"
+#include "Kismet/GameplayStatics.h"
 
 #include "../DefendYourKingdom.h"
 #include "Engine/World.h"
@@ -37,6 +43,8 @@ void ADYKPolygonGameMode::InitGame(const FString& MapName, const FString& Option
 	}
 	BattleSession.OnResolutionRequested.AddUObject(this, &ThisClass::QueueWaveResolution);
 	BattleSession.OnWaveStarted.AddUObject(this, &ThisClass::QueueEmission);
+	BattleSession.OnWaveCompleted.AddUObject(this, &ThisClass::RestoreDefenders);
+	CombatStepHandle = FWorldDelegates::OnWorldPostActorTick.AddUObject(this, &ThisClass::RefreshCombatTargets);
 	BattleSession.OnWaveStarted.AddLambda([](const FGuid& Token)
 	{
 		UE_LOG(LogDYK, Log, TEXT("Battle wave started: %s"), *Token.ToString());
@@ -49,6 +57,78 @@ void ADYKPolygonGameMode::InitGame(const FString& MapName, const FString& Option
 			Result.EnemiesKilled, Result.ActiveSeconds);
 	});
 	UE_LOG(LogDYK, Log, TEXT("Polygon battle ready in initial preparation (DEV_PLACEHOLDER mission data)."));
+}
+
+void ADYKPolygonGameMode::StartPlay()
+{
+	Super::StartPlay();
+	if (!StartupError.IsEmpty()) return;
+	if (auto* PC = GetWorld()->GetFirstPlayerController(); PC && PC->IsLocalController())
+		if (auto* Controls = CreateWidget<UDYKPlacementWidget>(PC, UDYKPlacementWidget::StaticClass())) Controls->AddToViewport();
+}
+
+bool ADYKPolygonGameMode::IsEditableSlot(const ADYKUnitSlot* Slot) const
+{
+	if (!IsValid(Slot) || Slot->IsActorBeingDestroyed() || Slot->GetWorld() != GetWorld() ||
+		!Slot->bPlayerEditable || Slot->SlotId.IsNone()) return false;
+	// Duplicate authored identifiers are invalid rather than selecting an arbitrary slot.
+	for (TActorIterator<ADYKUnitSlot> It(GetWorld()); It; ++It)
+		if (*It != Slot && It->SlotId == Slot->SlotId) return false;
+	return true;
+}
+
+ADYKDefenderActor* ADYKPolygonGameMode::PlaceDefender(ADYKUnitSlot* Slot, const FGuid& PreparationToken)
+{
+	if (!IsEditableSlot(Slot) || Slot->GetOccupant() || !BattleSession.IsPreparation() ||
+		PreparationToken != BattleSession.GetPreparationToken() || UGameplayStatics::IsGamePaused(this)) return nullptr;
+	const int32 Cost = DYKUnitCatalog::Find(DYKUnitIds::Peasant())->Base.PlacementSupplies.Value;
+	if (BattleSession.GetSupplies() < Cost) return nullptr;
+	auto* Unit = GetWorld()->SpawnActor<ADYKDefenderActor>(Slot->GetActorLocation(), Slot->GetActorRotation());
+	if (!Unit) return nullptr;
+	const FGuid Id = FGuid::NewGuid();
+	if (!BattleSession.PurchaseDefense(Id, Cost, PreparationToken)) { Unit->Destroy(); return nullptr; }
+	Unit->Initialize(this, Id);
+	Slot->Occupant = Unit;
+	Slot->UpdateMarker();
+	return Unit;
+}
+
+bool ADYKPolygonGameMode::SellDefender(ADYKUnitSlot* Slot, const FGuid& PreparationToken)
+{
+	if (!IsEditableSlot(Slot) || !IsValid(Slot->GetOccupant()) || UGameplayStatics::IsGamePaused(this) ||
+		!BattleSession.SellDefense(Slot->GetOccupant()->GetDefenseId(), PreparationToken)) return false;
+	auto* Unit = Slot->GetOccupant();
+	Slot->Occupant = nullptr;
+	Slot->UpdateMarker();
+	Unit->StopCombat();
+	Unit->Destroy();
+	MarkCombatTargetsDirty();
+	return true;
+}
+
+void ADYKPolygonGameMode::RegisterCombatUnit(ADYKCombatUnit* Unit)
+{
+	if (IsValid(Unit) && Unit->GetWorld() == GetWorld()) CombatUnits.AddUnique(Unit);
+	MarkCombatTargetsDirty();
+}
+
+void ADYKPolygonGameMode::RefreshCombatTargets(UWorld* World, ELevelTick TickType, float DeltaSeconds)
+{
+	if (World != GetWorld() || !bCombatTargetsDirty || UGameplayStatics::IsGamePaused(this)) return;
+	bCombatTargetsDirty = false;
+	CombatUnits.RemoveAll([](const auto& Unit) { return !Unit.IsValid() || Unit->IsActorBeingDestroyed(); });
+	TArray<ADYKCombatUnit*> Candidates;
+	for (const auto& Unit : CombatUnits) if (Unit->IsAlive()) Candidates.Add(Unit.Get());
+	// Movement/spawn/death/revival mark the registry dirty. Sample once after the game
+	// step, so simultaneous entrants share a stable registration-order tie-break.
+	for (const auto& Unit : CombatUnits) Unit->RefreshTargets(Candidates);
+}
+
+void ADYKPolygonGameMode::RestoreDefenders(int32 WaveNumber)
+{
+	for (const auto& Unit : CombatUnits)
+		if (auto* Defender = Cast<ADYKDefenderActor>(Unit.Get())) Defender->RestoreAfterWave();
+	MarkCombatTargetsDirty();
 }
 
 ADYKEnemyActor* ADYKPolygonGameMode::SpawnEnemy(ADYKEnemyRoute* Route, const FGuid& WaveToken, FName Group)
@@ -66,6 +146,7 @@ ADYKEnemyActor* ADYKPolygonGameMode::SpawnEnemy(ADYKEnemyRoute* Route, const FGu
 void ADYKPolygonGameMode::QueueEmission(const FGuid& WaveToken)
 {
 	EmittedEnemies = 0;
+	MarkCombatTargetsDirty();
 	// Session notifications reject reentrant commands. Release only after dispatch returns.
 	EmissionTimer = GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this, WaveToken]() { EmitEnemy(WaveToken); }));
 }
@@ -100,7 +181,7 @@ void ADYKPolygonGameMode::EmitEnemy(const FGuid& WaveToken)
 void ADYKPolygonGameMode::StopEnemies()
 {
 	GetWorldTimerManager().ClearTimer(EmissionTimer);
-	for (TActorIterator<ADYKEnemyActor> It(GetWorld()); It; ++It) It->StopCombat();
+	for (const auto& Unit : CombatUnits) if (Unit.IsValid()) Unit->StopCombat();
 }
 
 void ADYKPolygonGameMode::QueueWaveResolution(const FGuid& WaveToken)
@@ -121,9 +202,12 @@ void ADYKPolygonGameMode::QueueWaveResolution(const FGuid& WaveToken)
 
 void ADYKPolygonGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	FWorldDelegates::OnWorldPostActorTick.Remove(CombatStepHandle);
 	GetWorldTimerManager().ClearTimer(ResolutionTimer);
 	StopEnemies();
 	BattleSession.Abort(GetWorld()->GetTimeSeconds());
 	BattleSession.OnResolutionRequested.RemoveAll(this);
+	BattleSession.OnWaveCompleted.RemoveAll(this);
+	BattleSession.OnWaveStarted.RemoveAll(this);
 	Super::EndPlay(EndPlayReason);
 }

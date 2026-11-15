@@ -50,6 +50,8 @@ public:
 	bool Initialize(const FDYKBattleDefinition& Definition, FString& OutError);
 	bool AddDefense(const FGuid& DefenseId);
 	bool RemoveDefense(const FGuid& DefenseId);
+	bool PurchaseDefense(const FGuid& DefenseId, int32 Cost, const FGuid& PreparationToken);
+	bool SellDefense(const FGuid& DefenseId, const FGuid& PreparationToken);
 	bool CanStartWave() const;
 	// Token identifies this preparation; a queued old click cannot start a later wave.
 	bool StartWave(const FGuid& PreparationToken, double GameSeconds);
@@ -101,6 +103,7 @@ private:
 	bool bResolutionRequested = false;
 	TMap<FName, int32> ProtectedHP;
 	TSet<FGuid> Defenses, ActiveEnemies, SeenEnemies;
+	TMap<FGuid, int32> PurchasedDefenses;
 	TSet<FName> PendingGroups;
 	FDYKBattleResult Result;
 };
