@@ -5,7 +5,7 @@ namespace
 	const FDYKResourceId ResourceIds[] = {
 		FDYKResourceId(TEXT("RES-FOOD")), FDYKResourceId(TEXT("RES-WOOD")),
 		FDYKResourceId(TEXT("RES-STONE")), FDYKResourceId(TEXT("RES-GOLD"))};
-	const FDYKCityBuildingDefinition Definitions[] = {
+	const FDYKCityBuildingDefinition CityBuildingDefinitions[] = {
 		{FDYKBuildingId(TEXT("CITY-CASTLE")), TEXT("Замок"), {}, 0, 0, 0, {0, 0}},
 		// Level 1 basic storage = 12 hours, house = one cycle (approved rules).
 		{FDYKBuildingId(TEXT("CITY-SAWMILL")), TEXT("Лесопилка"), ResourceIds[1], 2, 60, 720, {-2, 0}},
@@ -15,11 +15,11 @@ namespace
 		{FDYKBuildingId(TEXT("CITY-HOUSE")), TEXT("Жилой дом"), ResourceIds[3], 1, 300, 1, {0, 2}}};
 }
 
-TConstArrayView<FDYKCityBuildingDefinition> DYKCityCatalog::Buildings() { return Definitions; }
+TConstArrayView<FDYKCityBuildingDefinition> DYKCityCatalog::Buildings() { return CityBuildingDefinitions; }
 TConstArrayView<FDYKResourceId> DYKCityCatalog::Resources() { return ResourceIds; }
 const FDYKCityBuildingDefinition* DYKCityCatalog::Find(const FDYKContentId& Id)
 {
-	for (const auto& Def : Definitions) { if (Def.Id.ToContentId() == Id) { return &Def; } }
+	for (const auto& Def : CityBuildingDefinitions) { if (Def.Id.ToContentId() == Id) { return &Def; } }
 	return nullptr;
 }
 int64 DYKCityCatalog::ResourceCapacity(FDYKResourceId Id)
