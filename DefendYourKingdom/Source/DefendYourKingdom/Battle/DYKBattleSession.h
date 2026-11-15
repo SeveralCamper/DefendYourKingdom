@@ -70,6 +70,8 @@ public:
 	int32 GetProtectedObjectHP(FName ObjectId) const;
 	int32 GetActiveEnemyCount() const { return ActiveEnemies.Num(); }
 	int32 GetPendingGroupCount() const { return PendingGroups.Num(); }
+	bool IsSpawnGroupPending(const FGuid& Token, FName Group) const { return IsActiveToken(Token) && PendingGroups.Contains(Group); }
+	bool IsEnemyActive(const FGuid& Token, const FGuid& Enemy) const { return IsActiveToken(Token) && ActiveEnemies.Contains(Enemy); }
 	const FDYKBattleResult* GetResult() const { return IsTerminal() ? &Result : nullptr; }
 	bool IsPreparation() const;
 	bool IsTerminal() const;
