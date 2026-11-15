@@ -30,7 +30,8 @@ bool UDYKGameInstance::IsLocalSessionReady(FString& OutError) const
 	}
 
 	if ((Save->GetLoadStatus() != EDYKProfileLoadStatus::Loaded
-		&& Save->GetLoadStatus() != EDYKProfileLoadStatus::Created) || !Save->GetActiveProfile())
+		&& Save->GetLoadStatus() != EDYKProfileLoadStatus::Created
+		&& Save->GetLoadStatus() != EDYKProfileLoadStatus::Recovered) || !Save->GetProfileSnapshot())
 	{
 		OutError = Save->GetLoadError().IsEmpty()
 			? TEXT("No usable local profile is available.") : Save->GetLoadError();

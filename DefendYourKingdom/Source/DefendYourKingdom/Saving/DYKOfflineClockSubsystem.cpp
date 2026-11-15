@@ -11,7 +11,7 @@ void UDYKOfflineClockSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Collection.InitializeDependency<UDYKSaveSubsystem>();
 
 	UDYKSaveSubsystem* SaveSubsystem = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
-	UDYKProfileSaveGame* Profile = SaveSubsystem->GetActiveProfile().Get();
+	const FDYKPlayerProfileSaveData* Profile = SaveSubsystem->GetProfileSnapshot();
 	if (!Profile || SaveSubsystem->GetLoadStatus() == EDYKProfileLoadStatus::CreationFailed)
 	{
 		LastError = SaveSubsystem->GetLoadError().IsEmpty()
@@ -21,7 +21,7 @@ void UDYKOfflineClockSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 
 	const int64 NowUnix = FDateTime::UtcNow().ToUnixTimestamp();
-	const int64 LastCalculationUnix = Profile->Profile.LastOfflineCalculationUnix;
+	const int64 LastCalculationUnix = Profile->LastOfflineCalculationUnix;
 	CalculationTimestampUnix = FMath::Max(NowUnix, LastCalculationUnix);
 	ElapsedSeconds = LastCalculationUnix > 0
 		? FMath::Max<int64>(0, NowUnix - LastCalculationUnix)
@@ -59,18 +59,19 @@ bool UDYKOfflineClockSubsystem::CommitOfflineCalculation()
 	}
 
 	UDYKSaveSubsystem* SaveSubsystem = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
-	UDYKProfileSaveGame* Profile = SaveSubsystem->GetActiveProfile().Get();
+	const FDYKPlayerProfileSaveData* Profile = SaveSubsystem->GetProfileSnapshot();
 	if (!Profile)
 	{
 		LastError = TEXT("The local profile became unavailable before offline progress could be saved.");
 		return false;
 	}
 
-	const int64 PreviousTimestamp = Profile->Profile.LastOfflineCalculationUnix;
-	Profile->Profile.LastOfflineCalculationUnix = FMath::Max(PreviousTimestamp, CalculationTimestampUnix);
-	if (!SaveSubsystem->SaveProfile())
+	if (!SaveSubsystem->ApplyProfileCommand(FGuid::NewGuid(), [this](FDYKPlayerProfileSaveData& Candidate)
 	{
-		Profile->Profile.LastOfflineCalculationUnix = PreviousTimestamp;
+		Candidate.LastOfflineCalculationUnix = FMath::Max(Candidate.LastOfflineCalculationUnix, CalculationTimestampUnix);
+		return true;
+	}))
+	{
 		LastError = SaveSubsystem->GetLoadError();
 		return false;
 	}
@@ -83,25 +84,26 @@ bool UDYKOfflineClockSubsystem::CommitOfflineCalculation()
 bool UDYKOfflineClockSubsystem::IsDailyRewardAvailable() const
 {
 	UDYKSaveSubsystem* SaveSubsystem = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
-	const UDYKProfileSaveGame* Profile = SaveSubsystem->GetActiveProfile().Get();
-	return Profile && GetCurrentLocalDateKey() > Profile->Profile.LastDailyRewardDateKey;
+	const FDYKPlayerProfileSaveData* Profile = SaveSubsystem->GetProfileSnapshot();
+	return Profile && GetCurrentLocalDateKey() > Profile->LastDailyRewardDateKey;
 }
 
 bool UDYKOfflineClockSubsystem::TryRecordDailyRewardClaim()
 {
 	UDYKSaveSubsystem* SaveSubsystem = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
-	UDYKProfileSaveGame* Profile = SaveSubsystem->GetActiveProfile().Get();
+	const FDYKPlayerProfileSaveData* Profile = SaveSubsystem->GetProfileSnapshot();
 	const int32 TodayDateKey = GetCurrentLocalDateKey();
-	if (!Profile || TodayDateKey <= Profile->Profile.LastDailyRewardDateKey)
+	if (!Profile || TodayDateKey <= Profile->LastDailyRewardDateKey)
 	{
 		return false;
 	}
 
-	const int32 PreviousDateKey = Profile->Profile.LastDailyRewardDateKey;
-	Profile->Profile.LastDailyRewardDateKey = TodayDateKey;
-	if (!SaveSubsystem->SaveProfile())
+	if (!SaveSubsystem->ApplyProfileCommand(FGuid::NewGuid(), [TodayDateKey](FDYKPlayerProfileSaveData& Candidate)
 	{
-		Profile->Profile.LastDailyRewardDateKey = PreviousDateKey;
+		Candidate.LastDailyRewardDateKey = TodayDateKey;
+		return true;
+	}))
+	{
 		LastError = SaveSubsystem->GetLoadError();
 		return false;
 	}

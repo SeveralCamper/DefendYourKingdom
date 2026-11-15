@@ -174,4 +174,8 @@ public:
 
 	UPROPERTY(SaveGame)
 	FDYKPlayerProfileSaveData Profile;
+
+	// Missing in the original schema-1 single-file saves; defaults to an empty ledger.
+	UPROPERTY(SaveGame)
+	TArray<FGuid> AppliedCommandIds;
 };

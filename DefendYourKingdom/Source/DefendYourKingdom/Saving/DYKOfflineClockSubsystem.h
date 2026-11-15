@@ -19,8 +19,9 @@ public:
 	int64 GetElapsedSeconds() const;
 	int64 GetCalculationTimestampUnix() const;
 
-	// Call after offline production and construction have updated the active profile.
-	// The profile state and timestamp are written together to avoid losing or replaying progress.
+	// A timestamp-only checkpoint. Offline domain commands must include their state
+	// changes AND GetCalculationTimestampUnix() in one ApplyProfileCommand transaction;
+	// never persist accrual separately before recording its timestamp.
 	bool CommitOfflineCalculation();
 
 	bool IsDailyRewardAvailable() const;
