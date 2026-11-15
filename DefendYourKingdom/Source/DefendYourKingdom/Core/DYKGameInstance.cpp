@@ -3,10 +3,17 @@
 #include "../DefendYourKingdom.h"
 #include "../Saving/DYKOfflineClockSubsystem.h"
 #include "../Saving/DYKSaveSubsystem.h"
+#include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
+#include "Misc/PackageName.h"
+#include "UObject/UObjectGlobals.h"
 
 void UDYKGameInstance::Init()
 {
 	Super::Init();
+	LevelLoadedHandle = FCoreUObjectDelegates::PostLoadMapWithWorld.AddUObject(this, &ThisClass::OnLevelLoaded);
+	TravelFailedHandle = GEngine->OnTravelFailure().AddUObject(this, &ThisClass::OnTravelFailed);
 
 	FString Error;
 	if (IsLocalSessionReady(Error))
@@ -16,6 +23,89 @@ void UDYKGameInstance::Init()
 	else
 	{
 		UE_LOG(LogDYK, Error, TEXT("Local session initialization failed: %s"), *Error);
+	}
+}
+
+void UDYKGameInstance::Shutdown()
+{
+	FCoreUObjectDelegates::PostLoadMapWithWorld.Remove(LevelLoadedHandle);
+	if (GEngine)
+	{
+		GEngine->OnTravelFailure().Remove(TravelFailedHandle);
+	}
+	bLevelTravelPending = false;
+	Super::Shutdown();
+}
+
+FName UDYKGameInstance::GetLevelPackage(const EDYKLocalLevel Destination)
+{
+	switch (Destination)
+	{
+	case EDYKLocalLevel::City:
+		return TEXT("/Game/DefendYourKingdom/Maps/L_Citadel");
+	case EDYKLocalLevel::MissionPolygon:
+		return TEXT("/Game/DefendYourKingdom/Maps/L_MissionPolygon");
+	default:
+		return NAME_None;
+	}
+}
+
+bool UDYKGameInstance::RequestLevelTravel(const EDYKLocalLevel Destination, FString& OutError)
+{
+	OutError.Reset();
+	const FName Package = GetLevelPackage(Destination);
+	if (Package.IsNone())
+	{
+		OutError = TEXT("Unknown local destination; only city and draft mission polygon are available.");
+		return false;
+	}
+	UWorld* World = GetWorld();
+	if (!World || !World->IsGameWorld() || World->GetGameInstance() != this)
+	{
+		OutError = TEXT("Level travel requires an active local game world.");
+		return false;
+	}
+	if (bLevelTravelPending)
+	{
+		OutError = TEXT("A level load is already pending.");
+		return false;
+	}
+	if (!IsLocalSessionReady(OutError))
+	{
+		return false;
+	}
+	// Remove the PIE prefix before comparing package names.
+	const FString CurrentPackage = UWorld::RemovePIEPrefix(World->GetOutermost()->GetName());
+	if (CurrentPackage == Package.ToString())
+	{
+		OutError = TEXT("The requested level is already loaded.");
+		return false;
+	}
+	if (!FPackageName::DoesPackageExist(Package.ToString()))
+	{
+		OutError = TEXT("The requested local map package is missing.");
+		return false;
+	}
+	bLevelTravelPending = true;
+	UE_LOG(LogDYK, Log, TEXT("Loading local level: %s"), *Package.ToString());
+	UGameplayStatics::OpenLevel(World, Package, true);
+	return true;
+}
+
+void UDYKGameInstance::OnLevelLoaded(UWorld* LoadedWorld)
+{
+	if (LoadedWorld && LoadedWorld->GetGameInstance() == this)
+	{
+		bLevelTravelPending = false;
+	}
+}
+
+void UDYKGameInstance::OnTravelFailed(UWorld* World, ETravelFailure::Type FailureType, const FString& Error)
+{
+	if (World && World->GetGameInstance() == this)
+	{
+		bLevelTravelPending = false;
+		UE_LOG(LogDYK, Error, TEXT("Local level load failed (%d): %s"), static_cast<int32>(FailureType), *Error);
 	}
 }
 
