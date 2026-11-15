@@ -11,4 +11,7 @@ class DEFENDYOURKINGDOM_API ADYKCityGameMode : public ADYKLocalGameMode
 {
 	GENERATED_BODY()
 
+public:
+	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
+	virtual void StartPlay() override;
 };

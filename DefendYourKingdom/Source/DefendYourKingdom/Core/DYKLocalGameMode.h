@@ -16,6 +16,6 @@ public:
 	virtual void RestartPlayer(AController* NewPlayer) override;
 	virtual void StartPlay() override;
 
-private:
+protected:
 	FString StartupError;
 };

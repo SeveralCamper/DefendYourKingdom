@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "../Core/Content/DYKContentId.h"
+#include "../Meta/DYKCitySaveData.h"
 #include "GameFramework/SaveGame.h"
 #include "DYKProfileSaveGame.generated.h"
 
@@ -159,6 +160,9 @@ struct DEFENDYOURKINGDOM_API FDYKPlayerProfileSaveData
 
 	UPROPERTY(SaveGame)
 	FDYKCurrentMissionSaveData CurrentMission;
+
+	UPROPERTY(SaveGame)
+	FDYKCitySaveData CityEconomy;
 };
 
 UCLASS()

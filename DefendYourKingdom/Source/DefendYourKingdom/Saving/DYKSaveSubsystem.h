@@ -40,6 +40,7 @@ public:
 
 private:
 	friend struct FDYKProfileTestAccess;
+	friend struct FDYKCityEconomyTestAccess;
 	void LoadOrCreateProfile();
 	FString GetSavePath(int32 Slot) const;
 	bool WriteProfile(UDYKProfileSaveGame* Candidate);
