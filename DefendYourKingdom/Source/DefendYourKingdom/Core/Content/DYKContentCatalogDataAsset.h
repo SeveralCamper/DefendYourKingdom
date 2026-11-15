@@ -7,6 +7,8 @@
 #include "DYKContentId.h"
 #include "DYKContentCatalogDataAsset.generated.h"
 
+// Optional asset-side ID list only. Numeric base definitions live in DYKUnitCatalog
+// and cannot be supplied or overwritten by an editable asset.
 UCLASS()
 class DEFENDYOURKINGDOM_API UDYKContentCatalogDataAsset : public UDataAsset
 {

@@ -4,7 +4,21 @@
 
 bool FDYKContentId::IsValid() const
 {
-	return Kind != EDYKContentKind::None && !Name.IsNone();
+	switch (Kind)
+	{
+	case EDYKContentKind::Resource:
+	case EDYKContentKind::Building:
+	case EDYKContentKind::Trap:
+	case EDYKContentKind::Spell:
+	case EDYKContentKind::Warrior:
+	case EDYKContentKind::Hero:
+	case EDYKContentKind::Slot:
+	case EDYKContentKind::Campaign:
+	case EDYKContentKind::Mission:
+		return !Name.IsNone();
+	default:
+		return false;
+	}
 }
 
 FPrimaryAssetId FDYKContentId::ToPrimaryAssetId() const

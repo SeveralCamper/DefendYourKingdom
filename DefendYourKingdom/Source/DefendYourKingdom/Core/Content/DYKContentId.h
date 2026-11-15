@@ -37,4 +37,10 @@ struct DEFENDYOURKINGDOM_API FDYKContentId
 	FPrimaryAssetId ToPrimaryAssetId() const;
 
 	bool operator==(const FDYKContentId& Other) const;
+	bool operator!=(const FDYKContentId& Other) const { return !(*this == Other); }
 };
+
+inline uint32 GetTypeHash(const FDYKContentId& Id)
+{
+	return HashCombineFast(GetTypeHash(static_cast<uint8>(Id.Kind)), GetTypeHash(Id.Name));
+}
