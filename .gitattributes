@@ -1,0 +1,2 @@
+# Preserve downloaded CC0 sources byte-for-byte, including upstream license formatting.
+DefendYourKingdom/SourceArt/Kenney/** -text -whitespace

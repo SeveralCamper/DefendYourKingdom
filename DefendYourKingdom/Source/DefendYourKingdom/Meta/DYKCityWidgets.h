@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Blueprint/UserWidget.h"
+#include "../UI/DYKScreenWidget.h"
 #include "../Core/Content/DYKContentId.h"
 #include "DYKCityWidgets.generated.h"
 
@@ -9,7 +9,7 @@ class UTextBlock;
 class UButton;
 
 UCLASS()
-class DEFENDYOURKINGDOM_API UDYKCityCollectWidget : public UUserWidget
+class DEFENDYOURKINGDOM_API UDYKCityCollectWidget : public UDYKScreenWidget
 {
 	GENERATED_BODY()
 public:
@@ -32,12 +32,14 @@ private:
 };
 
 UCLASS()
-class DEFENDYOURKINGDOM_API UDYKCityResourceWidget : public UUserWidget
+class DEFENDYOURKINGDOM_API UDYKCityResourceWidget : public UDYKScreenWidget
 {
 	GENERATED_BODY()
 public:
 	UFUNCTION() void Refresh();
 	UFUNCTION() void CollectRewardsClicked();
+	UFUNCTION() void MissionClicked();
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UButton> MissionButton;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UTextBlock> ResourceText;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UButton> CollectRewardsButton;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UTextBlock> RewardText;

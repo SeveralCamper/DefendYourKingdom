@@ -9,6 +9,8 @@
 #include "Engine/World.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
+#include "../UI/DYKVisuals.h"
+#include "Components/SceneComponent.h"
 
 namespace
 {
@@ -19,12 +21,11 @@ ADYKEnemyActor::ADYKEnemyActor()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false;
-	auto* Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TemporaryGoblinVisual"));
-	SetRootComponent(Mesh);
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> Shape(TEXT("/Engine/BasicShapes/Cone.Cone"));
-	Mesh->SetStaticMesh(Shape.Object);
-	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	Mesh->SetRelativeScale3D(FVector(0.7, 0.7, 1.2));
+	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("LogicalPosition")));
+	auto* Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("GoblinVisual"));
+	Mesh->SetupAttachment(GetRootComponent());
+	// DEV_PLACEHOLDER: smaller green orc model stands in for the goblin; stats stay in its passport.
+	DYKVisuals::Unit(Mesh,TEXT("character_orc"),1.5f);
 	SetActorEnableCollision(false);
 }
 

@@ -2,6 +2,7 @@
 
 #include "../Core/DYKLocalGameMode.h"
 #include "DYKBattleSession.h"
+#include "../Saving/DYKProfileSaveGame.h"
 #include "DYKPolygonGameMode.generated.h"
 
 class ADYKEnemyActor;
@@ -31,6 +32,8 @@ public:
 	bool ReturnToCity(FString& OutError);
 	bool IsMissionResultSaved() const { return bMissionResultSaved; }
 	const FString& GetMissionResultError() const { return MissionResultError; }
+	TConstArrayView<FDYKResourceSaveData> GetAwardedResources() const { return AwardedResources; }
+	TConstArrayView<FDYKResourceSaveData> GetDeferredResources() const { return DeferredResources; }
 
 private:
 	void QueueWaveResolution(const FGuid& WaveToken);
@@ -48,4 +51,5 @@ private:
 	FDelegateHandle CombatStepHandle;
 	bool bMissionResultSaved = false;
 	FString MissionResultError;
+	TArray<FDYKResourceSaveData> AwardedResources, DeferredResources;
 };

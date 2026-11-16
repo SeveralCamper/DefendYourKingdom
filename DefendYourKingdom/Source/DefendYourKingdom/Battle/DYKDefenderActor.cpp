@@ -8,16 +8,19 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
+#include "../UI/DYKVisuals.h"
 
 ADYKDefenderActor::ADYKDefenderActor()
 {
 	SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("LogicalPosition")));
-	auto* Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TemporaryPeasantVisual"));
+	auto* Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PeasantVisual"));
 	Mesh->SetupAttachment(GetRootComponent());
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> Shape(TEXT("/Engine/BasicShapes/Cube.Cube"));
-	Mesh->SetStaticMesh(Shape.Object);
-	Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	Mesh->SetRelativeScale3D(FVector(0.6, 0.6, 1.2));
+	DYKVisuals::Unit(Mesh,TEXT("character_human"),1.8f);
+	auto* Tool = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TemporaryPoleTool"));
+	Tool->SetupAttachment(GetRootComponent());
+	Tool->SetStaticMesh(DYKVisuals::Mesh(TEXT("Dungeon"),TEXT("weapon_spear")));
+	Tool->SetRelativeLocation(FVector(10,-35,-60)); Tool->SetRelativeScale3D(FVector(1,1,2.2));
+	Tool->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void ADYKDefenderActor::BeginPlay()

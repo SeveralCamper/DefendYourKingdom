@@ -18,6 +18,8 @@ class DEFENDYOURKINGDOM_API UDYKGameInstance : public UGameInstance
 	GENERATED_BODY()
 
 public:
+	// Session-only title screen state; profile and city progress stay in SaveSubsystem.
+	bool bHasEnteredCity = false;
 	virtual void Init() override;
 	virtual void Shutdown() override;
 	bool IsLocalSessionReady(FString& OutError) const;

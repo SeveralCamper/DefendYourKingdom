@@ -68,6 +68,8 @@ public:
 	const FGuid& GetWaveToken() const { return WaveId; }
 	const FGuid& GetAttemptId() const { return AttemptId; }
 	int32 GetWaveNumber() const { return WaveIndex + 1; }
+	int32 GetTotalWaves() const { return Config.Waves.Num(); }
+	TConstArrayView<FDYKProtectedObjectDefinition> GetProtectedObjects() const { return Config.ProtectedObjects; }
 	int32 GetSupplies() const { return Supplies; }
 	int32 GetProtectedObjectHP(FName ObjectId) const;
 	int32 GetActiveEnemyCount() const { return ActiveEnemies.Num(); }

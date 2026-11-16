@@ -1,6 +1,7 @@
 #include "DYKCityWidgets.h"
 #include "DYKCityEconomy.h"
 #include "DYKMissionRewards.h"
+#include "../Core/DYKGameInstance.h"
 #include "../Saving/DYKSaveSubsystem.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -19,18 +20,16 @@ TSharedRef<SWidget> UDYKCityCollectWidget::RebuildWidget()
 	if (!WidgetTree->RootWidget)
 	{
 		auto* Panel = WidgetTree->ConstructWidget<UVerticalBox>();
-		WidgetTree->RootWidget = Panel;
-		NameText = WidgetTree->ConstructWidget<UTextBlock>();
+		auto* Paper = DYKUI::Panel(WidgetTree,this);
+		Paper->SetPadding(FMargin(10.f,6.f)); Paper->AddChild(Panel);
+		WidgetTree->RootWidget = Paper;
+		NameText = DYKUI::Text(WidgetTree, FText::GetEmpty(), 18);
 		NameText->SetJustification(ETextJustify::Center);
 		Panel->AddChild(NameText);
-		StatusText = WidgetTree->ConstructWidget<UTextBlock>();
+		StatusText = DYKUI::Text(WidgetTree, FText::GetEmpty(), 14);
 		StatusText->SetJustification(ETextJustify::Center);
 		Panel->AddChild(StatusText);
-		CollectButton = WidgetTree->ConstructWidget<UButton>();
-		auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
-		Label->SetText(FText::FromString(TEXT("Собрать")));
-		Label->SetJustification(ETextJustify::Center);
-		CollectButton->AddChild(Label);
+		CollectButton = DYKUI::Button(WidgetTree, this, NSLOCTEXT("DYKCity", "Collect", "Собрать"));
 		Panel->AddChild(CollectButton);
 		CollectButton->OnClicked.AddDynamic(this, &ThisClass::CollectClicked);
 	}
@@ -92,31 +91,46 @@ TSharedRef<SWidget> UDYKCityResourceWidget::RebuildWidget()
 	{
 		auto* Canvas = WidgetTree->ConstructWidget<UCanvasPanel>();
 		WidgetTree->RootWidget = Canvas;
-		auto* Border = WidgetTree->ConstructWidget<UBorder>();
-		Border->SetBrushColor(FLinearColor(.025f, .035f, .05f, .95f));
-		Border->SetPadding(FMargin(24.f, 12.f));
+		auto* Border = DYKUI::Panel(WidgetTree, this);
 		auto* CanvasSlot = Canvas->AddChildToCanvas(Border);
 		CanvasSlot->SetAnchors(FAnchors(.5f, 0.f));
 		CanvasSlot->SetAlignment(FVector2D(.5f, 0.f));
 		CanvasSlot->SetPosition(FVector2D(0.f, 16.f));
 		CanvasSlot->SetAutoSize(true);
-		ResourceText = WidgetTree->ConstructWidget<UTextBlock>();
+		ResourceText = DYKUI::Text(WidgetTree, FText::GetEmpty(), 20);
 		auto* Panel = WidgetTree->ConstructWidget<UVerticalBox>();
 		Border->AddChild(Panel);
 		Panel->AddChild(ResourceText);
-		RewardText = WidgetTree->ConstructWidget<UTextBlock>();
+		RewardText = DYKUI::Text(WidgetTree, FText::GetEmpty(), 16);
 		RewardText->SetJustification(ETextJustify::Center);
 		Panel->AddChild(RewardText);
-		CollectRewardsButton = WidgetTree->ConstructWidget<UButton>();
-		auto* RewardLabel = WidgetTree->ConstructWidget<UTextBlock>();
-		RewardLabel->SetText(FText::FromString(TEXT("Собрать награды — полигон")));
-		RewardLabel->SetJustification(ETextJustify::Center);
-		CollectRewardsButton->AddChild(RewardLabel);
+		CollectRewardsButton = DYKUI::Button(WidgetTree, this, NSLOCTEXT("DYKCity", "CollectReward", "Собрать награды — полигон"));
 		CollectRewardsButton->OnClicked.AddDynamic(this, &ThisClass::CollectRewardsClicked);
 		Panel->AddChild(CollectRewardsButton);
+		auto* Footer = DYKUI::Panel(WidgetTree, this);
+		auto* FooterSlot = Canvas->AddChildToCanvas(Footer);
+		FooterSlot->SetAnchors(FAnchors(1.f,1.f)); FooterSlot->SetAlignment(FVector2D(1.f,1.f));
+		FooterSlot->SetPosition(FVector2D(-20.f,-20.f)); FooterSlot->SetAutoSize(true);
+		auto* Nav = WidgetTree->ConstructWidget<UVerticalBox>(); Footer->AddChild(Nav);
+		Nav->AddChild(DYKUI::Text(WidgetTree, NSLOCTEXT("DYKCity", "Defense", "Защитите подступы к городу"), 20));
+		MissionButton = DYKUI::Button(WidgetTree, this, NSLOCTEXT("DYKCity", "Polygon", "Подготовить оборону"));
+		MissionButton->OnClicked.AddDynamic(this, &ThisClass::MissionClicked); Nav->AddChild(MissionButton);
+		Nav->AddChild(DYKUI::Text(WidgetTree, NSLOCTEXT("DYKCity", "Camera", "WASD — камера • Колесо — масштаб"), 14));
 		Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	}
 	return Super::RebuildWidget();
+}
+
+void UDYKCityResourceWidget::MissionClicked()
+{
+	FString Error;
+	if (auto* GI = GetGameInstance<UDYKGameInstance>())
+	{
+		GI->bHasEnteredCity = true;
+		if (!GI->RequestLevelTravel(EDYKLocalLevel::MissionPolygon, Error) && RewardText)
+			RewardText->SetText(FText::FromString(Error));
+		if (MissionButton) MissionButton->SetIsEnabled(!GI->IsLevelTravelPending());
+	}
 }
 void UDYKCityResourceWidget::NativeConstruct()
 {

@@ -7,6 +7,7 @@
 #include "DYKPlacementWidget.h"
 #include "../Core/DYKGameInstance.h"
 #include "../Meta/DYKMissionRewards.h"
+#include "../Meta/DYKCityEconomy.h"
 #include "../Saving/DYKSaveSubsystem.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "Kismet/GameplayStatics.h"
@@ -75,7 +76,28 @@ bool ADYKPolygonGameMode::SettleMissionResult()
 		return true;
 	}
 	auto* Save = GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
-	bMissionResultSaved = Save && DYKMissionRewards::Settle(*Save, *Result, DYKMissionRewards::PolygonDEV_PLACEHOLDER());
+	const auto& Reward = DYKMissionRewards::PolygonDEV_PLACEHOLDER();
+	const auto* Before = Save ? Save->GetProfileSnapshot() : nullptr;
+	const bool bPreviouslyIssued = Before && Before->MissionRewards.ContainsByPredicate([&](const auto& R) { return R.RewardId == Reward.RewardId; });
+	TArray<int64> Balances;
+	for (const auto& Row : Reward.Resources)
+	{
+		const auto Id = FDYKResourceId::FromContentId(Row.ResourceId);
+		Balances.Add(Before && Id ? DYKCityEconomy::Balance(*Before, Id.GetValue()) : 0);
+	}
+	bMissionResultSaved = Save && DYKMissionRewards::Settle(*Save, *Result, Reward);
+	if (bMissionResultSaved && !bPreviouslyIssued)
+	{
+		const auto* After = Save->GetProfileSnapshot();
+		for (int32 I = 0; I < Reward.Resources.Num(); ++I)
+		{
+			const auto& Row = Reward.Resources[I];
+			const auto Id = FDYKResourceId::FromContentId(Row.ResourceId);
+			const int64 Delivered = Id ? DYKCityEconomy::Balance(*After, Id.GetValue()) - Balances[I] : 0;
+			if (Delivered > 0) AwardedResources.Add({Row.ResourceId, Delivered});
+		}
+		if (const auto* Receipt = After->MissionRewards.FindByPredicate([&](const auto& R) { return R.RewardId == Reward.RewardId; })) DeferredResources = Receipt->Remaining;
+	}
 	if (!bMissionResultSaved) MissionResultError = TEXT("Не удалось сохранить награду. Повторите возврат в город.");
 	return bMissionResultSaved;
 }
@@ -100,7 +122,7 @@ void ADYKPolygonGameMode::StartPlay()
 	Super::StartPlay();
 	if (!StartupError.IsEmpty()) return;
 	if (auto* PC = GetWorld()->GetFirstPlayerController(); PC && PC->IsLocalController())
-		if (auto* Controls = CreateWidget<UDYKPlacementWidget>(PC, UDYKPlacementWidget::StaticClass())) Controls->AddToViewport();
+		if (auto* Controls = CreateWidget<UDYKPlacementWidget>(PC, DYKUI::ScreenClass(UDYKPlacementWidget::StaticClass(), TEXT("WBP_Battle")))) Controls->AddToViewport();
 }
 
 bool ADYKPolygonGameMode::IsEditableSlot(const ADYKUnitSlot* Slot) const

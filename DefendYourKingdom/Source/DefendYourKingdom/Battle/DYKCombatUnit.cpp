@@ -3,6 +3,8 @@
 #include "DYKPolygonGameMode.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
+#include "../UI/DYKUnitHealthWidget.h"
+#include "Components/WidgetComponent.h"
 
 ADYKCombatUnit::ADYKCombatUnit()
 {
@@ -16,6 +18,16 @@ void ADYKCombatUnit::InitializeCombat(ADYKPolygonGameMode* OwnerMode, const FDYK
 	Definition = UnitDefinition;
 	HP = Definition->Base.MaxHP.Value;
 	IdleFacing = GetActorRotation();
+	auto* Health = NewObject<UWidgetComponent>(this,TEXT("UnitHealth"));
+	AddInstanceComponent(Health);
+	Health->SetupAttachment(GetRootComponent());
+	Health->SetWidgetSpace(EWidgetSpace::Screen);
+	Health->SetWidgetClass(UDYKUnitHealthWidget::StaticClass());
+	Health->SetDrawSize(FVector2D(72,8));
+	Health->SetRelativeLocation(FVector(0,0,Definition->Side == EDYKUnitSide::Defender ? 115 : -65));
+	Health->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Health->RegisterComponent(); Health->InitWidget();
+	if (auto* UI = Cast<UDYKUnitHealthWidget>(Health->GetUserWidgetObject())) UI->Configure(this);
 	OwnerMode->RegisterCombatUnit(this);
 }
 

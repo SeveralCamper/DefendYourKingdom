@@ -2,6 +2,8 @@
 #include "DYKCityBuildingActor.h"
 #include "DYKCityEconomy.h"
 #include "DYKCityWidgets.h"
+#include "../UI/DYKStartWidget.h"
+#include "../Core/DYKGameInstance.h"
 #include "../Saving/DYKSaveSubsystem.h"
 #include "../DefendYourKingdom.h"
 #include "Engine/GameInstance.h"
@@ -52,9 +54,11 @@ void ADYKCityGameMode::StartPlay()
 	Super::StartPlay();
 	if (auto* PC = GetWorld()->GetFirstPlayerController(); PC && PC->IsLocalController())
 	{
-		if (auto* HUD = CreateWidget<UDYKCityResourceWidget>(PC, UDYKCityResourceWidget::StaticClass()))
+		if (auto* HUD = CreateWidget<UDYKCityResourceWidget>(PC, DYKUI::ScreenClass(UDYKCityResourceWidget::StaticClass(), TEXT("WBP_City"))))
 		{
 			HUD->AddToViewport();
 		}
+		if (auto* GI = GetGameInstance<UDYKGameInstance>(); GI && !GI->bHasEnteredCity)
+			if (auto* Title = CreateWidget<UDYKStartWidget>(PC, DYKUI::ScreenClass(UDYKStartWidget::StaticClass(), TEXT("WBP_Start")))) Title->AddToViewport(100);
 	}
 }
