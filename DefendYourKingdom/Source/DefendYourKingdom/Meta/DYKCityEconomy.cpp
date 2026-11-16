@@ -1,4 +1,5 @@
 #include "DYKCityEconomy.h"
+#include "DYKCityBuildingRules.h"
 #include "../Saving/DYKProfileService.h"
 
 namespace
@@ -30,6 +31,11 @@ int64 DYKCityEconomy::Balance(const FDYKPlayerProfileSaveData& P, FDYKResourceId
 
 bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P)
 {
+	return Validate(P,DYKCityBuildingRules::DEV_PLACEHOLDER());
+}
+
+bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P, const FDYKCityBuildingRulesConfig& Config)
+{
 	if (P.CityEconomy.Version != 1) { return false; }
 	for (const auto& Id : DYKCityCatalog::Resources())
 	{
@@ -54,7 +60,7 @@ bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P)
 		Indices.Add(State.BuildingIndex);
 		const auto& Building = P.Buildings[State.BuildingIndex];
 		const auto* Def = DYKCityCatalog::Find(Building.BuildingId);
-		if (!Def || Building.Level != 1 || State.Stored < 0 || State.UpdatedAtUnix <= 0
+		if (!Def || State.Stored < 0 || State.UpdatedAtUnix <= 0
 			|| State.CollectionStartedAtUnix <= 0 || State.CollectionStartedAtUnix > State.UpdatedAtUnix
 			|| State.RemainderSeconds < 0) { return false; }
 		if (Def->CycleSeconds > 0)
@@ -68,14 +74,7 @@ bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P)
 	{
 		if (DYKCityCatalog::Find(P.Buildings[Index].BuildingId) && !Indices.Contains(Index)) { return false; }
 	}
-	for (const auto& Def : DYKCityCatalog::Buildings())
-	{
-		int32 Count = 0;
-		for (const auto& B : P.Buildings) { Count += B.BuildingId == Def.Id.ToContentId() ? 1 : 0; }
-		if (Count == 0 || (!Def.Resource.IsValid() && Count != 1)) { return false; }
-		if (Def.Id.GetName() == TEXT("CITY-HOUSE") && Count > 3) { return false; }
-	}
-	return true;
+	return DYKCityBuildingRules::ValidateOwnership(P,Config);
 }
 
 bool DYKCityEconomy::Initialize(FDYKPlayerProfileSaveData& P, int64 Now)
@@ -84,6 +83,7 @@ bool DYKCityEconomy::Initialize(FDYKPlayerProfileSaveData& P, int64 Now)
 	if (Now <= 0 || !P.CityEconomy.Instances.IsEmpty()) { return false; }
 	for (const auto& Def : DYKCityCatalog::Buildings())
 	{
+		if (!Def.bInitiallyOwned) continue;
 		if (!P.Buildings.ContainsByPredicate([&Def](const auto& B) { return B.BuildingId == Def.Id.ToContentId(); }))
 		{
 			FDYKBuildingSaveData B;

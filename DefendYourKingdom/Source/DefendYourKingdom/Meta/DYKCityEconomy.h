@@ -4,6 +4,7 @@
 #include "../Saving/DYKProfileSaveGame.h"
 
 class IDYKProfileService;
+struct FDYKCityBuildingRulesConfig;
 
 struct FDYKCityCollectionView
 {
@@ -17,6 +18,7 @@ namespace DYKCityEconomy
 {
 	DEFENDYOURKINGDOM_API bool Initialize(FDYKPlayerProfileSaveData& Profile, int64 Now);
 	DEFENDYOURKINGDOM_API bool Validate(const FDYKPlayerProfileSaveData& Profile);
+	DEFENDYOURKINGDOM_API bool Validate(const FDYKPlayerProfileSaveData& Profile, const FDYKCityBuildingRulesConfig& Config);
 	DEFENDYOURKINGDOM_API int64 Balance(const FDYKPlayerProfileSaveData& Profile, FDYKResourceId Id);
 	DEFENDYOURKINGDOM_API FDYKCityCollectionView View(const FDYKPlayerProfileSaveData& Profile, FGuid Instance, int64 Now);
 	DEFENDYOURKINGDOM_API bool Collect(IDYKProfileService& Service, FGuid Command, FGuid Instance, int64 Now);

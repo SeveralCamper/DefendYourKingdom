@@ -497,7 +497,12 @@ bool FDYKProfileLegacyCorruptTest::RunTest(const FString& Parameters)
 	const int32 CutInsideProfile = OldBytes.Num() + (Bytes.Num() - OldBytes.Num()) / 2;
 	TruncatedProfile.Append(Bytes.GetData(), CutInsideProfile);
 	TruncatedProfile.Append(NoneMarker);
+	// Additive saved fields can move the synthetic midpoint inside a nested array.
+	// Both diagnostics describe this intentionally truncated Profile payload; all
+	// corrupt/no-partial-profile/no-overwrite assertions below remain mandatory.
 	AddExpectedError(TEXT("Failed loading tagged StructProperty /Script/DefendYourKingdom.DYKProfileSaveGame:Profile"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("Failed loading tagged ArrayProperty /Script/DefendYourKingdom.DYKPlayerProfileSaveData:Upgrades"),
 		EAutomationExpectedErrorFlags::Contains, 1);
 	CheckRejected(TruncatedProfile, TEXT("Profile payload cut with valid final None"));
 	int32 InteriorMarkers = 0;

@@ -54,6 +54,11 @@ struct DEFENDYOURKINGDOM_API FDYKBuildingSaveData
 
 	UPROPERTY(SaveGame)
 	int64 ConstructionCompletesAtUnix = 0;
+
+	// Actual cumulative city-resource expenditure; old/free starters default to empty.
+	// Used for the 100% decoration refund, never reconstructed from current prices.
+	UPROPERTY(SaveGame)
+	TArray<FDYKResourceSaveData> PaidCosts;
 };
 
 USTRUCT()

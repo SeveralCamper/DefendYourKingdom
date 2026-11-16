@@ -31,11 +31,8 @@ const FDYKCityTerritoryConfig& DYKCityTerritory::DEV_PLACEHOLDER()
 	{
 		FDYKCityTerritoryConfig C;
 		for (int32 Y = 1; Y <= 2; ++Y) for (int32 X = 1; X <= 3; ++X) C.InitialParcels.Add({X,Y});
-		C.Footprints.Add(TEXT("CITY-CASTLE"), Rectangle(10,10)); // Approved, never a placeholder.
-		C.Footprints.Add(TEXT("CITY-SAWMILL"), Rectangle(3,2));
-		C.Footprints.Add(TEXT("CITY-QUARRY"), Rectangle(3,3));
-		C.Footprints.Add(TEXT("CITY-MILL"), Rectangle(3,2));
-		C.Footprints.Add(TEXT("CITY-HOUSE"), Rectangle(2,2));
+		for (const auto& Def : DYKCityCatalog::Buildings())
+			C.Footprints.Add(Def.Id.GetName(), Rectangle(Def.Footprint.X,Def.Footprint.Y));
 		C.StarterOrigins = {{TEXT("CITY-CASTLE"),{10,10}}, {TEXT("CITY-SAWMILL"),{22,12}},
 			{TEXT("CITY-QUARRY"),{32,12}}, {TEXT("CITY-MILL"),{12,22}}, {TEXT("CITY-HOUSE"),{22,22}}};
 		for (int32 Y = 0; Y < 5; ++Y) for (int32 X = 0; X < 5; ++X)

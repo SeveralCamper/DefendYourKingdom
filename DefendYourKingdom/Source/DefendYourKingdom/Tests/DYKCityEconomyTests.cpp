@@ -90,6 +90,7 @@ bool FDYKCityStarterTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Four HUD resource balances"), P.Resources.Num(), 4);
 	for (const auto& Def : DYKCityCatalog::Buildings())
 	{
+		if (!Def.bInitiallyOwned) continue;
 		TestEqual(TEXT("One starter of each specified type"), P.Buildings.FilterByPredicate(
 			[&Def](const auto& B) { return B.BuildingId == Def.Id.ToContentId(); }).Num(), 1);
 	}
@@ -294,6 +295,7 @@ bool FDYKCityCorruptStateTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Negative partial-cycle time rejected"), DYKCityEconomy::Validate(P));
 	for (const auto& Def : DYKCityCatalog::Buildings())
 	{
+		if (!Def.bInitiallyOwned) continue;
 		P = Original;
 		const int32 RemovedIndex = P.Buildings.IndexOfByPredicate([&Def](const auto& B) { return B.BuildingId == Def.Id.ToContentId(); });
 		P.Buildings.RemoveAt(RemovedIndex);

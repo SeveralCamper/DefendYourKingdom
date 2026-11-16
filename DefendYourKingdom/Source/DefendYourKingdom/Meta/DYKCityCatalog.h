@@ -3,6 +3,8 @@
 #include "../Core/Content/DYKTypedContentId.h"
 #include "Containers/ArrayView.h"
 
+enum class EDYKCityBuildingCategory : uint8 { Castle, Unique, Production, House, Decoration };
+
 struct FDYKCityBuildingDefinition
 {
 	FDYKBuildingId Id;
@@ -12,6 +14,10 @@ struct FDYKCityBuildingDefinition
 	int32 CycleSeconds;
 	int32 StorageCycles;
 	FIntPoint StarterCell;
+	EDYKCityBuildingCategory Category;
+	bool bInitiallyOwned;
+	// Per type, never per level. Unspecified sizes are DEV_PLACEHOLDER.
+	FIntPoint Footprint;
 };
 
 namespace DYKCityCatalog
