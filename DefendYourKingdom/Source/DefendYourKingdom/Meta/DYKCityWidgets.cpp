@@ -1,5 +1,6 @@
 #include "DYKCityWidgets.h"
 #include "DYKCityEconomy.h"
+#include "DYKCityTerritoryWidget.h"
 #include "DYKMissionRewards.h"
 #include "../Core/DYKGameInstance.h"
 #include "../Saving/DYKSaveSubsystem.h"
@@ -148,6 +149,8 @@ void UDYKCityResourceWidget::Refresh()
 	const auto* Save = GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
 	const auto* P = Save ? Save->GetProfileSnapshot() : nullptr;
 	if (!P || !ResourceText) { return; }
+	for (TObjectIterator<UDYKCityTerritoryWidget> It; It; ++It)
+		if (It->GetWorld()==GetWorld()) It->Refresh();
 	FString Text;
 	for (auto Id : DYKCityCatalog::Resources())
 	{

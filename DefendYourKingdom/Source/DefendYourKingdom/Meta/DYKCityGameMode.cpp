@@ -1,6 +1,9 @@
 #include "DYKCityGameMode.h"
 #include "DYKCityBuildingActor.h"
 #include "DYKCityEconomy.h"
+#include "DYKCityTerritory.h"
+#include "DYKCityTerritoryActor.h"
+#include "DYKCityTerritoryWidget.h"
 #include "DYKCityWidgets.h"
 #include "../UI/DYKStartWidget.h"
 #include "../Core/DYKGameInstance.h"
@@ -16,18 +19,19 @@ void ADYKCityGameMode::InitGame(const FString& MapName, const FString& Options, 
 	auto* Save = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
 	const auto* P = Save->GetProfileSnapshot();
 	bool Ready = false;
-	if (P && P->CityEconomy.Version == 0)
+	if (P && (P->CityEconomy.Version == 0 || P->CityEconomy.TerritoryVersion == 0))
 	{
 		const int64 Now = FDateTime::UtcNow().ToUnixTimestamp();
 		Ready = Save->ApplyProfileCommand(FGuid::NewGuid(), [Now](FDYKPlayerProfileSaveData& Candidate)
 		{
-			return DYKCityEconomy::Initialize(Candidate, Now);
+			return DYKCityEconomy::Initialize(Candidate, Now)
+				&& DYKCityTerritory::Initialize(Candidate, DYKCityTerritory::DEV_PLACEHOLDER());
 		});
 	}
-	else if (P) { Ready = DYKCityEconomy::Validate(*P); }
+	else if (P) { Ready = DYKCityEconomy::Validate(*P) && DYKCityTerritory::Validate(*P,DYKCityTerritory::DEV_PLACEHOLDER()); }
 	if (!Ready)
 	{
-		StartupError = ErrorMessage = TEXT("City economy initialization failed; existing profile was preserved.");
+		StartupError = ErrorMessage = TEXT("City state initialization failed; existing profile was preserved.");
 		SpectatorClass = nullptr;
 		UE_LOG(LogDYK, Error, TEXT("%s"), *StartupError);
 	}
@@ -37,11 +41,11 @@ void ADYKCityGameMode::StartPlay()
 {
 	if (!StartupError.IsEmpty()) { return; }
 	const auto* P = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>()->GetProfileSnapshot();
+	GetWorld()->SpawnActor<ADYKCityTerritoryActor>();
 	for (const auto& State : P->CityEconomy.Instances)
 	{
 		const auto& Building = P->Buildings[State.BuildingIndex];
-		// DEV_PLACEHOLDER cell spacing/shape, using saved placement rather than type singleton Actors.
-		const FVector Location(Building.CellOrigin.X * 900., Building.CellOrigin.Y * 900., 0.);
+		const FVector Location = DYKCityTerritory::BuildingLocation(Building,DYKCityTerritory::DEV_PLACEHOLDER());
 		const FTransform Transform(FRotator(0., Building.RotationQuarterTurns * 90., 0.), Location);
 		auto* Actor = GetWorld()->SpawnActorDeferred<ADYKCityBuildingActor>(ADYKCityBuildingActor::StaticClass(), Transform);
 		if (Actor)
@@ -54,6 +58,7 @@ void ADYKCityGameMode::StartPlay()
 	Super::StartPlay();
 	if (auto* PC = GetWorld()->GetFirstPlayerController(); PC && PC->IsLocalController())
 	{
+		if (auto* Territory = CreateWidget<UDYKCityTerritoryWidget>(PC)) Territory->AddToViewport();
 		if (auto* HUD = CreateWidget<UDYKCityResourceWidget>(PC, DYKUI::ScreenClass(UDYKCityResourceWidget::StaticClass(), TEXT("WBP_City"))))
 		{
 			HUD->AddToViewport();

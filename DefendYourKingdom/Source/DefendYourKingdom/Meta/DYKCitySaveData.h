@@ -22,5 +22,6 @@ struct DEFENDYOURKINGDOM_API FDYKCitySaveData
 	GENERATED_BODY()
 	// Zero is the pre-M1.05 profile, migrated once without replacing old progress.
 	UPROPERTY(SaveGame) int32 Version = 0;
+	UPROPERTY(SaveGame) int32 TerritoryVersion = 0;
 	UPROPERTY(SaveGame) TArray<FDYKCityProductionSaveData> Instances;
 };

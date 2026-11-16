@@ -41,6 +41,7 @@ public:
 private:
 	friend struct FDYKProfileTestAccess;
 	friend struct FDYKCityEconomyTestAccess;
+	friend struct FDYKCityTerritoryTestAccess;
 	friend struct FDYKMissionRewardTestAccess;
 	void LoadOrCreateProfile();
 	FString GetSavePath(int32 Slot) const;
