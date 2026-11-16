@@ -58,7 +58,7 @@ void ADYKCityGameMode::StartPlay()
 	Super::StartPlay();
 	if (auto* PC = GetWorld()->GetFirstPlayerController(); PC && PC->IsLocalController())
 	{
-		if (auto* Territory = CreateWidget<UDYKCityTerritoryWidget>(PC)) Territory->AddToViewport();
+		if (auto* Territory = CreateWidget<UDYKCityTerritoryWidget>(PC)) Territory->AddToViewport(10);
 		if (auto* HUD = CreateWidget<UDYKCityResourceWidget>(PC, DYKUI::ScreenClass(UDYKCityResourceWidget::StaticClass(), TEXT("WBP_City"))))
 		{
 			HUD->AddToViewport();

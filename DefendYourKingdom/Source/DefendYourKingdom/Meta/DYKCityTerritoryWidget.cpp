@@ -2,23 +2,21 @@
 #include "DYKCityTerritory.h"
 #include "DYKCityTerritoryActor.h"
 #include "DYKCityCatalog.h"
-#include "DYKCityWidgets.h"
+#include "DYKCityEconomy.h"
 #include "../Saving/DYKSaveSubsystem.h"
 #include "Blueprint/WidgetTree.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/Border.h"
+#include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/TextBlock.h"
-#include "Components/UniformGridPanel.h"
 #include "Components/SizeBox.h"
 #include "Components/VerticalBox.h"
 #include "Engine/GameInstance.h"
 #include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
 
-void UDYKCityParcelButton::SelectParcel()
-{
-	if (auto* Panel=GetTypedOuter<UDYKCityTerritoryWidget>()) Panel->Select(Coordinate);
-}
 TSharedRef<SWidget> UDYKCityTerritoryWidget::RebuildWidget()
 {
 	if (!WidgetTree) WidgetTree=NewObject<UWidgetTree>(this,TEXT("WidgetTree"));
@@ -26,74 +24,142 @@ TSharedRef<SWidget> UDYKCityTerritoryWidget::RebuildWidget()
 	{
 		auto* Canvas=WidgetTree->ConstructWidget<UCanvasPanel>(); WidgetTree->RootWidget=Canvas;
 		Canvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		auto* Paper=DYKUI::Panel(WidgetTree,this);
-		auto* PaperSlot=Canvas->AddChildToCanvas(Paper);
-		PaperSlot->SetAnchors(FAnchors(0.f,1.f)); PaperSlot->SetAlignment(FVector2D(0.f,1.f));
-		PaperSlot->SetPosition(FVector2D(16.f,-16.f)); PaperSlot->SetAutoSize(true);
-		auto* Box=WidgetTree->ConstructWidget<UVerticalBox>(); Paper->AddChild(Box);
-		Box->AddChild(DYKUI::Text(WidgetTree,FText::FromString(TEXT("Территория города · 5×5")),18));
-		auto* Grid=WidgetTree->ConstructWidget<UUniformGridPanel>(); Box->AddChild(Grid);
-		Grid->SetSlotPadding(FMargin(2.f));
-		for (int32 Y=0; Y<5; ++Y) for (int32 X=0; X<5; ++X)
-		{
-			auto* Button=WidgetTree->ConstructWidget<UDYKCityParcelButton>();
-			Button->Coordinate={X,Y}; Button->OnClicked.AddDynamic(Button,&UDYKCityParcelButton::SelectParcel);
-			auto* Size=WidgetTree->ConstructWidget<USizeBox>(); Size->SetWidthOverride(48.f); Size->SetHeightOverride(30.f);
-			Size->AddChild(Button); Grid->AddChildToUniformGrid(Size,Y,X);
-			auto* Text=DYKUI::Text(WidgetTree,FText::FromString(FString::Printf(TEXT("%d:%d"),X+1,Y+1)),14);
-			Text->SetJustification(ETextJustify::Center); Button->AddChild(Text); ParcelButtons.Add(Button);
-		}
-		auto* Wrap=WidgetTree->ConstructWidget<USizeBox>(); Wrap->SetWidthOverride(270.f);
-		Details=DYKUI::Text(WidgetTree,FText::GetEmpty(),14); Details->SetAutoWrapText(true); Wrap->AddChild(Details); Box->AddChild(Wrap);
+		Popup=DYKUI::Panel(WidgetTree,this);
+		PopupSlot=Canvas->AddChildToCanvas(Popup);
+		PopupSlot->SetAutoSize(true);
+		auto* Box=WidgetTree->ConstructWidget<UVerticalBox>(); Popup->AddChild(Box);
+		auto* Wrap=WidgetTree->ConstructWidget<USizeBox>(); Wrap->SetWidthOverride(300.f);
+		Details=DYKUI::Text(WidgetTree,FText::GetEmpty(),16);
+		Details->SetAutoWrapText(true); Wrap->AddChild(Details); Box->AddChild(Wrap);
 		UnlockButton=DYKUI::Button(WidgetTree,this,FText::FromString(TEXT("Открыть участок")));
 		UnlockButton->OnClicked.AddDynamic(this,&ThisClass::UnlockClicked); Box->AddChild(UnlockButton);
+		Popup->SetVisibility(ESlateVisibility::Hidden);
 	}
 	Refresh();
 	return Super::RebuildWidget();
 }
+
 void UDYKCityTerritoryWidget::Select(FIntPoint Parcel)
 {
-	if (Selected!=Parcel) PendingCommand.Invalidate();
-	Selected=Parcel; bFailed=false; Refresh();
+	if (Selected!=Parcel) { PendingCommand.Invalidate(); bFailed=false; }
+	Selected=Parcel; AwaySeconds=0.f; Refresh();
 }
+
+bool UDYKCityTerritoryWidget::IsPopupVisible() const
+{
+	return Popup && Popup->GetVisibility()==ESlateVisibility::Visible;
+}
+
 void UDYKCityTerritoryWidget::Refresh()
 {
 	const auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
 	const auto* P=Save ? Save->GetProfileSnapshot() : nullptr;
-	if (!P || !Details || !UnlockButton) return;
-	const auto& Config=DYKCityTerritory::DEV_PLACEHOLDER();
-	for (const auto& Button : ParcelButtons)
+	if (!P || !Details || !UnlockButton || !Popup) return;
+	const bool Inside=Selected.X>=0 && Selected.Y>=0 && Selected.X<5 && Selected.Y<5;
+	if (!Inside || DYKCityTerritory::IsUnlocked(*P,Selected))
 	{
-		const bool Open=DYKCityTerritory::IsUnlocked(*P,Button->Coordinate);
-		Button->SetBackgroundColor(Button->Coordinate==Selected ? FLinearColor(.95f,.65f,.15f)
-			: Open ? FLinearColor(.25f,.65f,.25f) : FLinearColor(.24f,.24f,.24f));
-		Button->SetToolTipText(FText::FromString(Open ? TEXT("Открыт · 10×10 клеток") : TEXT("Закрыт · выберите для условий открытия")));
+		Popup->SetVisibility(ESlateVisibility::Hidden); UnlockButton->SetIsEnabled(false); return;
 	}
-	const bool Open=DYKCityTerritory::IsUnlocked(*P,Selected);
-	FString Text=FString::Printf(TEXT("Участок %d:%d · 10×10 клеток\n"),Selected.X+1,Selected.Y+1);
-	if (Open) Text+=TEXT("Открыт для размещения");
-	else if (const auto* Rule=Config.ParcelRules.Find(Selected))
+	Popup->SetVisibility(ESlateVisibility::Visible);
+	const auto& Config=DYKCityTerritory::DEV_PLACEHOLDER();
+	FString Text=FString::Printf(TEXT("Участок %d:%d · 10×10 клеток"),Selected.X+1,Selected.Y+1);
+	bool Adjacent=false;
+	for (auto Delta : {FIntPoint(1,0),FIntPoint(-1,0),FIntPoint(0,1),FIntPoint(0,-1)})
+		Adjacent |= DYKCityTerritory::IsUnlocked(*P,Selected+Delta);
+	Text+=Adjacent ? TEXT("\nСоседний открытый участок: есть") : TEXT("\nЗаблокировано: нет смежного открытого участка");
+	if (const auto* Rule=Config.ParcelRules.Find(Selected))
 	{
-		Text+=TEXT("Нужен открытый сосед по стороне.");
+		if (Rule->Costs.IsEmpty()) Text+=TEXT("\nОткрытие бесплатно");
 		for (const auto& Cost : Rule->Costs)
 		{
 			const auto Id=FDYKResourceId::FromContentId(Cost.ResourceId);
-			if (Id) Text+=FString::Printf(TEXT("\n%s: %lld"),DYKCityCatalog::ResourceName(Id.GetValue()),Cost.Amount);
+			if (!Id) { Text+=TEXT("\nЗаблокировано: неизвестная стоимость"); continue; }
+			const int64 Have=DYKCityEconomy::Balance(*P,Id.GetValue());
+			Text+=FString::Printf(TEXT("\n%s: %lld / %lld%s"),DYKCityCatalog::ResourceName(Id.GetValue()),Have,Cost.Amount,
+				Have>=Cost.Amount ? TEXT(" · достаточно") : TEXT(" · не хватает"));
 		}
 		for (FName Key : Rule->Conditions)
 		{
 			const auto* Label=Config.ConditionLabels.Find(Key);
-			Text+=TEXT("\n") + (Label ? *Label : FString(TEXT("Дополнительное условие открытия")));
+			const auto* Check=Config.Conditions.Find(Key);
+			const bool Met=Check && bool(*Check) && (*Check)(*P);
+			Text+=TEXT("\n")+(Label ? *Label : FString(TEXT("Дополнительное условие открытия")))
+				+(Met ? TEXT(": выполнено") : TEXT(": не выполнено"));
 		}
 	}
-	if (bFailed) Text+=TEXT("\nНе удалось открыть. Проверьте условия и повторите.");
+	else Text+=TEXT("\nЗаблокировано: условия открытия не заданы");
+	if (bFailed) Text+=TEXT("\nНе удалось сохранить открытие. Повторите попытку.");
 	Details->SetText(FText::FromString(Text));
-	UnlockButton->SetIsEnabled(!Open && DYKCityTerritory::CanUnlock(*P,Selected,Config));
+	UnlockButton->SetIsEnabled(DYKCityTerritory::CanUnlock(*P,Selected,Config));
 }
+
+bool UDYKCityTerritoryWidget::PositionPopup(const FGeometry& Geometry)
+{
+	auto* PC=GetOwningPlayer();
+	if (!PC || !Popup || !PopupSlot || Popup->GetVisibility()!=ESlateVisibility::Visible) return true;
+	const FIntPoint Cell=Selected*DYKCityTerritory::CellsPerParcel;
+	float Bottom=-MAX_flt,Top=MAX_flt,Left=MAX_flt,Right=-MAX_flt;
+	for (auto Offset : {FIntPoint(0,0),FIntPoint(10,0),FIntPoint(0,10),FIntPoint(10,10)})
+	{
+		FVector2D Projected;
+		if (!UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(PC,DYKCityTerritory::CellCorner(Cell+Offset),Projected,true))
+		{
+			Select(FIntPoint(-1,-1));
+			return false;
+		}
+		Bottom=FMath::Max(Bottom,float(Projected.Y)); Top=FMath::Min(Top,float(Projected.Y));
+		Left=FMath::Min(Left,float(Projected.X)); Right=FMath::Max(Right,float(Projected.X));
+	}
+	Popup->ForceLayoutPrepass(); PopupSize=Popup->GetDesiredSize();
+	const FVector2D ViewSize=Geometry.GetLocalSize();
+	if (Right<0 || Left>ViewSize.X || Bottom<0 || Top>ViewSize.Y)
+	{
+		Select(FIntPoint(-1,-1)); return false;
+	}
+	PopupPosition.X=FMath::Clamp((Left+Right)*.5-PopupSize.X*.5,8.,FMath::Max(8.,ViewSize.X-PopupSize.X-8.));
+	PopupPosition.Y=FMath::Clamp(double(Bottom)+8.,8.,FMath::Max(8.,ViewSize.Y-PopupSize.Y-8.));
+	PopupSlot->SetPosition(PopupPosition);
+	return true;
+}
+
+void UDYKCityTerritoryWidget::NativeTick(const FGeometry& Geometry,float DeltaTime)
+{
+	Super::NativeTick(Geometry,DeltaTime);
+	auto* PC=GetOwningPlayer();
+	if (!PC || !Popup) return;
+	if (!PositionPopup(Geometry)) return;
+	float MouseX=0.f,MouseY=0.f;
+	const bool HasMouse=PC->GetMousePosition(MouseX,MouseY);
+	const double Scale=UWidgetLayoutLibrary::GetViewportScale(this);
+	const FVector2D Mouse=FVector2D(MouseX,MouseY)/FMath::Max(.01,Scale);
+	// Keep the popup stable while the pointer crosses the short gap to its button.
+	const bool OverPopup=Popup->GetVisibility()==ESlateVisibility::Visible && HasMouse &&
+		Mouse.X>=PopupPosition.X-8. && Mouse.X<=PopupPosition.X+PopupSize.X+8. &&
+		Mouse.Y>=PopupPosition.Y-16. && Mouse.Y<=PopupPosition.Y+PopupSize.Y+8.;
+	if (OverPopup || Popup->IsHovered()) { AwaySeconds=0.f; return; }
+	FVector Origin,Direction;
+	if (HasMouse && PC->DeprojectMousePositionToWorld(Origin,Direction) && Direction.Z < -KINDA_SMALL_NUMBER)
+	{
+		const FVector Ground=Origin-Direction*(Origin.Z/Direction.Z);
+		const FVector Min=DYKCityTerritory::CellCorner(FIntPoint::ZeroValue);
+		const double ParcelSize=DYKCityTerritory::CellSize*DYKCityTerritory::CellsPerParcel;
+		const FIntPoint Parcel(FMath::FloorToInt((Ground.X-Min.X)/ParcelSize),FMath::FloorToInt((Ground.Y-Min.Y)/ParcelSize));
+		const auto* Save=GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
+		const auto* P=Save ? Save->GetProfileSnapshot() : nullptr;
+		if (P && Parcel.X>=0 && Parcel.Y>=0 && Parcel.X<5 && Parcel.Y<5 && !DYKCityTerritory::IsUnlocked(*P,Parcel))
+		{
+			if (Selected!=Parcel || Popup->GetVisibility()!=ESlateVisibility::Visible) Select(Parcel);
+			AwaySeconds=0.f; PositionPopup(Geometry); return;
+		}
+	}
+	AwaySeconds+=DeltaTime;
+	if (AwaySeconds>.25f && Selected!=FIntPoint(-1,-1)) Select(FIntPoint(-1,-1));
+}
+
 void UDYKCityTerritoryWidget::UnlockClicked()
 {
 	auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
-	if (!Save) return;
+	if (!Save || !Popup || Popup->GetVisibility()!=ESlateVisibility::Visible) return;
 	if (!PendingCommand.IsValid()) PendingCommand=FGuid::NewGuid();
 	bFailed=!DYKCityTerritory::Unlock(*Save,PendingCommand,Selected,DYKCityTerritory::DEV_PLACEHOLDER());
 	if (!bFailed) PendingCommand.Invalidate();

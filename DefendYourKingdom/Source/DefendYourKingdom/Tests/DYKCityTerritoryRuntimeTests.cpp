@@ -5,6 +5,7 @@
 #include "../UI/DYKStartWidget.h"
 #include "../Core/DYKGameInstance.h"
 #include "../Saving/DYKSaveSubsystem.h"
+#include "../Core/Interaction/DYKStrategyCameraPawn.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
@@ -22,6 +23,9 @@
 #include "Widgets/SWidget.h"
 #include "UnrealClient.h"
 #include "UObject/UObjectIterator.h"
+#include "Components/Border.h"
+#include "Components/TextBlock.h"
+#include "Blueprint/SlateBlueprintLibrary.h"
 #if WITH_EDITOR
 #include "ShaderCompiler.h"
 #endif
@@ -76,15 +80,74 @@ namespace
 					return true;
 				}
 				Test->TestTrue(TEXT("Full geometry valid in live world"),DYKCityTerritory::Validate(*Save->GetProfileSnapshot(),DYKCityTerritory::DEV_PLACEHOLDER()));
-				Test->TestEqual(TEXT("25 interactive plot buttons"),UI->ParcelButtons.Num(),25);
+				CheckCamera(W);
 				Test->TestTrue(TEXT("Seed dedicated test profile"),Save->ApplyProfileCommand(FGuid::NewGuid(),[](auto& P)
 					{ for (auto& R:P.Resources) if (R.ResourceId.Name==TEXT("RES-WOOD")) R.Amount=100; return true; }));
-				Stage=1; Capture(TEXT("01-city-grid.png")); return false;
+				Hover(W,{0,0}); Stage=10; WaitHover(); return false;
 			}
+			if (Stage==10)
+			{
+				Test->TestTrue(TEXT("Real world hover selects nonadjacent parcel"),UI->GetSelectedParcel()==FIntPoint(0,0));
+				Test->TestTrue(TEXT("Nonadjacent popup visible"),UI->Popup->GetVisibility()==ESlateVisibility::Visible);
+				Test->TestFalse(TEXT("Nonadjacent purchase disabled"),UI->UnlockButton->GetIsEnabled());
+				Test->TestTrue(TEXT("Specific adjacency blocker displayed"),UI->Details->GetText().ToString().Contains(TEXT("нет смежного")));
+				Hover(W,{1,1}); Stage=11; WaitHover(); return false;
+			}
+			if (Stage==11)
+			{
+				Test->TestTrue(TEXT("Open parcel has no purchase popup"),!UI->IsPopupVisible());
+				Hover(W,{-1,1}); Stage=12; WaitHover(); return false;
+			}
+			if (Stage==12)
+			{
+				Test->TestTrue(TEXT("Decorative exterior has no purchase popup"),!UI->IsPopupVisible());
+				Hover(W,{0,1}); Stage=13; WaitHover(); return false;
+			}
+			if (Stage==13)
+			{
+				Test->TestTrue(TEXT("Real cursor selects eligible parcel"),UI->GetSelectedParcel()==FIntPoint(0,1));
+				Test->TestTrue(TEXT("Eligible popup visible"),UI->Popup->GetVisibility()==ESlateVisibility::Visible);
+				Test->TestTrue(TEXT("Price and current balance displayed"),UI->Details->GetText().ToString().Contains(TEXT("100 / 7")));
+				Stage=14; Capture(TEXT("01-city-grid.png")); return false;
+			}
+			if (Stage==14)
+			{
+				const auto Geometry=UI->UnlockButton->GetCachedGeometry();
+				const auto Absolute=Geometry.LocalToAbsolute(Geometry.GetLocalSize()*.5);
+				FVector2D Pixel,Viewport; USlateBlueprintLibrary::AbsoluteToViewport(W,Absolute,Pixel,Viewport);
+				float X=0,Y=0; W->GetFirstPlayerController()->GetMousePosition(X,Y);
+				CursorStart={X,Y}; CursorEnd=Pixel; CursorStep=0; Stage=15; return false;
+			}
+			if (Stage==15)
+			{
+				Test->TestTrue(TEXT("Selected parcel stable along pointer path to popup"),UI->GetSelectedParcel()==FIntPoint(0,1));
+				if (++CursorStep>6)
+				{
+					if (!bPanChecked)
+					{
+						CameraBeforePan=W->GetFirstPlayerController()->GetPawn()->GetActorLocation();
+						W->GetFirstPlayerController()->GetPawn()->SetActorLocation(FVector(9000.,9000.,CameraBeforePan.Z));
+						Stage=16; WaitHover(); return false;
+					}
+					Stage=1; WaitHover(); return false;
+				}
+				const auto Pixel=FMath::Lerp(CursorStart,CursorEnd,double(CursorStep)/6.);
+				W->GetFirstPlayerController()->SetMouseLocation(FMath::RoundToInt(Pixel.X),FMath::RoundToInt(Pixel.Y));
+				AfterTime=FPlatformTime::Seconds()+.1; AfterFrame=GFrameCounter+2; return false;
+			}
+			if (Stage==16)
+			{
+				Test->TestTrue(TEXT("Pan cannot retain stale popup for offscreen original parcel"),!UI->IsPopupVisible() || UI->GetSelectedParcel()!=FIntPoint(0,1));
+				W->GetFirstPlayerController()->GetPawn()->SetActorLocation(CameraBeforePan);
+				bPanChecked=true; Stage=17; WaitHover(); return false;
+			}
+			if (Stage==17) { Hover(W,{0,1}); Stage=18; WaitHover(); return false; }
+			if (Stage==18) { Stage=14; return false; }
 			if (Stage==1)
 			{
 				if (!Test->TestNotNull(TEXT("City plot UI"),UI)) return true;
-				if (!TerritoryPress(Test,UI->ParcelButtons[5]) || !TerritoryPress(Test,UI->UnlockButton)) return true;
+				Test->TestTrue(TEXT("Popup stays visible while cursor moves onto purchase button"),UI->Popup->GetVisibility()==ESlateVisibility::Visible);
+				if (!TerritoryPress(Test,UI->UnlockButton)) return true;
 				Test->TestTrue(TEXT("Native plot button unlocks western neighbour"),DYKCityTerritory::IsUnlocked(*Save->GetProfileSnapshot(),{0,1}));
 				Test->TestFalse(TEXT("Repeat UI unlock disabled"),UI->UnlockButton->GetIsEnabled());
 				Test->TestTrue(TEXT("Exact wood debit persisted"),Save->GetProfileSnapshot()->Resources.ContainsByPredicate([](const auto& R) { return R.ResourceId.Name==TEXT("RES-WOOD") && R.Amount==93; }));
@@ -97,6 +160,8 @@ namespace
 			if (Stage==2)
 			{
 				if (UI) return false;
+				if (auto* Movement=W->GetFirstPlayerController()->GetPawn()->FindComponentByClass<UDYKCameraMovement>())
+					Test->TestFalse(TEXT("Battle camera does not inherit city bounds"),Movement->bBounded);
 				FString Error; Test->TestTrue(TEXT("Travel back"),GI->RequestLevelTravel(EDYKLocalLevel::City,Error)); Stage=3; return false;
 			}
 			if (Stage==3)
@@ -120,6 +185,48 @@ namespace
 			return true;
 		}
 	private:
+		void WaitHover() { AfterTime=FPlatformTime::Seconds()+.6; AfterFrame=GFrameCounter+5; }
+		void Hover(UWorld* W,FIntPoint Parcel)
+		{
+			const FVector Center=DYKCityTerritory::CellCorner(Parcel*10+FIntPoint(5,5));
+			FVector2D Screen; auto* PC=W->GetFirstPlayerController();
+			Test->TestTrue(TEXT("Parcel center projects into viewport"),PC->ProjectWorldLocationToScreen(Center,Screen));
+			PC->SetMouseLocation(FMath::RoundToInt(Screen.X),FMath::RoundToInt(Screen.Y));
+		}
+		void CheckCamera(UWorld* W)
+		{
+			auto* Pawn=W->GetFirstPlayerController()->GetPawn();
+			auto* Movement=Pawn ? Pawn->FindComponentByClass<UDYKCameraMovement>() : nullptr;
+			if (!Test->TestNotNull(TEXT("Real bounded camera movement exists"),Movement)) return;
+			Test->TestTrue(TEXT("City camera bounds enabled"),Movement->bBounded);
+			Test->TestTrue(TEXT("Seven by seven bounds minimum"),Movement->PanBounds.Min.Equals(FVector2D(-5000,-5000)));
+			Test->TestTrue(TEXT("Seven by seven bounds maximum"),Movement->PanBounds.Max.Equals(FVector2D(9000,9000)));
+			const auto Original=Pawn->GetActorLocation();
+			for (int32 X : {-1,1}) for (int32 Y : {-1,1})
+			{
+				Pawn->SetActorLocation(FVector(X<0 ? -4999. : 8999.,Y<0 ? -4999. : 8999.,Original.Z));
+				Movement->Velocity=FVector(X*2400.,Y*2400.,0.);
+				Movement->TickComponent(.05f,LEVELTICK_All,&Movement->PrimaryComponentTick);
+				const auto Location=Pawn->GetActorLocation();
+				Test->TestTrue(TEXT("Inertial diagonal pan remains in 7x7"),Location.X>=-5000 && Location.X<=9000 && Location.Y>=-5000 && Location.Y<=9000);
+				Test->TestTrue(TEXT("Outward velocity removed at each corner"),Movement->Velocity.IsNearlyZero());
+				Movement->Velocity=FVector(-X*2400.,-Y*2400.,0.);
+				Movement->TickComponent(.05f,LEVELTICK_All,&Movement->PrimaryComponentTick);
+				const auto Inward=Pawn->GetActorLocation();
+				Test->TestTrue(TEXT("Camera can move inward immediately after touching boundary"),Inward.X> -5000 && Inward.X<9000 && Inward.Y> -5000 && Inward.Y<9000);
+			}
+			for (int32 Axis=0; Axis<2; ++Axis) for (int32 Sign : {-1,1})
+			{
+				FVector Start(2000.,2000.,Original.Z),Velocity(1000.,1000.,0.);
+				Start[Axis]=Sign<0 ? -4999. : 8999.; Velocity[Axis]=Sign*2400.;
+				Pawn->SetActorLocation(Start); Movement->Velocity=Velocity;
+				Movement->TickComponent(.05f,LEVELTICK_All,&Movement->PrimaryComponentTick);
+				const auto Edge=Pawn->GetActorLocation();
+				Test->TestTrue(TEXT("Each individual edge clamps outward movement"),FMath::IsNearlyEqual(Edge[Axis],Sign<0 ? -5000. : 9000.));
+				Test->TestTrue(TEXT("Tangential camera movement continues along boundary"),Edge[1-Axis]>Start[1-Axis]);
+			}
+			Movement->StopMovementImmediately(); Pawn->SetActorLocation(Original);
+		}
 		void Capture(const TCHAR* File) { if (FParse::Param(FCommandLine::Get(),TEXT("DYKM201Capture"))) { PendingCapture=File; AfterTime=FPlatformTime::Seconds()+2.; } }
 		FAutomationTestBase* Test;
 		TWeakObjectPtr<UDYKGameInstance> GI;
@@ -128,6 +235,10 @@ namespace
 		uint64 AfterFrame=0;
 		int32 Stage=0;
 		FGuid Instance;
+		FVector2D CursorStart,CursorEnd;
+		int32 CursorStep=0;
+		FVector CameraBeforePan;
+		bool bPanChecked=false;
 	};
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKCityTerritoryRuntimeTest,"DYK.M201.RuntimeTerritoryAcrossProcesses",EAutomationTestFlags::ClientContext|EAutomationTestFlags::EngineFilter)
