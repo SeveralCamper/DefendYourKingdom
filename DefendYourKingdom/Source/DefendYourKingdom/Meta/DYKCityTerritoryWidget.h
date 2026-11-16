@@ -7,6 +7,11 @@ class UButton;
 class UBorder;
 class UCanvasPanelSlot;
 
+namespace DYKCityPointer
+{
+	DEFENDYOURKINGDOM_API bool HUDUnderPointer(const UUserWidget* Context, const UUserWidget* Exclude = nullptr);
+}
+
 UCLASS()
 class DEFENDYOURKINGDOM_API UDYKCityTerritoryWidget : public UDYKScreenWidget
 {

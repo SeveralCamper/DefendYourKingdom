@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "../Core/Content/DYKContentId.h"
+#include "../Core/Interaction/DYKSelectionTarget.h"
 #include "DYKCityBuildingActor.generated.h"
 
 class UWidgetComponent;
@@ -10,12 +11,13 @@ class UStaticMeshComponent;
 
 // One visual per owned instance, created only in the city. Economy stays in C++ profile commands.
 UCLASS()
-class DEFENDYOURKINGDOM_API ADYKCityBuildingActor : public AActor
+class DEFENDYOURKINGDOM_API ADYKCityBuildingActor : public AActor, public IDYKSelectionTarget
 {
 	GENERATED_BODY()
 public:
 	ADYKCityBuildingActor();
 	virtual void BeginPlay() override;
+	virtual EDYKSelectionTargetKind GetSelectionTargetKind() const override { return EDYKSelectionTargetKind::CityBuilding; }
 	UPROPERTY(VisibleAnywhere) FGuid InstanceId;
 	UPROPERTY(VisibleAnywhere) FDYKContentId BuildingId;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> Body;

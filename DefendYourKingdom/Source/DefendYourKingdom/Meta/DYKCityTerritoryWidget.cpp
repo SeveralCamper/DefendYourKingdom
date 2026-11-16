@@ -3,6 +3,7 @@
 #include "DYKCityTerritoryActor.h"
 #include "DYKCityCatalog.h"
 #include "DYKCityEconomy.h"
+#include "DYKCityGameMode.h"
 #include "../Saving/DYKSaveSubsystem.h"
 #include "Blueprint/WidgetTree.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
@@ -34,7 +35,8 @@ namespace
 		const auto& Geometry=Widget->GetCachedGeometry();
 		return Geometry.GetLocalSize().X>0 && Geometry.GetLocalSize().Y>0 && Geometry.IsUnderLocation(Pointer);
 	}
-	bool OtherHUDUnderPointer(const UDYKCityTerritoryWidget* Territory)
+}
+	bool DYKCityPointer::HUDUnderPointer(const UUserWidget* Territory, const UUserWidget* Exclude)
 	{
 		float MouseX=0.f,MouseY=0.f;
 		auto* Player=Territory->GetOwningPlayer();
@@ -59,7 +61,7 @@ namespace
 			}
 		for (TObjectIterator<UUserWidget> It; It; ++It)
 		{
-			if (*It==Territory || It->GetWorld()!=Territory->GetWorld() || !It->WidgetTree
+			if (*It==Exclude || It->GetWorld()!=Territory->GetWorld() || !It->WidgetTree
 				|| (!It->IsInViewport() && !AttachedWidgets.Contains(*It))) continue;
 			const auto Visibility=It->GetVisibility();
 			if (Visibility==ESlateVisibility::Hidden || Visibility==ESlateVisibility::Collapsed
@@ -70,7 +72,6 @@ namespace
 		}
 		return false;
 	}
-}
 
 TSharedRef<SWidget> UDYKCityTerritoryWidget::RebuildWidget()
 {
@@ -110,8 +111,12 @@ void UDYKCityTerritoryWidget::Refresh()
 	const auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
 	const auto* P=Save ? Save->GetProfileSnapshot() : nullptr;
 	if (!P || !Details || !UnlockButton || !Popup) return;
+	if (const auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>(); City && City->GetLayoutEditor().IsActive())
+	{
+		Popup->SetVisibility(ESlateVisibility::Hidden); UnlockButton->SetIsEnabled(false); return;
+	}
 	const bool Inside=Selected.X>=0 && Selected.Y>=0 && Selected.X<5 && Selected.Y<5;
-	if (!Inside || OtherHUDUnderPointer(this) || DYKCityTerritory::IsUnlocked(*P,Selected))
+	if (!Inside || DYKCityPointer::HUDUnderPointer(this,this) || DYKCityTerritory::IsUnlocked(*P,Selected))
 	{
 		Popup->SetVisibility(ESlateVisibility::Hidden); UnlockButton->SetIsEnabled(false); return;
 	}
@@ -190,7 +195,7 @@ void UDYKCityTerritoryWidget::NativeTick(const FGeometry& Geometry,float DeltaTi
 	auto* PC=GetOwningPlayer();
 	if (!PC || !Popup) return;
 	// Foreign HUD wins even when this popup currently draws over that HUD.
-	if (OtherHUDUnderPointer(this)) { Select(FIntPoint(-1,-1)); return; }
+	if (DYKCityPointer::HUDUnderPointer(this,this)) { Select(FIntPoint(-1,-1)); return; }
 	if (!PositionPopup(Geometry)) return;
 	float MouseX=0.f,MouseY=0.f;
 	const bool HasMouse=PC->GetMousePosition(MouseX,MouseY);
@@ -222,8 +227,9 @@ void UDYKCityTerritoryWidget::NativeTick(const FGeometry& Geometry,float DeltaTi
 
 void UDYKCityTerritoryWidget::UnlockClicked()
 {
+	if (const auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>(); City && City->GetLayoutEditor().IsActive()) return;
 	auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
-	if (!Save || !Popup || Popup->GetVisibility()!=ESlateVisibility::Visible || OtherHUDUnderPointer(this)) return;
+	if (!Save || !Popup || Popup->GetVisibility()!=ESlateVisibility::Visible || DYKCityPointer::HUDUnderPointer(this,this)) return;
 	if (!PendingCommand.IsValid()) PendingCommand=FGuid::NewGuid();
 	bFailed=!DYKCityTerritory::Unlock(*Save,PendingCommand,Selected,DYKCityTerritory::DEV_PLACEHOLDER());
 	if (!bFailed) PendingCommand.Invalidate();

@@ -1,6 +1,10 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "DYKSelectionPlayerController.h"
+#include "../../Meta/DYKCityGameMode.h"
+#include "../../Meta/DYKCityBuildingActor.h"
+#include "../../Meta/DYKCityEditorWidget.h"
+#include "Engine/World.h"
 
 void ADYKSelectionPlayerController::BeginPlay()
 {
@@ -51,6 +55,16 @@ AActor* ADYKSelectionPlayerController::GetSelectedActor() const
 
 void ADYKSelectionPlayerController::HandleWorldSelect()
 {
+	// GameAndUI can forward unhandled clicks on panel/text backgrounds to the game.
+	for (TObjectIterator<UDYKCityEditorWidget> It; It; ++It)
+		if (It->GetWorld()==GetWorld() && It->IsInViewport() && It->BlocksWorldInput()) return;
+	if (auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>(); City && City->GetLayoutEditor().IsActive())
+	{
+		FIntPoint Cell;
+		if (DYKCityEditorInput::CursorCell(this,Cell)) City->PlaceSelected(Cell);
+		City->SyncLayoutVisuals();
+		return;
+	}
 	FHitResult HitResult;
 	if (!GetHitResultUnderCursor(ECC_Visibility, false, HitResult) || !HitResult.bBlockingHit)
 	{
@@ -67,6 +81,11 @@ void ADYKSelectionPlayerController::HandleWorldSelect()
 	}
 
 	SelectedActor = HitActor;
+	if (const auto* Building=Cast<ADYKCityBuildingActor>(HitActor))
+		if (auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>())
+		{
+			City->SelectBuilding(Building->InstanceId); City->SyncLayoutVisuals();
+		}
 
 	FDYKWorldSelection Selection;
 	Selection.TargetKind = SelectionTarget->GetSelectionTargetKind();

@@ -1,5 +1,6 @@
 #include "DYKGameInstance.h"
 #include "../Battle/DYKPolygonGameMode.h"
+#include "../Meta/DYKCityGameMode.h"
 
 #include "../DefendYourKingdom.h"
 #include "../Saving/DYKOfflineClockSubsystem.h"
@@ -69,6 +70,11 @@ bool UDYKGameInstance::RequestLevelTravel(const EDYKLocalLevel Destination, FStr
 	if (bLevelTravelPending)
 	{
 		OutError = TEXT("A level load is already pending.");
+		return false;
+	}
+	if (const auto* City = World->GetAuthGameMode<ADYKCityGameMode>(); City && City->GetLayoutEditor().IsActive())
+	{
+		OutError = TEXT("Завершите редактор города: примените расстановку или отмените изменения.");
 		return false;
 	}
 	if (!IsLocalSessionReady(OutError))
