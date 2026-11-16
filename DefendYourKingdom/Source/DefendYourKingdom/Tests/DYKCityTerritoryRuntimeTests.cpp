@@ -2,6 +2,7 @@
 #include "../Meta/DYKCityTerritoryWidget.h"
 #include "../Meta/DYKCityTerritoryActor.h"
 #include "../Meta/DYKCityBuildingActor.h"
+#include "../Meta/DYKCityWidgets.h"
 #include "../UI/DYKStartWidget.h"
 #include "../Core/DYKGameInstance.h"
 #include "../Saving/DYKSaveSubsystem.h"
@@ -25,6 +26,8 @@
 #include "UObject/UObjectIterator.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
+#include "Components/WidgetComponent.h"
+#include "Components/Button.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
 #if WITH_EDITOR
 #include "ShaderCompiler.h"
@@ -69,7 +72,10 @@ namespace
 			if (Stage==0)
 			{
 				if (!UI) return false;
-				if (auto* Title=TerritoryRuntimeWidget<UDYKStartWidget>(W)) if (!TerritoryPress(Test,Title->EnterButton)) return true;
+				if (auto* Title=TerritoryRuntimeWidget<UDYKStartWidget>(W))
+				{
+					HoverHUD(W,Title->EnterButton); Stage=30; WaitHover(); return false;
+				}
 				if (Mode==TEXT("reload"))
 				{
 					TArray<uint8> Bytes; Test->TestTrue(TEXT("Previous process fixture exists"),FFileHelper::LoadFileToArray(Bytes,*(Evidence/TEXT("expected.sav"))));
@@ -83,6 +89,57 @@ namespace
 				CheckCamera(W);
 				Test->TestTrue(TEXT("Seed dedicated test profile"),Save->ApplyProfileCommand(FGuid::NewGuid(),[](auto& P)
 					{ for (auto& R:P.Resources) if (R.ResourceId.Name==TEXT("RES-WOOD")) R.Amount=100; return true; }));
+				UI->Select({0,1});
+				HoverHUD(W,TerritoryRuntimeWidget<UDYKCityResourceWidget>(W)->MissionButton);
+				Stage=20; WaitHover(); return false;
+			}
+			if (Stage==30)
+			{
+				Test->TestFalse(TEXT("Title HUD suppresses parcel popup"),UI->IsPopupVisible());
+				auto* Title=TerritoryRuntimeWidget<UDYKStartWidget>(W);
+				if (!Title || !TerritoryPress(Test,Title->EnterButton)) return true;
+				Stage=0; WaitHover(); return false;
+			}
+			if (Stage==20)
+			{
+				Test->TestFalse(TEXT("Mission HUD hover clears existing parcel popup immediately"),UI->IsPopupVisible());
+				auto* City=TerritoryRuntimeWidget<UDYKCityResourceWidget>(W);
+				Test->TestTrue(TEXT("Mission button remains enabled"),City->MissionButton->GetIsEnabled());
+				HoverHUD(W,City->ResourceText); Stage=21; WaitHover(); return false;
+			}
+			if (Stage==21)
+			{
+				Test->TestFalse(TEXT("Resource HUD does not hover through to land"),UI->IsPopupVisible());
+				UDYKCityCollectWidget* Collect=nullptr;
+				for (TActorIterator<ADYKCityBuildingActor> It(W); It; ++It)
+				{
+					auto* Candidate=Cast<UDYKCityCollectWidget>(It->CollectionWidget->GetUserWidgetObject());
+					if (Candidate && Candidate->CollectButton && Candidate->CollectButton->GetVisibility()==ESlateVisibility::Visible)
+					{ Collect=Candidate; break; }
+				}
+				if (!Test->TestNotNull(TEXT("Actual building collection HUD exists"),Collect)) return true;
+				HoverHUD(W,Collect->CollectButton); Stage=22; WaitHover(); return false;
+			}
+			if (Stage==22)
+			{
+				Test->TestFalse(TEXT("Screen-space building collection HUD suppresses land popup even disabled"),UI->IsPopupVisible());
+				Hover(W,{0,1}); Stage=23; WaitHover(); return false;
+			}
+			if (Stage==23)
+			{
+				Test->TestTrue(TEXT("Land hover resumes after leaving HUD"),UI->IsPopupVisible());
+				auto* Mission=TerritoryRuntimeWidget<UDYKCityResourceWidget>(W)->MissionButton.Get();
+				const auto MissionGeometry=Mission->GetCachedGeometry();
+				const auto PopupGeometry=UI->Popup->GetCachedGeometry();
+				const auto Offset=MissionGeometry.GetAbsolutePosition()+MissionGeometry.GetAbsoluteSize()*.5
+					-PopupGeometry.GetAbsolutePosition()-PopupGeometry.GetAbsoluteSize()*.5;
+				UI->Popup->SetRenderTranslation(Offset/PopupGeometry.GetAccumulatedLayoutTransform().GetScale());
+				HoverHUD(W,Mission); Stage=25; WaitHover(); return false;
+			}
+			if (Stage==25)
+			{
+				Test->TestFalse(TEXT("Foreign HUD wins even where purchase popup overlaps its button"),UI->IsPopupVisible());
+				UI->Popup->SetRenderTranslation(FVector2D::ZeroVector);
 				Hover(W,{0,0}); Stage=10; WaitHover(); return false;
 			}
 			if (Stage==10)
@@ -154,8 +211,14 @@ namespace
 				const auto& P=*Save->GetProfileSnapshot();
 				for (const auto& S:P.CityEconomy.Instances) if (P.Buildings[S.BuildingIndex].BuildingId.Name==TEXT("CITY-SAWMILL")) Instance=S.InstanceId;
 				Test->TestTrue(TEXT("Saved placement rotated on newly opened land"),DYKCityTerritory::Move(*Save,FGuid::NewGuid(),Instance,{2,12},1,DYKCityTerritory::DEV_PLACEHOLDER()));
-				Stage=2; FString Error;
-				Test->TestTrue(TEXT("Travel away"),GI->RequestLevelTravel(EDYKLocalLevel::MissionPolygon,Error)); return false;
+				HoverHUD(W,TerritoryRuntimeWidget<UDYKCityResourceWidget>(W)->MissionButton);
+				Stage=24; WaitHover(); return false;
+			}
+			if (Stage==24)
+			{
+				Test->TestFalse(TEXT("Mission navigation hover suppresses land overlay before clicking"),UI->IsPopupVisible());
+				if (!TerritoryPress(Test,TerritoryRuntimeWidget<UDYKCityResourceWidget>(W)->MissionButton)) return true;
+				Stage=2; return false;
 			}
 			if (Stage==2)
 			{
@@ -185,6 +248,15 @@ namespace
 			return true;
 		}
 	private:
+		void HoverHUD(UWorld* W,UWidget* Widget)
+		{
+			if (!Test->TestNotNull(TEXT("Requested HUD widget exists"),Widget)) return;
+			const auto Geometry=Widget->GetCachedGeometry();
+			const auto Absolute=Geometry.LocalToAbsolute(Geometry.GetLocalSize()*.5);
+			FVector2D Pixel,Viewport;
+			USlateBlueprintLibrary::AbsoluteToViewport(W,Absolute,Pixel,Viewport);
+			W->GetFirstPlayerController()->SetMouseLocation(FMath::RoundToInt(Pixel.X),FMath::RoundToInt(Pixel.Y));
+		}
 		void WaitHover() { AfterTime=FPlatformTime::Seconds()+.6; AfterFrame=GFrameCounter+5; }
 		void Hover(UWorld* W,FIntPoint Parcel)
 		{

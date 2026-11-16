@@ -27,7 +27,7 @@
 | `M1.09` | Результат, постоянная награда | [`02`](./02-mission-economy.md) CAM11.04; [`02`](./02-mission-economy.md) P03.09; [`01`](./01-city-and-meta.md) CITY13.02 | P11-T15;QA-P02-19 | M1 |
 | `M1.10` | Первоначальные меню и HUD | [`01`](./01-city-and-meta.md) CITY16; [`02`](./02-mission-economy.md) UI16.01–UI16.04; [`08`](./08-tech-and-production.md) DEV-ART-001 | P16-T15;P17-T13;P18-T24 | M1 |
 | `M1.11` | Проверка сквозного M1-SLICE | [`00`](./00-project-and-roadmap.md) PROD-GATE-001; [`08`](./08-tech-and-production.md) P19-Q34/Q35; [`09`](./09-qa.md) PG-001…PG-060 (применимая часть) | P18-T01;QA-P03-21;PG-060 | M1 |
-| `M2.01` | Территория и участки города | [`01`](./01-city-and-meta.md) CITY12.01; [`01`](./01-city-and-meta.md) CITY12.02 | P12-T01;P12-T02;P12-T03;P12-T25;P12-T26;P12-T27 | M2 |
+| `M2.01` | Территория и участки города | [`01`](./01-city-and-meta.md) CITY12.01; [`01`](./01-city-and-meta.md) CITY12.02 | P12-T01;P12-T02;P12-T03;P12-T25;P12-T26;P12-T27;P12-T28 | M2 |
 | `M2.02` | Здания, ограничения и улучшения | [`01`](./01-city-and-meta.md) CITY12.02; [`01`](./01-city-and-meta.md) CITY14.04; [`01`](./01-city-and-meta.md) CITY14.05 | P12-T08;P12-T10;P14-T10 | M2 |
 | `M2.03` | Городской редактор Commit/Cancel | [`01`](./01-city-and-meta.md) CITY12.03; [`01`](./01-city-and-meta.md) CITY16 | P12-T16;P12-T17;P16-T06;P16-T07 | M2 |
 | `M2.04` | Городские дороги и декоративные NPC | [`01`](./01-city-and-meta.md) CITY12.04; [`01`](./01-city-and-meta.md) CITY16 | P12-T20;P12-T21;P12-T22 | M2 |

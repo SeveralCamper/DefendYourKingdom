@@ -13,9 +13,64 @@
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
 #include "Components/VerticalBox.h"
+#include "Components/WidgetComponent.h"
+#include "Components/PanelWidget.h"
 #include "Engine/GameInstance.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
+
+namespace
+{
+	bool BlocksPointer(UWidget* Widget, const FVector2D& Pointer)
+	{
+		// SelfHitTestInvisible containers cover the viewport but do not own its input.
+		if (Widget->GetVisibility()!=ESlateVisibility::Visible) return false;
+		for (auto* Parent=Widget->GetParent(); Parent; Parent=Parent->GetParent())
+		{
+			const auto Visibility=Parent->GetVisibility();
+			if (Visibility==ESlateVisibility::Hidden || Visibility==ESlateVisibility::Collapsed
+				|| Visibility==ESlateVisibility::HitTestInvisible) return false;
+		}
+		const auto& Geometry=Widget->GetCachedGeometry();
+		return Geometry.GetLocalSize().X>0 && Geometry.GetLocalSize().Y>0 && Geometry.IsUnderLocation(Pointer);
+	}
+	bool OtherHUDUnderPointer(const UDYKCityTerritoryWidget* Territory)
+	{
+		float MouseX=0.f,MouseY=0.f;
+		auto* Player=Territory->GetOwningPlayer();
+		if (!Player || !Player->GetMousePosition(MouseX,MouseY)) return false;
+		// Use the same viewport pointer as world hover, then map it into widget geometry.
+		const double Scale=FMath::Max(.01,double(UWidgetLayoutLibrary::GetViewportScale(Territory)));
+		const auto Pointer=Territory->GetCachedGeometry().LocalToAbsolute(FVector2D(MouseX,MouseY)/Scale);
+		TSet<UUserWidget*> AttachedWidgets;
+		for (TObjectIterator<UWidgetComponent> It; It; ++It)
+			if (It->GetWorld()==Territory->GetWorld() && It->IsRegistered() && It->IsVisible()
+				&& It->IsWidgetVisible() && It->GetWidgetSpace()==EWidgetSpace::Screen
+				&& It->GetOwner() && !It->GetOwner()->IsHidden())
+			{
+				FVector2D Screen;
+				if (auto* PC=Territory->GetOwningPlayer(); PC && PC->ProjectWorldLocationToScreen(It->GetComponentLocation(),Screen))
+				{
+					int32 Width=0,Height=0; PC->GetViewportSize(Width,Height);
+					const auto Margin=It->GetDrawSize();
+					if (Screen.X>=-Margin.X && Screen.X<=Width+Margin.X && Screen.Y>=-Margin.Y && Screen.Y<=Height+Margin.Y)
+						AttachedWidgets.Add(It->GetUserWidgetObject());
+				}
+			}
+		for (TObjectIterator<UUserWidget> It; It; ++It)
+		{
+			if (*It==Territory || It->GetWorld()!=Territory->GetWorld() || !It->WidgetTree
+				|| (!It->IsInViewport() && !AttachedWidgets.Contains(*It))) continue;
+			const auto Visibility=It->GetVisibility();
+			if (Visibility==ESlateVisibility::Hidden || Visibility==ESlateVisibility::Collapsed
+				|| Visibility==ESlateVisibility::HitTestInvisible) continue;
+			bool Blocked=false;
+			It->WidgetTree->ForEachWidget([&](UWidget* Widget) { Blocked |= BlocksPointer(Widget,Pointer); });
+			if (Blocked) return true;
+		}
+		return false;
+	}
+}
 
 TSharedRef<SWidget> UDYKCityTerritoryWidget::RebuildWidget()
 {
@@ -56,7 +111,7 @@ void UDYKCityTerritoryWidget::Refresh()
 	const auto* P=Save ? Save->GetProfileSnapshot() : nullptr;
 	if (!P || !Details || !UnlockButton || !Popup) return;
 	const bool Inside=Selected.X>=0 && Selected.Y>=0 && Selected.X<5 && Selected.Y<5;
-	if (!Inside || DYKCityTerritory::IsUnlocked(*P,Selected))
+	if (!Inside || OtherHUDUnderPointer(this) || DYKCityTerritory::IsUnlocked(*P,Selected))
 	{
 		Popup->SetVisibility(ESlateVisibility::Hidden); UnlockButton->SetIsEnabled(false); return;
 	}
@@ -127,6 +182,8 @@ void UDYKCityTerritoryWidget::NativeTick(const FGeometry& Geometry,float DeltaTi
 	Super::NativeTick(Geometry,DeltaTime);
 	auto* PC=GetOwningPlayer();
 	if (!PC || !Popup) return;
+	// Foreign HUD wins even when this popup currently draws over that HUD.
+	if (OtherHUDUnderPointer(this)) { Select(FIntPoint(-1,-1)); return; }
 	if (!PositionPopup(Geometry)) return;
 	float MouseX=0.f,MouseY=0.f;
 	const bool HasMouse=PC->GetMousePosition(MouseX,MouseY);
@@ -159,7 +216,7 @@ void UDYKCityTerritoryWidget::NativeTick(const FGeometry& Geometry,float DeltaTi
 void UDYKCityTerritoryWidget::UnlockClicked()
 {
 	auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
-	if (!Save || !Popup || Popup->GetVisibility()!=ESlateVisibility::Visible) return;
+	if (!Save || !Popup || Popup->GetVisibility()!=ESlateVisibility::Visible || OtherHUDUnderPointer(this)) return;
 	if (!PendingCommand.IsValid()) PendingCommand=FGuid::NewGuid();
 	bFailed=!DYKCityTerritory::Unlock(*Save,PendingCommand,Selected,DYKCityTerritory::DEV_PLACEHOLDER());
 	if (!bFailed) PendingCommand.Invalidate();
