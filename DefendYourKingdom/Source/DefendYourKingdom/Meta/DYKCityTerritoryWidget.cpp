@@ -171,8 +171,15 @@ bool UDYKCityTerritoryWidget::PositionPopup(const FGeometry& Geometry)
 	{
 		Select(FIntPoint(-1,-1)); return false;
 	}
-	PopupPosition.X=FMath::Clamp((Left+Right)*.5-PopupSize.X*.5,8.,FMath::Max(8.,ViewSize.X-PopupSize.X-8.));
-	PopupPosition.Y=FMath::Clamp(double(Bottom)+8.,8.,FMath::Max(8.,ViewSize.Y-PopupSize.Y-8.));
+	FVector2D Center;
+	if (!UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(PC,
+		DYKCityTerritory::CellCorner(Cell+FIntPoint(5,5)),Center,true))
+	{
+		Select(FIntPoint(-1,-1)); return false;
+	}
+	// Center the card on the plot so its purchase button is a short pointer move away.
+	PopupPosition.X=FMath::Clamp(Center.X-PopupSize.X*.5,8.,FMath::Max(8.,ViewSize.X-PopupSize.X-8.));
+	PopupPosition.Y=FMath::Clamp(Center.Y-PopupSize.Y*.5,8.,FMath::Max(8.,ViewSize.Y-PopupSize.Y-8.));
 	PopupSlot->SetPosition(PopupPosition);
 	return true;
 }
