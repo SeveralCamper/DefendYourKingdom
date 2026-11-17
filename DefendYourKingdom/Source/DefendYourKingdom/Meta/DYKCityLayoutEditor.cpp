@@ -23,7 +23,7 @@ bool FDYKCityLayoutEditor::ValidateDraft(const TArray<FDYKCityLayoutEntry>& Layo
 {
 	if (!bActive || Layout.Num() != Original.CityEconomy.Instances.Num()) return false;
 	TSet<FGuid> Ids;
-	TSet<FIntPoint> Occupancy;
+	TArray<FDYKBuildingSaveData> Placed;
 	for (const auto& Entry : Layout)
 	{
 		const auto* State = Original.CityEconomy.Instances.FindByPredicate([&](const auto& S) { return S.InstanceId == Entry.InstanceId; });
@@ -32,15 +32,15 @@ bool FDYKCityLayoutEditor::ValidateDraft(const TArray<FDYKCityLayoutEntry>& Layo
 		if (!Entry.bPlaced) { if (RequireAll) return false; else continue; }
 		auto B = Original.Buildings[State->BuildingIndex];
 		B.CellOrigin = Entry.Origin; B.RotationQuarterTurns = Entry.QuarterTurns;
-		TArray<FIntPoint> Cells;
-		if (!DYKCityTerritory::OccupiedCells(B,DYKCityTerritory::DEV_PLACEHOLDER(),Cells)) return false;
-		for (auto Cell : Cells)
-		{
-			if (Occupancy.Contains(Cell) || !DYKCityTerritory::IsUnlocked(Original,{Cell.X/10,Cell.Y/10})) return false;
-			Occupancy.Add(Cell);
-		}
+		Placed.Add(B);
 	}
-	return true;
+	return DYKCityTerritory::ValidateLayout(Original,Placed,DYKCityTerritory::DEV_PLACEHOLDER());
+}
+
+bool FDYKCityLayoutEditor::HasConflict(const FDYKPlayerProfileSaveData& P) const
+{
+	return bActive && (!DYKCityEconomy::Validate(P) || !MatchesOriginal(P)
+		|| !DYKCityTerritory::Validate(P,DYKCityTerritory::DEV_PLACEHOLDER()));
 }
 
 bool FDYKCityLayoutEditor::Store(FGuid Instance)
@@ -60,6 +60,15 @@ bool FDYKCityLayoutEditor::CanPlace(FGuid Instance, FIntPoint Origin, int32 Turn
 	if (!Entry) return false;
 	Entry->Origin = Origin; Entry->QuarterTurns = Turns; Entry->bPlaced = true;
 	return ValidateDraft(Candidate,false);
+}
+
+bool FDYKCityLayoutEditor::RotateStored(FGuid Instance,int32 Turns)
+{
+	if (!bActive || Turns<0 || Turns>3) return false;
+	auto* Entry=Draft.FindByPredicate([Instance](const auto& E){return E.InstanceId==Instance;});
+	if (!Entry || Entry->bPlaced) return false;
+	Entry->QuarterTurns=Turns;
+	return true;
 }
 
 bool FDYKCityLayoutEditor::Place(FGuid Instance, FIntPoint Origin, int32 Turns)

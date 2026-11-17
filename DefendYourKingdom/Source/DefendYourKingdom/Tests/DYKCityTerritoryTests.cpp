@@ -98,7 +98,7 @@ bool FDYKTerritoryInitialTest::RunTest(const FString& Parameters)
 	for (int32 I=0;I<P.Buildings.Num();++I) TestTrue(TEXT("Building ownership/order/levels retained"),
 		P.Buildings[I].BuildingId==Legacy.Buildings[I].BuildingId && P.Buildings[I].Level==Legacy.Buildings[I].Level);
 	TestEqual(TEXT("Existing valid quarter-turn retained by migration"),P.Buildings[TerritoryBuilding(P,TEXT("CITY-SAWMILL"))].RotationQuarterTurns,1);
-	auto ExpectedEconomy=Legacy.CityEconomy; ExpectedEconomy.TerritoryVersion=1;
+	auto ExpectedEconomy=Legacy.CityEconomy; ExpectedEconomy.TerritoryVersion=DYKCityTerritory::CurrentVersion;
 	TestTrue(TEXT("Every production GUID/index/stored/cycle/timestamp retained"),FDYKCitySaveData::StaticStruct()->CompareScriptStruct(&P.CityEconomy,&ExpectedEconomy,0));
 	TestEqual(TEXT("Wood balance retained"),DYKCityEconomy::Balance(P,TerritoryWood),int64(37));
 	TestEqual(TEXT("Daily reward retained"),P.LastDailyRewardDateKey,Legacy.LastDailyRewardDateKey);
@@ -117,9 +117,9 @@ bool FDYKTerritoryInitialTest::RunTest(const FString& Parameters)
 		auto Invalid=P; Invalid.Parcels[Delta].Coordinate=Invalid.Parcels[0].Coordinate;
 		TestFalse(TEXT("Duplicate parcel rejected"),DYKCityTerritory::Validate(Invalid,C));
 	}
-	auto Unknown=P; Unknown.CityEconomy.TerritoryVersion=2;
+	auto Unknown=P; Unknown.CityEconomy.TerritoryVersion=DYKCityTerritory::CurrentVersion+1;
 	TestFalse(TEXT("Unknown territory version rejected"),DYKCityTerritory::Initialize(Unknown,C));
-	TestEqual(TEXT("Unknown version preserved"),Unknown.CityEconomy.TerritoryVersion,2);
+	TestEqual(TEXT("Unknown version preserved"),Unknown.CityEconomy.TerritoryVersion,DYKCityTerritory::CurrentVersion+1);
 	auto BadConfig=C; BadConfig.InitialParcels.Remove(*BadConfig.InitialParcels.CreateConstIterator());
 	auto Failed=Legacy;
 	TestFalse(TEXT("Invalid initial parcel configuration rejected"),DYKCityTerritory::Initialize(Failed,BadConfig));
@@ -146,6 +146,61 @@ bool FDYKTerritoryInitialTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("Malformed legacy parcel rejected"),DYKCityTerritory::Initialize(BadLegacy,C));
 		TestTrue(TEXT("Malformed legacy land preserved on rejection"),TerritorySame(BadLegacy,BadBefore));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKTerritoryClearanceMigrationTest, "DYK.M204.MandatoryPerimeter.V1Migration", TerritoryTestFlags)
+bool FDYKTerritoryClearanceMigrationTest::RunTest(const FString& Parameters)
+{
+	const auto& C=DYKCityTerritory::DEV_PLACEHOLDER();
+	FDYKPlayerProfileSaveData P;
+	if (!TestTrue(TEXT("Seed latest city"),TerritorySeed(P,C))) return false;
+	P.CityEconomy.TerritoryVersion=1;
+	P.Buildings[TerritoryBuilding(P,TEXT("CITY-CASTLE"))].CellOrigin={10,10};
+	P.CityEconomy.Instances[1].Stored=11; P.CityEconomy.Instances[1].RemainderSeconds=29;
+	P.Buildings[TerritoryBuilding(P,TEXT("CITY-MILL"))].RotationQuarterTurns=1;
+	TerritorySetBalance(P,TerritoryWood,37); P.LastDailyRewardDateKey=20261115;
+	P.Parcels.FindByPredicate([](const auto& R){return R.Coordinate==FIntPoint(4,2);})->bIsUnlocked=true;
+	const auto Legacy=P;
+	TestTrue(TEXT("Real V1 edge-castle save remains openable"),DYKCityTerritory::Initialize(P,C));
+	TestTrue(TEXT("Castle moved minimally to allow all four road sides"),P.Buildings[TerritoryBuilding(P,TEXT("CITY-CASTLE"))].CellOrigin==FIntPoint(11,11));
+	auto Expected=Legacy; Expected.CityEconomy.TerritoryVersion=DYKCityTerritory::CurrentVersion;
+	for (int32 I=0;I<P.Buildings.Num();++I) Expected.Buildings[I].CellOrigin=P.Buildings[I].CellOrigin;
+	TestTrue(TEXT("Only origins/version changed; GUIDs, order, paid costs, resources, production and open land preserved"),TerritorySame(P,Expected));
+	const auto Migrated=P;
+	TestTrue(TEXT("V2 reload succeeds"),DYKCityTerritory::Initialize(P,C));
+	TestTrue(TEXT("V2 reload does not repeat repair"),TerritorySame(P,Migrated));
+	P.CityEconomy.TerritoryVersion=1; Expected=P; Expected.CityEconomy.TerritoryVersion=DYKCityTerritory::CurrentVersion;
+	TestTrue(TEXT("Already ring-safe V1 geometry migrates"),DYKCityTerritory::Initialize(P,C));
+	TestTrue(TEXT("Ring-safe V1 changes version alone"),TerritorySame(P,Expected));
+
+	// A dense V1 strip is legal under the old body-only contract, but lacks road clearance.
+	auto Dense=Legacy;
+	const TArray<FName> Names={TEXT("CITY-CASTLE"),TEXT("CITY-SAWMILL"),TEXT("CITY-QUARRY"),TEXT("CITY-MILL"),TEXT("CITY-HOUSE")};
+	const TArray<FIntPoint> Origins={{10,10},{20,10},{23,10},{26,10},{29,10}};
+	for (int32 I=0;I<Names.Num();++I)
+	{
+		auto& B=Dense.Buildings[TerritoryBuilding(Dense,Names[I])]; B.CellOrigin=Origins[I]; B.RotationQuarterTurns=0;
+	}
+	const auto DenseBefore=Dense;
+	TestTrue(TEXT("Dense old strip repaired without losing owned buildings"),DYKCityTerritory::Initialize(Dense,C));
+	TestTrue(TEXT("Repaired dense layout satisfies all mandatory perimeters"),DYKCityTerritory::Validate(Dense,C));
+	Expected=DenseBefore; Expected.CityEconomy.TerritoryVersion=DYKCityTerritory::CurrentVersion;
+	for (int32 I=0;I<Dense.Buildings.Num();++I) Expected.Buildings[I].CellOrigin=Dense.Buildings[I].CellOrigin;
+	TestTrue(TEXT("Dense repair changes no non-placement field"),TerritorySame(Dense,Expected));
+
+	// No 12x12 castle clearance can fit in these isolated one-parcel islands.
+	auto Impossible=Legacy;
+	const TSet<FIntPoint> Islands={{1,1},{3,1},{1,3},{3,3},{0,0},{4,4}};
+	for (auto& Parcel:Impossible.Parcels) Parcel.bIsUnlocked=Islands.Contains(Parcel.Coordinate);
+	const TArray<FIntPoint> IslandOrigins={{10,10},{31,11},{11,31},{31,31},{1,1}};
+	for (int32 I=0;I<Names.Num();++I)
+	{
+		auto& B=Impossible.Buildings[TerritoryBuilding(Impossible,Names[I])]; B.CellOrigin=IslandOrigins[I]; B.RotationQuarterTurns=0;
+	}
+	const auto ImpossibleBefore=Impossible;
+	TestFalse(TEXT("Impossible legacy ownership fails without buying land or deleting buildings"),DYKCityTerritory::Initialize(Impossible,C));
+	TestTrue(TEXT("Failed repair preserves entire old save and old version"),TerritorySame(Impossible,ImpossibleBefore));
 	return true;
 }
 
@@ -211,21 +266,21 @@ bool FDYKTerritoryPlacementTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Unknown instance cannot move"),DYKCityTerritory::Move(S,FGuid::NewGuid(),FGuid::NewGuid(),{30,20},0,C));
 	TestFalse(TEXT("Invalid rotation cannot move"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Sawmill,{30,20},4,C));
 	S.bFailWrite=true;
-	TestFalse(TEXT("Valid move fails if persistence fails"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Sawmill,{30,20},1,C));
+	TestFalse(TEXT("Valid move fails if persistence fails"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Sawmill,{36,23},1,C));
 	TestTrue(TEXT("Persistence failure preserves old placement"),TerritorySame(S.Profile,Before));
 	S.bFailWrite=false;
-	TestTrue(TEXT("Free existing building moved with rotation"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Sawmill,{30,20},1,C));
+	TestTrue(TEXT("Free existing building moved with rotation"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Sawmill,{36,23},1,C));
 	TestEqual(TEXT("Building ownership count unchanged"),S.Profile.Buildings.Num(),Before.Buildings.Num());
 	TestEqual(TEXT("Move never charges resources"),DYKCityEconomy::Balance(S.Profile,TerritoryWood),DYKCityEconomy::Balance(Before,TerritoryWood));
 	const auto& Moved=S.Profile.Buildings[TerritoryBuilding(S.Profile,TEXT("CITY-SAWMILL"))];
-	TestTrue(TEXT("Position persisted"),Moved.CellOrigin==FIntPoint(30,20)); TestEqual(TEXT("Rotation persisted"),Moved.RotationQuarterTurns,1);
-	TestTrue(TEXT("Castle moves to free full parcel for free"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Castle,{20,10},3,C));
+	TestTrue(TEXT("Position persisted"),Moved.CellOrigin==FIntPoint(36,23)); TestEqual(TEXT("Rotation persisted"),Moved.RotationQuarterTurns,1);
+	TestTrue(TEXT("Castle moves with its full open perimeter for free"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Castle,{21,11},3,C));
 	const auto BeforeCastleCollision=S.Profile;
 	TestFalse(TEXT("Castle cannot move onto partially occupied parcel away from origin"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Castle,{30,20},0,C));
 	TestTrue(TEXT("Castle collision preserves original and all other buildings"),TerritorySame(S.Profile,BeforeCastleCollision));
 	for (int32 Turns=0;Turns<4;++Turns)
 	{
-		TestTrue(TEXT("All turns of castle preserve approved area"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Castle,{20,10},Turns,C));
+		TestTrue(TEXT("All turns of castle preserve approved area"),DYKCityTerritory::Move(S,FGuid::NewGuid(),Castle,{21,11},Turns,C));
 	}
 	const auto Current=S.Profile;
 	auto BadCastle=C; BadCastle.Footprints[TEXT("CITY-CASTLE")]={{0,0}};

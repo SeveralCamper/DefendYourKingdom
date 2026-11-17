@@ -2,6 +2,8 @@
 #include "../Meta/DYKCityEditorWidget.h"
 #include "../Meta/DYKCityTerritoryWidget.h"
 #include "../Meta/DYKCityBuildingActor.h"
+#include "../Meta/DYKCityBuildingPreviewActor.h"
+#include "../Meta/DYKCityDecorationActor.h"
 #include "../Meta/DYKCityWidgets.h"
 #include "../Saving/DYKSaveSubsystem.h"
 #include "../Core/DYKGameInstance.h"
@@ -18,12 +20,14 @@
 #include "HAL/PlatformTime.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Engine/StaticMeshActor.h"
 #include "EngineUtils.h"
 #include "Components/InputComponent.h"
 #include "Components/Button.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Input/Events.h"
 #include "Widgets/SWidget.h"
@@ -31,6 +35,8 @@
 #include "UnrealClient.h"
 #include "GameFramework/Pawn.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Engine/TextureRenderTarget2D.h"
 #if WITH_EDITOR
 #include "ShaderCompiler.h"
 #endif
@@ -92,15 +98,24 @@ namespace
 					return true;
 				}
 				Before=*Save->GetProfileSnapshot(); Revision=Save->GetRevision();
-				for (const auto& S:Before.CityEconomy.Instances) if (Before.Buildings[S.BuildingIndex].BuildingId.Name==TEXT("CITY-SAWMILL")) Saw=S.InstanceId;
+				CheckRoads(W,Before);
+				if (auto* Decor=Decoration(W)) for (const auto& Walker:Decor->GetPedestrians().Walkers) InitialPeople.Add(Walker.Position());
+				for (const auto& S:Before.CityEconomy.Instances)
+				{
+					if (Before.Buildings[S.BuildingIndex].BuildingId.Name==TEXT("CITY-SAWMILL")) Saw=S.InstanceId;
+					if (Before.Buildings[S.BuildingIndex].BuildingId.Name==TEXT("CITY-QUARRY")) Quarry=S.InstanceId;
+				}
 				if (!Test->TestTrue(TEXT("Sawmill owned"),Saw.IsValid())) return true;
 				// Focus the actual strategy camera, then select through its registered world input action.
 				auto* Pawn=W->GetFirstPlayerController()->GetPawn();
 				Pawn->SetActorLocation(FVector(2000,1000,Pawn->GetActorLocation().Z));
-				Stage=1; Wait(); return false;
+				Stage=1; Capture(TEXT("00-roads.png")); Wait(); return false;
 			}
 			if (Stage==1)
 			{
+				bool Moved=false;
+				if (auto* Decor=Decoration(W)) for (int32 I=0;I<InitialPeople.Num();++I) Moved|=Decor->GetPedestrians().Walkers[I].Position()!=InitialPeople[I];
+				Test->TestTrue(TEXT("Actual world timer moves decorative residents"),Moved);
 				auto* Actor=Building(W,Saw); if (!Test->TestNotNull(TEXT("Real city building actor exists"),Actor)) return true;
 				HoverWorld(W,Actor->Body->Bounds.Origin); Stage=2; Wait(); return false;
 			}
@@ -114,8 +129,13 @@ namespace
 				LayoutPress(Test,UI->StoreButton);
 				Test->TestTrue(TEXT("Buffer hides actor and collision"),Building(W,Saw)->IsHidden() && !Building(W,Saw)->GetActorEnableCollision());
 				Test->TestFalse(TEXT("Buffered actor collection UI hidden"),Building(W,Saw)->CollectionWidget->IsVisible());
+				Test->TestTrue(TEXT("Buffer is visible while it contains one building"),UI->BufferPanel->IsVisible() && UI->BufferedCardCount()==1);
+				Test->TestNull(TEXT("No next-building button in new editor"),UI->NextButton.Get());
+				Test->TestNull(TEXT("No cancel button in new editor"),UI->CancelButton.Get());
+				CheckRoads(W,*Save->GetProfileSnapshot());
 				LayoutPress(Test,UI->ApplyButton);
 				Test->TestTrue(TEXT("Incomplete Apply remains in editor"),City->GetLayoutEditor().IsActive());
+				Test->TestTrue(TEXT("Finish explains missing buildings"),City->GetLayoutMessage().ToString().Contains(TEXT("Не все здания")));
 				FString Error;
 				Test->TestFalse(TEXT("Direct travel cannot bypass incomplete editor"),GI->RequestLevelTravel(EDYKLocalLevel::MissionPolygon,Error));
 				LayoutPress(Test,LayoutUI<UDYKCityResourceWidget>(W)->MissionButton);
@@ -123,17 +143,55 @@ namespace
 				Test->TestTrue(TEXT("Failed Apply leaves saved profile byte-equivalent"),SameLayoutProfile(*Save->GetProfileSnapshot(),Before));
 				LayoutUI<UDYKCityTerritoryWidget>(W)->Select({0,1});
 				Test->TestFalse(TEXT("Land popup suppressed during editor"),LayoutUI<UDYKCityTerritoryWidget>(W)->IsPopupVisible());
-				LayoutPress(Test,UI->RotateButton);
 				Stage=10; Wait(); return false;
 			}
 			if (Stage==10)
 			{
-				// Text replacement changes the auto-sized panel; wait for Slate layout before reading geometry.
+				HoverWorld(W,Building(W,Quarry)->Body->Bounds.Origin); Stage=11; Wait(); return false;
+			}
+			if (Stage==11)
+			{
+				WorldAction(W);
+				if (!Test->TestTrue(TEXT("Mouse selection chooses another placed building during editor"),City->GetSelectedBuilding()==Quarry)) return true;
+				LayoutPress(Test,UI->StoreButton);
+				Test->TestEqual(TEXT("One card per buffered building"),UI->BufferedCardCount(),2);
+				Stage=12; Wait(); return false;
+			}
+			if (Stage==12)
+			{
+				FVector2D BufferPixel,BufferViewport;
+				const auto BufferGeometry=UI->BufferPanel->GetCachedGeometry();
+				USlateBlueprintLibrary::LocalToViewport(W,BufferGeometry,BufferGeometry.GetLocalSize()*.5,BufferPixel,BufferViewport);
+				int32 ViewWidth=0,ViewHeight=0; W->GetFirstPlayerController()->GetViewportSize(ViewWidth,ViewHeight);
+				Test->TestTrue(TEXT("Buffer strip centered along bottom of viewport"),FMath::Abs(BufferPixel.X-ViewWidth*.5)<60 && BufferPixel.Y>ViewHeight*.6);
+				HoverHUD(W,UI->FindBufferButton(Saw)); Stage=13; Wait(); return false;
+			}
+			if (Stage==13)
+			{
+				Test->TestTrue(TEXT("Pointer over buffer card blocks ground placement"),UI->BlocksWorldInput());
+				WorldAction(W);
+				Test->TestTrue(TEXT("Click forwarded through buffer card cannot place a stored building"),Building(W,Saw)->IsHidden() && Building(W,Quarry)->IsHidden());
+				if (!LayoutPress(Test,UI->FindBufferButton(Saw))) return true;
+				Test->TestTrue(TEXT("Click on sawmill card selects its exact instance"),City->GetSelectedBuilding()==Saw);
+				Test->TestNotNull(TEXT("Sawmill has model thumbnail"),UI->FindThumbnail(TEXT("CITY-SAWMILL")));
+				Test->TestNotNull(TEXT("Quarry has its own model thumbnail"),UI->FindThumbnail(TEXT("CITY-QUARRY")));
+				Test->TestTrue(TEXT("Different building types use distinct thumbnail textures"),UI->FindThumbnail(TEXT("CITY-SAWMILL"))!=UI->FindThumbnail(TEXT("CITY-QUARRY")));
+				if (FParse::Param(FCommandLine::Get(),TEXT("DYKM203Capture")))
+				{
+					CheckThumbnail(UI->FindThumbnail(TEXT("CITY-SAWMILL")));
+					CheckThumbnail(UI->FindThumbnail(TEXT("CITY-QUARRY")));
+				}
+				LayoutPress(Test,UI->RotateButton);
+				Test->TestEqual(TEXT("Buffered preview rotates immediately"),City->GetPlacementTurns(),1);
+				LayoutPress(Test,UI->FindBufferButton(Quarry));
+				LayoutPress(Test,UI->FindBufferButton(Saw));
+				Test->TestEqual(TEXT("Buffered rotation survives selecting a different card and returning"),City->GetPlacementTurns(),1);
 				HoverHUD(W,UI->Details); Stage=8; Wait(); return false;
 			}
 			if (Stage==8)
 			{
 				Test->TestTrue(TEXT("Panel text blocks world input"),UI->BlocksWorldInput());
+				Test->TestTrue(TEXT("Placement ghost hidden over editor HUD"),!UI->GetPlacementPreview() || UI->GetPlacementPreview()->IsHidden());
 				WorldAction(W);
 				Test->TestTrue(TEXT("Click through editor text cannot place buffered building"),Building(W,Saw)->IsHidden());
 				HoverHUD(W,LayoutUI<UDYKCityResourceWidget>(W)->ResourceText); Stage=9; Wait(); return false;
@@ -147,19 +205,32 @@ namespace
 			}
 			if (Stage==3)
 			{
+				CheckPreview(W,UI,City,{30,20});
 				WorldAction(W);
 				Test->TestFalse(TEXT("Placed draft actor visible"),Building(W,Saw)->IsHidden());
 				Test->TestTrue(TEXT("Draft world transform moved with rotated 2x3 footprint"),Building(W,Saw)->GetActorLocation().Equals(DYKCityTerritory::CellCorner({31,21})+FVector(0,100,0),1));
-				LayoutPress(Test,UI->NextButton);
-				Test->TestTrue(TEXT("Can select another owned building in editor"),City->GetSelectedBuilding()!=Saw);
-				LayoutPress(Test,UI->StoreButton);
-				LayoutPress(Test,UI->CancelButton);
-				Test->TestFalse(TEXT("Cancel exits even with buffer"),City->GetLayoutEditor().IsActive());
-				Test->TestEqual(TEXT("Cancel performs no save"),Save->GetRevision(),Revision);
-				Test->TestTrue(TEXT("Cancel restores all saved fields"),SameLayoutProfile(*Save->GetProfileSnapshot(),Before));
+				CheckRoads(W,*Save->GetProfileSnapshot());
+				Test->TestTrue(TEXT("Buffer remains visible while quarry still stored"),UI->BufferPanel->IsVisible() && UI->BufferedCardCount()==1);
+				if (!LayoutPress(Test,UI->FindBufferButton(Quarry))) return true;
+				Test->TestTrue(TEXT("Click on quarry card selects quarry"),City->GetSelectedBuilding()==Quarry);
+				for (const auto& S:Before.CityEconomy.Instances) if (S.InstanceId==Quarry) HoverCell(W,Before.Buildings[S.BuildingIndex].CellOrigin);
+				Stage=31; Wait(); return false;
+			}
+			if (Stage==31)
+			{
+				WorldAction(W);
+				Test->TestTrue(TEXT("Quarry returns from storage"),!Building(W,Quarry)->IsHidden());
+				Test->TestEqual(TEXT("No cards after every building returned"),UI->BufferedCardCount(),0);
+				Test->TestFalse(TEXT("Empty buffer strip disappears"),UI->BufferPanel->IsVisible());
+				// Backend cancel restores the fixture for a separate successful-Finish scenario;
+				// it is not exposed as a user-facing editor action.
+				City->CancelLayoutEdit();
+				Test->TestEqual(TEXT("Fixture rollback performs no save"),Save->GetRevision(),Revision);
+				Test->TestTrue(TEXT("Fixture rollback restores all saved fields"),SameLayoutProfile(*Save->GetProfileSnapshot(),Before));
 				CheckVisuals(W,Before);
 				// Second session commits a rotation and move through the same actual controls.
 				City->SelectBuilding(Saw); UI->Refresh(); LayoutPress(Test,UI->MoveButton); LayoutPress(Test,UI->RotateButton);
+				Test->TestTrue(TEXT("Placed building visibly rotates in place immediately without a ground click"),Building(W,Saw)->GetActorRotation().Equals(FRotator(0,90,0),.1));
 				HoverCell(W,{30,20}); Stage=4; Wait(); return false;
 			}
 			if (Stage==4)
@@ -179,7 +250,8 @@ namespace
 			}
 			if (Stage==5)
 			{
-				OldWorld=W; OldUI=UI;
+				Test->TestTrue(TEXT("Placement ghost disappears after successful Finish"),!UI->GetPlacementPreview() || UI->GetPlacementPreview()->IsHidden());
+				OldWorld=W; OldUI=UI; OldDecoration=Decoration(W);
 				FString Error; if (!Test->TestTrue(TEXT("Travel allowed after complete commit"),GI->RequestLevelTravel(EDYKLocalLevel::MissionPolygon,Error))) return true;
 				Stage=6; return false;
 			}
@@ -189,6 +261,7 @@ namespace
 				CollectGarbage(RF_NoFlags);
 				Test->TestFalse(TEXT("Editor UI releases unloaded city"),OldUI.IsValid());
 				Test->TestFalse(TEXT("City world collected after exit"),OldWorld.IsValid());
+				Test->TestFalse(TEXT("Decoration and timer released with old world"),OldDecoration.IsValid());
 				FString Error; if (!Test->TestTrue(TEXT("Return to city"),GI->RequestLevelTravel(EDYKLocalLevel::City,Error))) return true;
 				Stage=7; return false;
 			}
@@ -205,10 +278,86 @@ namespace
 			return false;
 		}
 	private:
+		void CheckThumbnail(UTextureRenderTarget2D* Texture)
+		{
+			if (!Texture) return;
+			TArray<FColor> Pixels;
+			if (!Test->TestTrue(TEXT("Real building thumbnail can be read from render target"),Texture->GameThread_GetRenderTargetResource()->ReadPixels(Pixels)) || Pixels.IsEmpty()) return;
+			int32 NonBackground=0; for (const auto Pixel:Pixels) NonBackground+=Pixel!=Pixels[0];
+			Test->TestTrue(TEXT("Thumbnail contains rendered model detail, not an empty uniform image"),NonBackground>Pixels.Num()/100);
+		}
+		void CheckPreview(UWorld* W,UDYKCityEditorWidget* UI,ADYKCityGameMode* City,FIntPoint Cell)
+		{
+			auto* Preview=UI->GetPlacementPreview();
+			if (!Test->TestNotNull(TEXT("Real placement ghost exists"),Preview)) return;
+			Test->TestTrue(TEXT("Preview visible over world"),!Preview->IsHidden());
+			Test->TestTrue(TEXT("Preview cannot intercept clicks"),!Preview->GetActorEnableCollision());
+			Test->TestTrue(TEXT("Preview rotates with current selection"),Preview->GetActorRotation().Equals(FRotator(0,City->GetPlacementTurns()*90.,0),.1));
+			const auto* S=Before.CityEconomy.Instances.FindByPredicate([City](const auto& Row){return Row.InstanceId==City->GetSelectedBuilding();});
+			if (S)
+			{
+				auto B=Before.Buildings[S->BuildingIndex]; B.CellOrigin=Cell; B.RotationQuarterTurns=City->GetPlacementTurns();
+				Test->TestTrue(TEXT("Preview follows projected footprint location"),Preview->GetActorLocation().Equals(DYKCityTerritory::BuildingLocation(B,DYKCityTerritory::DEV_PLACEHOLDER()),1));
+			}
+			TArray<UStaticMeshComponent*> Parts; Preview->GetComponents(Parts);
+			Test->TestTrue(TEXT("Building preview includes model parts"),Parts.Num()>1);
+			for (auto* Part:Parts) for (int32 I=0;I<Part->GetNumMaterials();++I)
+			{
+				const auto* Material=Cast<UMaterialInstanceDynamic>(Part->GetMaterial(I));
+				if (!Test->TestNotNull(TEXT("Each model part uses translucent preview material"),Material)) continue;
+				Test->TestTrue(TEXT("Preview uses actual translucent blend mode"),Material->GetBlendMode()==BLEND_Translucent);
+				float Opacity=0;
+				Test->TestTrue(TEXT("30 percent transparent means opacity 0.7"),Material->GetScalarParameterValue(FMaterialParameterInfo(TEXT("Opacity")),Opacity) && FMath::IsNearlyEqual(Opacity,.7f));
+			}
+		}
+		ADYKCityDecorationActor* Decoration(UWorld* W)
+		{ for (TActorIterator<ADYKCityDecorationActor> It(W);It;++It) return *It; return nullptr; }
+		void CheckRoads(UWorld* W,const FDYKPlayerProfileSaveData& P)
+		{
+			auto* Decor=Decoration(W); if (!Test->TestNotNull(TEXT("City decoration exists"),Decor)) return;
+			FDYKCityRoadNetwork Expected;
+			Expected.Rebuild(P,DYKCityTerritory::DEV_PLACEHOLDER(),&W->GetAuthGameMode<ADYKCityGameMode>()->GetLayoutEditor());
+			const auto& Editor=W->GetAuthGameMode<ADYKCityGameMode>()->GetLayoutEditor();
+			for (const auto& S:P.CityEconomy.Instances)
+			{
+				auto B=P.Buildings[S.BuildingIndex];
+				if (Editor.IsActive())
+				{
+					const auto* E=Editor.Entries().FindByPredicate([&S](const auto& Entry){return Entry.InstanceId==S.InstanceId;});
+					if (!E || !E->bPlaced) continue;
+					B.CellOrigin=E->Origin; B.RotationQuarterTurns=E->QuarterTurns;
+				}
+				TArray<FIntPoint> Body,Perimeter;
+				Test->TestTrue(TEXT("Every placed building has valid complete perimeter geometry"),DYKCityTerritory::PlacementCells(B,DYKCityTerritory::DEV_PLACEHOLDER(),Body,Perimeter));
+				for (const auto Cell:Perimeter)
+					Test->TestTrue(TEXT("Every required perimeter cell is actually rendered, including corners"),Decor->GetRoads().Cells.Contains(Cell));
+			}
+			Test->TestTrue(TEXT("Roads follow current draft/committed layout"),Expected.OrderedCells==Decor->GetRoads().OrderedCells);
+			Test->TestEqual(TEXT("Exactly one mesh per road cell"),Decor->Roads->GetInstanceCount(),Expected.Cells.Num());
+			Test->TestEqual(TEXT("Decorative population rendered"),Decor->Residents->GetInstanceCount(),Decor->GetPedestrians().DEV_PLACEHOLDER.Population);
+			Test->TestTrue(TEXT("Roads and residents cannot block building selection"),Decor->Roads->GetCollisionEnabled()==ECollisionEnabled::NoCollision && Decor->Residents->GetCollisionEnabled()==ECollisionEnabled::NoCollision);
+			if (!Test->TestNotNull(TEXT("Licensed road mesh loaded"),Decor->Roads->GetStaticMesh().Get())) return;
+			Test->TestNotNull(TEXT("Licensed resident mesh loaded"),Decor->Residents->GetStaticMesh().Get());
+			for (TActorIterator<AStaticMeshActor> It(W);It;++It)
+				if (It->ActorHasTag(TEXT("M110_VISUAL")) && (It->GetStaticMeshComponent()->GetStaticMesh()==Decor->Roads->GetStaticMesh()
+					|| It->GetStaticMeshComponent()->GetStaticMesh()->GetFName()==TEXT("SM_planks")))
+					Test->TestTrue(TEXT("Old fixed road props superseded by current perimeters"),It->IsHidden() && !It->GetActorEnableCollision());
+			TSet<FIntPoint> Seen;
+			for (int32 I=0;I<Decor->Roads->GetInstanceCount();++I)
+			{
+				FTransform T; Decor->Roads->GetInstanceTransform(I,T);
+				const auto Center=T.TransformPosition(Decor->Roads->GetStaticMesh()->GetBoundingBox().GetCenter());
+				const FIntPoint Cell(FMath::FloorToInt(Center.X/200+15),FMath::FloorToInt(Center.Y/200+15));
+				Test->TestTrue(TEXT("Mesh transform lies on a unique current road cell"),Expected.Cells.Contains(Cell) && !Seen.Contains(Cell)); Seen.Add(Cell);
+			}
+			for (const auto& Walker:Decor->GetPedestrians().Walkers)
+				Test->TestTrue(TEXT("Every resident stays on accessible decoration"),Expected.Cells.Contains(Walker.Cell) && Expected.Cells.Contains(Walker.Next));
+		}
 		ADYKCityBuildingActor* Building(UWorld* W,FGuid Id)
 		{ for (TActorIterator<ADYKCityBuildingActor> It(W); It; ++It) if (It->InstanceId==Id) return *It; return nullptr; }
 		void CheckVisuals(UWorld* W,const FDYKPlayerProfileSaveData& P)
 		{
+			CheckRoads(W,P);
 			int32 Count=0; for (TActorIterator<ADYKCityBuildingActor> It(W); It; ++It) ++Count;
 			Test->TestEqual(TEXT("Exactly one actor per owned building"),Count,P.Buildings.Num());
 			for (const auto& S:P.CityEconomy.Instances)
@@ -252,13 +401,15 @@ namespace
 		TWeakObjectPtr<UDYKGameInstance> GI;
 		FString Phase,Evidence,CaptureName;
 		FDYKPlayerProfileSaveData Before;
-		FGuid Saw;
+		FGuid Saw,Quarry;
 		int64 Revision=0;
 		int32 Stage=0;
 		double Deadline,AfterTime=0;
 		uint64 AfterFrame=0;
 		TWeakObjectPtr<UWorld> OldWorld;
 		TWeakObjectPtr<UDYKCityEditorWidget> OldUI;
+		TWeakObjectPtr<ADYKCityDecorationActor> OldDecoration;
+		TArray<FVector2D> InitialPeople;
 	};
 }
 

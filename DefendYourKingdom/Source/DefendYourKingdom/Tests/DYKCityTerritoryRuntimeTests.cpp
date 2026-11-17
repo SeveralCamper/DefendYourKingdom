@@ -2,6 +2,7 @@
 #include "../Meta/DYKCityTerritoryWidget.h"
 #include "../Meta/DYKCityTerritoryActor.h"
 #include "../Meta/DYKCityBuildingActor.h"
+#include "../Meta/DYKCityDecorationActor.h"
 #include "../Meta/DYKCityWidgets.h"
 #include "../UI/DYKStartWidget.h"
 #include "../Core/DYKGameInstance.h"
@@ -28,6 +29,7 @@
 #include "Components/TextBlock.h"
 #include "Components/WidgetComponent.h"
 #include "Components/Button.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
 #if WITH_EDITOR
 #include "ShaderCompiler.h"
@@ -204,8 +206,22 @@ namespace
 			{
 				if (!Test->TestNotNull(TEXT("City plot UI"),UI)) return true;
 				Test->TestTrue(TEXT("Popup stays visible while cursor moves onto purchase button"),UI->Popup->GetVisibility()==ESlateVisibility::Visible);
+				ADYKCityDecorationActor* Decoration=nullptr;
+				for (TActorIterator<ADYKCityDecorationActor> It(W);It;++It) { Decoration=*It; break; }
+				if (!Test->TestNotNull(TEXT("Actual city decoration before purchase"),Decoration)) return true;
+				const int32 RoadsBefore=Decoration->Roads->GetInstanceCount();
+				Test->TestTrue(TEXT("Castle has its complete west perimeter before any land purchase"),Decoration->GetRoads().Cells.Contains({10,12}));
+				FDYKCityRoadNetwork BeforeRoads;
+				Test->TestTrue(TEXT("Complete road geometry derives before purchase"),BeforeRoads.Rebuild(*Save->GetProfileSnapshot(),DYKCityTerritory::DEV_PLACEHOLDER()));
+				Test->TestTrue(TEXT("Actual roads already complete before purchase"),BeforeRoads.OrderedCells==Decoration->GetRoads().OrderedCells);
 				if (!TerritoryPress(Test,UI->UnlockButton)) return true;
 				Test->TestTrue(TEXT("Native plot button unlocks western neighbour"),DYKCityTerritory::IsUnlocked(*Save->GetProfileSnapshot(),{0,1}));
+				FDYKCityRoadNetwork ExpectedRoads;
+				Test->TestTrue(TEXT("Expected purchased-land network derives"),ExpectedRoads.Rebuild(*Save->GetProfileSnapshot(),DYKCityTerritory::DEV_PLACEHOLDER()));
+				Test->TestTrue(TEXT("Full castle west perimeter remains visible after purchase"),Decoration->GetRoads().Cells.Contains({10,12}));
+				Test->TestEqual(TEXT("Buying land cannot reveal a previously clipped required road"),Decoration->Roads->GetInstanceCount(),RoadsBefore);
+				Test->TestTrue(TEXT("Actual network refreshed exactly after unlock"),Decoration->GetRoads().OrderedCells==ExpectedRoads.OrderedCells);
+				Test->TestEqual(TEXT("Actual purchased-land mesh count matches network"),Decoration->Roads->GetInstanceCount(),ExpectedRoads.Cells.Num());
 				Test->TestFalse(TEXT("Repeat UI unlock disabled"),UI->UnlockButton->GetIsEnabled());
 				Test->TestTrue(TEXT("Exact wood debit persisted"),Save->GetProfileSnapshot()->Resources.ContainsByPredicate([](const auto& R) { return R.ResourceId.Name==TEXT("RES-WOOD") && R.Amount==93; }));
 				const auto& P=*Save->GetProfileSnapshot();

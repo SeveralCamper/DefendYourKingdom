@@ -6,6 +6,7 @@
 #include "DYKCityTerritoryWidget.h"
 #include "DYKCityWidgets.h"
 #include "DYKCityEditorWidget.h"
+#include "DYKCityDecorationActor.h"
 #include "EngineUtils.h"
 #include "Components/WidgetComponent.h"
 #include "../UI/DYKStartWidget.h"
@@ -22,7 +23,7 @@ void ADYKCityGameMode::InitGame(const FString& MapName, const FString& Options, 
 	auto* Save = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
 	const auto* P = Save->GetProfileSnapshot();
 	bool Ready = false;
-	if (P && (P->CityEconomy.Version == 0 || P->CityEconomy.TerritoryVersion == 0))
+	if (P && (P->CityEconomy.Version == 0 || P->CityEconomy.TerritoryVersion < 2))
 	{
 		const int64 Now = FDateTime::UtcNow().ToUnixTimestamp();
 		Ready = Save->ApplyProfileCommand(FGuid::NewGuid(), [Now](FDYKPlayerProfileSaveData& Candidate)
@@ -58,6 +59,7 @@ void ADYKCityGameMode::StartPlay()
 			Actor->FinishSpawning(Transform);
 		}
 	}
+	if (auto* Decoration=GetWorld()->SpawnActor<ADYKCityDecorationActor>()) Decoration->Refresh(*P);
 	Super::StartPlay();
 	if (auto* PC = GetWorld()->GetFirstPlayerController(); PC && PC->IsLocalController())
 	{
@@ -105,7 +107,7 @@ bool ADYKCityGameMode::StoreSelected()
 bool ADYKCityGameMode::PlaceSelected(FIntPoint Cell)
 {
 	const bool Placed = LayoutEditor.Place(SelectedBuilding,Cell,PlacementTurns);
-	LayoutMessage = Placed ? NSLOCTEXT("DYKCityEditor","Placed","Место выбрано. Нажмите «Применить» для сохранения.")
+	LayoutMessage = Placed ? NSLOCTEXT("DYKCityEditor","Placed","Место выбрано. Нажмите «Закончить изменение» для сохранения.")
 		: NSLOCTEXT("DYKCityEditor","Illegal","Здесь нельзя разместить здание: проверьте свободное место и открытую землю.");
 	if (Placed) SyncLayoutVisuals();
 	return Placed;
@@ -114,17 +116,36 @@ bool ADYKCityGameMode::PlaceSelected(FIntPoint Cell)
 bool ADYKCityGameMode::RotateSelected()
 {
 	if (!LayoutEditor.IsActive() || !SelectedBuilding.IsValid()) return false;
-	PlacementTurns = (PlacementTurns+1)%4;
-	LayoutMessage = NSLOCTEXT("DYKCityEditor","Rotated","Поворот выбран. Нажмите на сетку, чтобы разместить здание.");
+	const int32 NewTurns=(PlacementTurns+1)%4;
+	const auto* Entry=LayoutEditor.Entries().FindByPredicate([this](const auto& E){return E.InstanceId==SelectedBuilding;});
+	if (!Entry) return false;
+	if (!Entry->bPlaced && !LayoutEditor.RotateStored(SelectedBuilding,NewTurns)) return false;
+	if (Entry->bPlaced && !LayoutEditor.Place(SelectedBuilding,Entry->Origin,NewTurns))
+	{
+		LayoutMessage=NSLOCTEXT("DYKCityEditor","RotationBlocked","Поворот невозможен: не хватает свободного места для здания и дорожек.");
+		return false;
+	}
+	PlacementTurns=NewTurns;
+	LayoutMessage=FText::GetEmpty();
+	SyncLayoutVisuals();
 	return true;
 }
 
 bool ADYKCityGameMode::CommitLayoutEdit()
 {
 	auto* Save = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
+	const auto* Current=Save->GetProfileSnapshot();
+	if (LayoutEditor.IsActive() && Current && LayoutEditor.HasConflict(*Current))
+	{
+		LayoutMessage=NSLOCTEXT("DYKCityEditor","LayoutConflict","Расстановка или состав зданий изменились извне. Изменения не сохранены.");
+		return false;
+	}
 	if (!LayoutEditor.Commit(*Save))
 	{
-		LayoutMessage = NSLOCTEXT("DYKCityEditor","CommitFailed","Не удалось применить. Разместите все здания на свободной открытой земле. При ошибке записи повторите сохранение.");
+		const bool Buffered=LayoutEditor.Entries().ContainsByPredicate([](const auto& E){return !E.bPlaced;});
+		LayoutMessage = Buffered ? NSLOCTEXT("DYKCityEditor","BuildingsMissing","Не все здания выставлены. Верните здания из хранилища на карту.")
+			: !LayoutEditor.CanFinish() ? NSLOCTEXT("DYKCityEditor","InvalidFinish","Нельзя закончить изменение: проверьте свободное место для всех зданий и дорожек.")
+			: NSLOCTEXT("DYKCityEditor","WriteFailed","Не удалось записать расстановку. Повторите завершение изменения.");
 		return false;
 	}
 	LayoutMessage = FText::GetEmpty();
@@ -158,5 +179,6 @@ void ADYKCityGameMode::SyncLayoutVisuals()
 		if (Entry) { B.CellOrigin=Entry->Origin; B.RotationQuarterTurns=Entry->QuarterTurns; }
 		if (!Hidden) It->SetActorLocationAndRotation(DYKCityTerritory::BuildingLocation(B,DYKCityTerritory::DEV_PLACEHOLDER()),FRotator(0,B.RotationQuarterTurns*90.,0));
 	}
+	for (TActorIterator<ADYKCityDecorationActor> It(GetWorld());It;++It) It->Refresh(*P,&LayoutEditor);
 	for (TObjectIterator<UDYKCityEditorWidget> It; It; ++It) if (It->GetWorld()==GetWorld()) It->Refresh();
 }

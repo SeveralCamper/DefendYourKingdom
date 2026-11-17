@@ -234,5 +234,6 @@ void UDYKCityTerritoryWidget::UnlockClicked()
 	bFailed=!DYKCityTerritory::Unlock(*Save,PendingCommand,Selected,DYKCityTerritory::DEV_PLACEHOLDER());
 	if (!bFailed) PendingCommand.Invalidate();
 	for (TActorIterator<ADYKCityTerritoryActor> It(GetWorld()); It; ++It) It->Refresh();
+	if (!bFailed) if (auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>()) City->SyncLayoutVisuals();
 	Refresh();
 }

@@ -29,7 +29,7 @@
 | `M1.11` | Проверка сквозного M1-SLICE | [`00`](./00-project-and-roadmap.md) PROD-GATE-001; [`08`](./08-tech-and-production.md) P19-Q34/Q35; [`09`](./09-qa.md) PG-001…PG-060 (применимая часть) | P18-T01;QA-P03-21;PG-060 | M1 |
 | `M2.01` | Территория и участки города | [`01`](./01-city-and-meta.md) CITY12.01; [`01`](./01-city-and-meta.md) CITY12.02 | P12-T01;P12-T02;P12-T03;P12-T25;P12-T26;P12-T27;P12-T28 | M2 |
 | `M2.02` | Здания, ограничения и улучшения | [`01`](./01-city-and-meta.md) CITY12.02; [`01`](./01-city-and-meta.md) CITY14.04; [`01`](./01-city-and-meta.md) CITY14.05 | P12-T08;P12-T10;P14-T10 | M2 |
-| `M2.03` | Городской редактор Commit/Cancel | [`01`](./01-city-and-meta.md) CITY12.03; [`01`](./01-city-and-meta.md) CITY16 | P12-T16;P12-T17;P16-T06;P16-T07 | M2 |
+| `M2.03` | Городской редактор: хранилище и завершение изменения | [`01`](./01-city-and-meta.md) CITY12.03; [`01`](./01-city-and-meta.md) CITY16 | P12-T16;P12-T17;P16-T06;P16-T07 | M2 |
 | `M2.04` | Городские дороги и декоративные NPC | [`01`](./01-city-and-meta.md) CITY12.04; [`01`](./01-city-and-meta.md) CITY16 | P12-T20;P12-T21;P12-T22 | M2 |
 | `M2.05` | Производство и офлайн-расчёт | [`01`](./01-city-and-meta.md) CITY13.01; [`01`](./01-city-and-meta.md) CITY13.05; [`08`](./08-tech-and-production.md) P18.05 | P13-T09;P13-T20;P13-T30 | M2 |
 | `M2.06` | Таймеры строительства и улучшений (Q40) | [`01`](./01-city-and-meta.md) CITY13.03; [`01`](./01-city-and-meta.md) CITY13.06; [`01`](./01-city-and-meta.md) CITY14.07 | P13-T15;P13-T16;P13-T21;P14-T07 | M2 |

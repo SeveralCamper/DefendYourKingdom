@@ -142,7 +142,7 @@ bool FDYKLayoutGeometryCommitTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Quarry moves into former sawmill area"),E.Place(Quarry,Before.Buildings[SI].CellOrigin,2));
 	TestTrue(TEXT("Sawmill moves and turns in former quarry area"),E.Place(Saw,Before.Buildings[QI].CellOrigin,1));
 	TestTrue(TEXT("Castle temporarily buffered"),E.Store(LayoutGuid(Before,CI)));
-	TestTrue(TEXT("Castle moves freely to complete empty open parcel"),E.Place(LayoutGuid(Before,CI),{30,20},3));
+	TestTrue(TEXT("Castle moves with full perimeter into empty open area"),E.Place(LayoutGuid(Before,CI),{26,17},3));
 	TestTrue(TEXT("Draft actions do not save"),LayoutSame(S.Profile,Before));
 	S.bFailWrite = true;
 	TestFalse(TEXT("Persistence failure refuses entire commit"),E.Commit(S));
@@ -157,7 +157,7 @@ bool FDYKLayoutGeometryCommitTest::RunTest(const FString& Parameters)
 	auto Expected = Before;
 	Expected.Buildings[SI].CellOrigin = Before.Buildings[QI].CellOrigin; Expected.Buildings[SI].RotationQuarterTurns = 1;
 	Expected.Buildings[QI].CellOrigin = Before.Buildings[SI].CellOrigin; Expected.Buildings[QI].RotationQuarterTurns = 2;
-	Expected.Buildings[CI].CellOrigin = {30,20}; Expected.Buildings[CI].RotationQuarterTurns = 3;
+	Expected.Buildings[CI].CellOrigin = {26,17}; Expected.Buildings[CI].RotationQuarterTurns = 3;
 	TestTrue(TEXT("Commit modifies only intended placements, preserving identity, level, resources, timers and progress"),LayoutSame(S.Profile,Expected));
 	TestFalse(TEXT("Repeated inactive commit cannot duplicate transaction"),E.Commit(S));
 	TestEqual(TEXT("Repeated commit has no extra payment or write"),S.Revision,int64(1));

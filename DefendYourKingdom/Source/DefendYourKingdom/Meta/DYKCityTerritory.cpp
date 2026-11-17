@@ -33,7 +33,7 @@ const FDYKCityTerritoryConfig& DYKCityTerritory::DEV_PLACEHOLDER()
 		for (int32 Y = 1; Y <= 2; ++Y) for (int32 X = 1; X <= 3; ++X) C.InitialParcels.Add({X,Y});
 		for (const auto& Def : DYKCityCatalog::Buildings())
 			C.Footprints.Add(Def.Id.GetName(), Rectangle(Def.Footprint.X,Def.Footprint.Y));
-		C.StarterOrigins = {{TEXT("CITY-CASTLE"),{10,10}}, {TEXT("CITY-SAWMILL"),{22,12}},
+		C.StarterOrigins = {{TEXT("CITY-CASTLE"),{11,11}}, {TEXT("CITY-SAWMILL"),{22,12}},
 			{TEXT("CITY-QUARRY"),{32,12}}, {TEXT("CITY-MILL"),{12,22}}, {TEXT("CITY-HOUSE"),{22,22}}};
 		for (int32 Y = 0; Y < 5; ++Y) for (int32 X = 0; X < 5; ++X)
 		{
@@ -90,76 +90,147 @@ bool DYKCityTerritory::OccupiedCells(const FDYKBuildingSaveData& B, const FDYKCi
 	return true;
 }
 
+bool DYKCityTerritory::PlacementCells(const FDYKBuildingSaveData& B, const FDYKCityTerritoryConfig& C,
+	TArray<FIntPoint>& Body,TArray<FIntPoint>& Perimeter)
+{
+	Body.Reset(); Perimeter.Reset();
+	auto Fail=[&]() { Body.Reset(); Perimeter.Reset(); return false; };
+	if (!OccupiedCells(B,C,Body)) return Fail();
+	if (B.BuildingId.Name==TEXT("CITY-CASTLE"))
+	{
+		// Road clearance never changes the approved 10x10 body.
+		if (Body.Num()!=100) return Fail();
+		for (int32 Y=0;Y<10;++Y) for (int32 X=0;X<10;++X)
+			if (!Body.Contains(B.CellOrigin+FIntPoint(X,Y))) return Fail();
+	}
+	TSet<FIntPoint> Taken,Ring; Taken.Append(Body);
+	for (const auto Cell:Body) for (int32 Y=-1;Y<=1;++Y) for (int32 X=-1;X<=1;++X)
+	{
+		const auto Neighbor=Cell+FIntPoint(X,Y);
+		if (!InRange(Neighbor,CellsPerSide)) return Fail();
+		if (!Taken.Contains(Neighbor)) Ring.Add(Neighbor);
+	}
+	Perimeter=Ring.Array();
+	Perimeter.Sort([](FIntPoint A,FIntPoint B){ return A.Y==B.Y ? A.X<B.X : A.Y<B.Y; });
+	return true;
+}
+
+bool DYKCityTerritory::ValidateLayout(const FDYKPlayerProfileSaveData& P,
+	TConstArrayView<FDYKBuildingSaveData> Buildings,const FDYKCityTerritoryConfig& C)
+{
+	if (!ValidParcels(P)) return false;
+	TSet<FIntPoint> Bodies,Roads;
+	for (const auto& B:Buildings)
+	{
+		TArray<FIntPoint> Body,Perimeter;
+		if (!PlacementCells(B,C,Body,Perimeter)) return false;
+		for (const auto Cell:Body)
+		{
+			if (!IsUnlocked(P,{Cell.X/10,Cell.Y/10}) || Bodies.Contains(Cell) || Roads.Contains(Cell)) return false;
+		}
+		for (const auto Cell:Perimeter)
+			if (!IsUnlocked(P,{Cell.X/10,Cell.Y/10}) || Bodies.Contains(Cell)) return false;
+		Bodies.Append(Body); Roads.Append(Perimeter);
+	}
+	return true;
+}
+
 bool DYKCityTerritory::Validate(const FDYKPlayerProfileSaveData& P, const FDYKCityTerritoryConfig& C)
 {
-	if (P.CityEconomy.TerritoryVersion != 1 || !ValidParcels(P)) return false;
-	TSet<FIntPoint> Occupancy;
-	TArray<FIntPoint> Cells;
-	int32 Castles = 0;
-	for (const auto& B : P.Buildings)
-	{
-		if (!OccupiedCells(B, C, Cells)) return false;
-		if (B.BuildingId.Name == TEXT("CITY-CASTLE"))
-		{
-			++Castles;
-			// Configuration cannot weaken the approved 10x10 castle footprint.
-			if (Cells.Num() != 100) return false;
-			for (int32 Y = 0; Y < 10; ++Y) for (int32 X = 0; X < 10; ++X)
-				if (!Cells.Contains(B.CellOrigin + FIntPoint(X,Y))) return false;
-		}
-		for (auto Cell : Cells)
-		{
-			if (!IsUnlocked(P, {Cell.X / 10, Cell.Y / 10}) || Occupancy.Contains(Cell)) return false;
-			Occupancy.Add(Cell);
-		}
-	}
-	return Castles == 1;
+	return P.CityEconomy.TerritoryVersion==CurrentVersion
+		&& P.Buildings.FilterByPredicate([](const auto& B){return B.BuildingId.Name==TEXT("CITY-CASTLE");}).Num()==1
+		&& ValidateLayout(P,P.Buildings,C);
 }
 
 bool DYKCityTerritory::Initialize(FDYKPlayerProfileSaveData& P, const FDYKCityTerritoryConfig& C)
 {
-	if (P.CityEconomy.TerritoryVersion != 0) return Validate(P,C);
-	if (!DYKCityEconomy::Validate(P) || C.InitialParcels.Num() != 6) return false;
-	for (auto Parcel : C.InitialParcels) if (!InRange(Parcel,5)) return false;
-	auto Candidate = P;
-	TSet<FIntPoint> LegacyUnlocked;
-	TSet<FIntPoint> LegacySeen;
-	for (const auto& Parcel : P.Parcels)
+	const int32 Version=P.CityEconomy.TerritoryVersion;
+	if (Version==CurrentVersion) return Validate(P,C);
+	if (Version<0 || Version>CurrentVersion || !DYKCityEconomy::Validate(P)) return false;
+	auto Candidate=P;
+	if (Version==0)
 	{
-		if (!InRange(Parcel.Coordinate,5) || LegacySeen.Contains(Parcel.Coordinate)) return false;
-		LegacySeen.Add(Parcel.Coordinate);
-		if (Parcel.bIsUnlocked) LegacyUnlocked.Add(Parcel.Coordinate);
-	}
-	Candidate.Parcels.Reset();
-	for (int32 Y = 0; Y < 5; ++Y) for (int32 X = 0; X < 5; ++X)
-		Candidate.Parcels.Add({{X,Y}, C.InitialParcels.Contains({X,Y}) || LegacyUnlocked.Contains({X,Y})});
-	// Adapt pre-grid placement once. Fail atomically if legacy ownership cannot fit.
-	Candidate.CityEconomy.TerritoryVersion = 1;
-	TSet<FIntPoint> Used;
-	TArray<int32> Order;
-	for (int32 I = 0; I < Candidate.Buildings.Num(); ++I)
-		if (Candidate.Buildings[I].BuildingId.Name == TEXT("CITY-CASTLE")) Order.Insert(I,0); else Order.Add(I);
-	for (int32 I : Order)
-	{
-		auto& B = Candidate.Buildings[I];
-		if (B.RotationQuarterTurns < 0 || B.RotationQuarterTurns > 3) return false;
-		bool Found = false;
-		auto TryOrigin = [&](FIntPoint Origin)
+		if (C.InitialParcels.Num()!=6) return false;
+		for (auto Parcel:C.InitialParcels) if (!InRange(Parcel,5)) return false;
+		TSet<FIntPoint> LegacyUnlocked,LegacySeen;
+		for (const auto& Parcel:P.Parcels)
 		{
-			B.CellOrigin = Origin; TArray<FIntPoint> Cells;
-			if (!OccupiedCells(B,C,Cells)) return false;
-			for (auto Cell : Cells) if (Used.Contains(Cell) || !IsUnlocked(Candidate,{Cell.X/10,Cell.Y/10})) return false;
-			Used.Append(Cells); return true;
-		};
-		if (const auto* Preferred = C.StarterOrigins.Find(B.BuildingId.Name)) Found = TryOrigin(*Preferred);
-		for (int32 Y = 0; Y < 50 && !Found; ++Y) for (int32 X = 0; X < 50 && !Found; ++X)
-		{
-			Found = TryOrigin({X,Y});
+			if (!InRange(Parcel.Coordinate,5) || LegacySeen.Contains(Parcel.Coordinate)) return false;
+			LegacySeen.Add(Parcel.Coordinate);
+			if (Parcel.bIsUnlocked) LegacyUnlocked.Add(Parcel.Coordinate);
 		}
-		if (!Found) return false;
+		Candidate.Parcels.Reset();
+		for (int32 Y=0;Y<5;++Y) for (int32 X=0;X<5;++X)
+			Candidate.Parcels.Add({{X,Y},C.InitialParcels.Contains({X,Y}) || LegacyUnlocked.Contains({X,Y})});
+	}
+	else
+	{
+		// Verify V1's original body-only contract before attempting clearance repair.
+		if (!ValidParcels(P)) return false;
+		TSet<FIntPoint> Used;
+		for (const auto& B:P.Buildings)
+		{
+			TArray<FIntPoint> Body;
+			if (!OccupiedCells(B,C,Body)) return false;
+			for (const auto Cell:Body)
+			{
+				if (!IsUnlocked(P,{Cell.X/10,Cell.Y/10}) || Used.Contains(Cell)) return false;
+				Used.Add(Cell);
+			}
+		}
+	}
+	Candidate.CityEconomy.TerritoryVersion=CurrentVersion;
+	if (Version==1 && Validate(Candidate,C)) { P=MoveTemp(Candidate); return true; }
+	// Largest bodies first; original locations win, then nearest deterministic legal locations.
+	TArray<int32> Order;
+	for (int32 I=0;I<Candidate.Buildings.Num();++I) Order.Add(I);
+	Order.Sort([&](int32 A,int32 B)
+	{
+		const auto* SA=C.Footprints.Find(Candidate.Buildings[A].BuildingId.Name);
+		const auto* SB=C.Footprints.Find(Candidate.Buildings[B].BuildingId.Name);
+		const int32 NA=SA ? SA->Num() : 0,NB=SB ? SB->Num() : 0;
+		return NA==NB ? A<B : NA>NB;
+	});
+	TArray<FDYKBuildingSaveData> Placed;
+	bool Repaired=true;
+	for (const int32 I:Order)
+	{
+		auto B=Candidate.Buildings[I];
+		if (B.RotationQuarterTurns<0 || B.RotationQuarterTurns>3) return false;
+		FIntPoint Preferred=B.CellOrigin;
+		if (Version==0) if (const auto* Origin=C.StarterOrigins.Find(B.BuildingId.Name)) Preferred=*Origin;
+		TArray<FIntPoint> Origins;
+		for (int32 Y=0;Y<50;++Y) for (int32 X=0;X<50;++X) Origins.Add({X,Y});
+		Origins.Sort([Preferred](FIntPoint A,FIntPoint Other)
+		{
+			const int64 DA=FMath::Abs(int64(A.X)-Preferred.X)+FMath::Abs(int64(A.Y)-Preferred.Y);
+			const int64 DB=FMath::Abs(int64(Other.X)-Preferred.X)+FMath::Abs(int64(Other.Y)-Preferred.Y);
+			return DA==DB ? (A.Y==Other.Y ? A.X<Other.X : A.Y<Other.Y) : DA<DB;
+		});
+		bool Found=false;
+		for (const auto Origin:Origins)
+		{
+			B.CellOrigin=Origin; Placed.Add(B);
+			if (ValidateLayout(Candidate,Placed,C)) { Candidate.Buildings[I]=B; Found=true; break; }
+			Placed.Pop(EAllowShrinking::No);
+		}
+		if (!Found) { Repaired=false; break; }
+	}
+	if (!Repaired || !Validate(Candidate,C))
+	{
+		// Existing game saves own the five starter types. Their canonical ring-safe layout
+		// is a bounded fallback if greedy nearest-position repair runs out of room.
+		if (Candidate.Buildings.Num()!=C.StarterOrigins.Num()) return false;
+		TSet<FName> Types;
+		for (auto& B:Candidate.Buildings)
+		{
+			const auto* Origin=C.StarterOrigins.Find(B.BuildingId.Name);
+			if (!Origin || Types.Contains(B.BuildingId.Name)) return false;
+			Types.Add(B.BuildingId.Name); B.CellOrigin=*Origin;
+		}
 	}
 	if (!Validate(Candidate,C)) return false;
-	P = MoveTemp(Candidate);
+	P=MoveTemp(Candidate);
 	return true;
 }
 

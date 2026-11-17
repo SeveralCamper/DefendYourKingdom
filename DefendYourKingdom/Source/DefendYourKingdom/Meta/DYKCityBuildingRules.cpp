@@ -124,6 +124,7 @@ bool DYKCityBuildingRules::Prepare(const FDYKPlayerProfileSaveData& P, const FDY
 		FDYKBuildingSaveData B;
 		B.BuildingId = Def->Id.ToContentId(); B.CellOrigin = R.Origin; B.RotationQuarterTurns = R.QuarterTurns;
 		Candidate.Buildings.Add(B);
+		// The same body+mandatory perimeter contract serves editor and work preparation.
 		if (!DYKCityTerritory::Validate(Candidate,Territory)) return false;
 	}
 	else if (R.Kind == EDYKCityBuildingWorkKind::Upgrade)

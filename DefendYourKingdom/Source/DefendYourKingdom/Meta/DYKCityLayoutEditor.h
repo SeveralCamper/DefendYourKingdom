@@ -18,8 +18,11 @@ public:
 	bool IsActive() const { return bActive; }
 	const TArray<FDYKCityLayoutEntry>& Entries() const { return Draft; }
 	bool Store(FGuid Instance);
+	bool RotateStored(FGuid Instance,int32 QuarterTurns);
 	bool Place(FGuid Instance, FIntPoint Origin, int32 QuarterTurns);
 	bool CanPlace(FGuid Instance, FIntPoint Origin, int32 QuarterTurns) const;
+	bool CanFinish() const { return ValidateDraft(Draft,true); }
+	bool HasConflict(const FDYKPlayerProfileSaveData& Profile) const;
 	bool Commit(IDYKProfileService& Service);
 	void Cancel();
 

@@ -60,6 +60,22 @@ void ADYKSelectionPlayerController::HandleWorldSelect()
 		if (It->GetWorld()==GetWorld() && It->IsInViewport() && It->BlocksWorldInput()) return;
 	if (auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>(); City && City->GetLayoutEditor().IsActive())
 	{
+		FHitResult BuildingHit;
+		if (GetHitResultUnderCursor(ECC_Visibility,false,BuildingHit))
+			if (const auto* Building=Cast<ADYKCityBuildingActor>(BuildingHit.GetActor()); Building && Building->InstanceId!=City->GetSelectedBuilding())
+			{
+				if (City->SelectBuilding(Building->InstanceId))
+				{
+					SelectedActor=const_cast<ADYKCityBuildingActor*>(Building);
+					FDYKWorldSelection Selection;
+					Selection.TargetKind=EDYKSelectionTargetKind::CityBuilding;
+					Selection.TargetActor=SelectedActor;
+					Selection.HitResult=BuildingHit;
+					WorldSelectionChanged.Broadcast(Selection);
+					City->SyncLayoutVisuals();
+				}
+				return;
+			}
 		FIntPoint Cell;
 		if (DYKCityEditorInput::CursorCell(this,Cell)) City->PlaceSelected(Cell);
 		City->SyncLayoutVisuals();
