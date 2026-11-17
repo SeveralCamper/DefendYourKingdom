@@ -15,6 +15,7 @@ class DEFENDYOURKINGDOM_API UDYKScreenWidget : public UUserWidget
 {
 	GENERATED_BODY()
 public:
+	UDYKScreenWidget(const FObjectInitializer& ObjectInitializer);
 	UPROPERTY(EditDefaultsOnly, Category="Appearance") TObjectPtr<UTexture2D> PanelTexture;
 	UPROPERTY(EditDefaultsOnly, Category="Appearance") TObjectPtr<UTexture2D> ButtonTexture;
 	UPROPERTY(EditDefaultsOnly, Category="Appearance") FLinearColor Ink = FLinearColor(.12f, .075f, .035f, 1.f);

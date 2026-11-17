@@ -16,6 +16,8 @@ public:
 	virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
 	virtual void StartPlay() override;
 	bool SelectBuilding(FGuid Instance);
+	void ClearBuildingSelection();
+	bool IsPlacingBuilding() const { return bPlacingBuilding; }
 	bool BeginLayoutEdit();
 	bool StoreSelected();
 	bool PlaceSelected(FIntPoint Cell);
@@ -31,5 +33,6 @@ private:
 	FDYKCityLayoutEditor LayoutEditor;
 	FGuid SelectedBuilding;
 	int32 PlacementTurns = 0;
+	bool bPlacingBuilding = false;
 	FText LayoutMessage;
 };

@@ -62,7 +62,7 @@ void ADYKSelectionPlayerController::HandleWorldSelect()
 	{
 		FHitResult BuildingHit;
 		if (GetHitResultUnderCursor(ECC_Visibility,false,BuildingHit))
-			if (const auto* Building=Cast<ADYKCityBuildingActor>(BuildingHit.GetActor()); Building && Building->InstanceId!=City->GetSelectedBuilding())
+			if (const auto* Building=Cast<ADYKCityBuildingActor>(BuildingHit.GetActor()))
 			{
 				if (City->SelectBuilding(Building->InstanceId))
 				{
@@ -77,7 +77,8 @@ void ADYKSelectionPlayerController::HandleWorldSelect()
 				return;
 			}
 		FIntPoint Cell;
-		if (DYKCityEditorInput::CursorCell(this,Cell)) City->PlaceSelected(Cell);
+		if (City->IsPlacingBuilding() && DYKCityEditorInput::CursorCell(this,Cell)) City->PlaceSelected(Cell);
+		else City->ClearBuildingSelection();
 		City->SyncLayoutVisuals();
 		return;
 	}

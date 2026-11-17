@@ -6,6 +6,15 @@
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
 #include "Styling/CoreStyle.h"
+#include "UObject/ConstructorHelpers.h"
+
+UDYKScreenWidget::UDYKScreenWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
+{
+	static ConstructorHelpers::FObjectFinder<UTexture2D> PaperTexture(TEXT("/Game/DefendYourKingdom/Art/UI/panel_beige.panel_beige"));
+	static ConstructorHelpers::FObjectFinder<UTexture2D> ButtonPaper(TEXT("/Game/DefendYourKingdom/Art/UI/buttonLong_beige.buttonLong_beige"));
+	PanelTexture=PaperTexture.Object;
+	ButtonTexture=ButtonPaper.Object;
+}
 
 namespace
 {

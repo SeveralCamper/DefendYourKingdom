@@ -6,6 +6,7 @@
 #include "DYKCityTerritoryWidget.h"
 #include "DYKCityWidgets.h"
 #include "DYKCityEditorWidget.h"
+#include "../Core/Interaction/DYKSelectionPlayerController.h"
 #include "DYKCityDecorationActor.h"
 #include "EngineUtils.h"
 #include "Components/WidgetComponent.h"
@@ -80,17 +81,29 @@ bool ADYKCityGameMode::SelectBuilding(FGuid Instance)
 	const auto* State = P ? P->CityEconomy.Instances.FindByPredicate([Instance](const auto& S) { return S.InstanceId == Instance; }) : nullptr;
 	if (!State) return false;
 	SelectedBuilding = Instance;
+	bPlacingBuilding=false;
 	PlacementTurns = P->Buildings[State->BuildingIndex].RotationQuarterTurns;
 	if (const auto* Entry = LayoutEditor.Entries().FindByPredicate([Instance](const auto& E) { return E.InstanceId == Instance; }))
+	{
 		PlacementTurns = Entry->QuarterTurns;
+		bPlacingBuilding=!Entry->bPlaced;
+	}
 	LayoutMessage = FText::GetEmpty();
 	return true;
+}
+
+void ADYKCityGameMode::ClearBuildingSelection()
+{
+	SelectedBuilding.Invalidate(); PlacementTurns=0; bPlacingBuilding=false;
+	if (auto* PC=Cast<ADYKSelectionPlayerController>(GetWorld()->GetFirstPlayerController())) PC->ClearWorldSelection();
+	SyncLayoutVisuals();
 }
 
 bool ADYKCityGameMode::BeginLayoutEdit()
 {
 	const auto* P = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>()->GetProfileSnapshot();
-	if (!SelectedBuilding.IsValid() || !P || !LayoutEditor.Begin(*P)) return false;
+	if (!SelectedBuilding.IsValid() || !P || (!LayoutEditor.IsActive() && !LayoutEditor.Begin(*P))) return false;
+	bPlacingBuilding=true;
 	LayoutMessage = NSLOCTEXT("DYKCityEditor","Hint","Выберите место на сетке. Все изменения сохраняются вместе.");
 	SyncLayoutVisuals();
 	return true;
@@ -99,17 +112,18 @@ bool ADYKCityGameMode::BeginLayoutEdit()
 bool ADYKCityGameMode::StoreSelected()
 {
 	if (!LayoutEditor.Store(SelectedBuilding)) return false;
-	LayoutMessage = NSLOCTEXT("DYKCityEditor","Buffered","Здание в буфере. Выберите место, чтобы вернуть его на карту.");
-	SyncLayoutVisuals();
+	LayoutMessage = NSLOCTEXT("DYKCityEditor","Buffered","Здание в хранилище. Выберите его изображение, чтобы разместить снова.");
+	ClearBuildingSelection();
 	return true;
 }
 
 bool ADYKCityGameMode::PlaceSelected(FIntPoint Cell)
 {
+	if (!bPlacingBuilding) return false;
 	const bool Placed = LayoutEditor.Place(SelectedBuilding,Cell,PlacementTurns);
 	LayoutMessage = Placed ? NSLOCTEXT("DYKCityEditor","Placed","Место выбрано. Нажмите «Закончить изменение» для сохранения.")
 		: NSLOCTEXT("DYKCityEditor","Illegal","Здесь нельзя разместить здание: проверьте свободное место и открытую землю.");
-	if (Placed) SyncLayoutVisuals();
+	if (Placed) ClearBuildingSelection();
 	return Placed;
 }
 
@@ -150,6 +164,7 @@ bool ADYKCityGameMode::CommitLayoutEdit()
 	}
 	LayoutMessage = FText::GetEmpty();
 	SelectedBuilding.Invalidate();
+	bPlacingBuilding=false;
 	SyncLayoutVisuals();
 	return true;
 }
@@ -158,6 +173,7 @@ void ADYKCityGameMode::CancelLayoutEdit()
 {
 	LayoutEditor.Cancel();
 	SelectedBuilding.Invalidate();
+	bPlacingBuilding=false;
 	LayoutMessage = FText::GetEmpty();
 	SyncLayoutVisuals();
 }

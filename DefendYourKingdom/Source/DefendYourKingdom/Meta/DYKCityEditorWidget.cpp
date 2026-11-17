@@ -12,9 +12,9 @@
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
-#include "Components/ScrollBox.h"
 #include "Components/Image.h"
-#include "Components/ScrollBoxSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -59,10 +59,20 @@ TSharedRef<SWidget> UDYKCityEditorWidget::RebuildWidget()
 		BufferSlot->SetAnchors(FAnchors(.5,1)); BufferSlot->SetAlignment(FVector2D(.5,1));
 		BufferSlot->SetPosition(FVector2D(0,0)); BufferSlot->SetAutoSize(true);
 		auto* BufferWidth=WidgetTree->ConstructWidget<USizeBox>();
-		BufferWidth->SetWidthOverride(560); BufferWidth->SetHeightOverride(170); BufferPanel->AddChild(BufferWidth);
-		BufferScroll=WidgetTree->ConstructWidget<UScrollBox>(); BufferScroll->SetOrientation(Orient_Horizontal);
-		BufferScroll->SetScrollBarVisibility(ESlateVisibility::Visible);
-		BufferScroll->SetConsumeMouseWheel(EConsumeMouseWheel::Always); BufferWidth->AddChild(BufferScroll);
+		BufferWidth->SetWidthOverride(720); BufferWidth->SetHeightOverride(80); BufferPanel->AddChild(BufferWidth);
+		auto* NavigationRow=WidgetTree->ConstructWidget<UHorizontalBox>(); BufferWidth->AddChild(NavigationRow);
+		PreviousPageButton=DYKUI::Button(WidgetTree,this,FText::FromString(TEXT("◀")));
+		PreviousPageButton->OnClicked.AddDynamic(this,&ThisClass::PreviousPageClicked);
+		NavigationRow->AddChildToHorizontalBox(PreviousPageButton)->SetVerticalAlignment(VAlign_Center);
+		BufferRow=WidgetTree->ConstructWidget<UHorizontalBox>();
+		NavigationRow->AddChildToHorizontalBox(BufferRow)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		NextPageButton=DYKUI::Button(WidgetTree,this,FText::FromString(TEXT("▶")));
+		NextPageButton->OnClicked.AddDynamic(this,&ThisClass::NextPageClicked);
+		NavigationRow->AddChildToHorizontalBox(NextPageButton)->SetVerticalAlignment(VAlign_Center);
+		for (auto* Arrow:{PreviousPageButton.Get(),NextPageButton.Get()})
+		{
+			auto Style=Arrow->GetStyle(); Style.SetNormalPadding(FMargin(6,8)); Style.SetPressedPadding(FMargin(6,8)); Arrow->SetStyle(Style);
+		}
 	}
 	Refresh();
 	return Super::RebuildWidget();
@@ -74,11 +84,12 @@ void UDYKCityEditorWidget::Refresh()
 	if (!City || !Panel) return;
 	const bool Active=City->GetLayoutEditor().IsActive();
 	Panel->SetVisibility(Active || City->GetSelectedBuilding().IsValid() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	MoveButton->SetVisibility(Active ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	MoveButton->SetVisibility(Active && City->IsPlacingBuilding() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	MoveButton->SetIsEnabled(City->GetSelectedBuilding().IsValid());
 	for (auto* B : {RotateButton.Get(),StoreButton.Get(),ApplyButton.Get()})
 		B->SetVisibility(Active ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	RefreshBuffer();
-	if (!Active && PlacementPreview) PlacementPreview->SetActorHiddenInGame(true);
+	if ((!Active || !City->IsPlacingBuilding()) && PlacementPreview) PlacementPreview->SetActorHiddenInGame(true);
 	const auto* P=GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>()->GetProfileSnapshot();
 	const auto Id=City->GetSelectedBuilding();
 	const auto* S=P ? P->CityEconomy.Instances.FindByPredicate([Id](const auto& State) { return State.InstanceId==Id; }) : nullptr;
@@ -101,7 +112,7 @@ void UDYKCityEditorWidget::NativeTick(const FGeometry& Geometry,float DeltaTime)
 {
 	Super::NativeTick(Geometry,DeltaTime);
 	const auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>();
-	if (!City || !City->GetLayoutEditor().IsActive() || BlocksWorldInput())
+	if (!City || !City->GetLayoutEditor().IsActive() || !City->IsPlacingBuilding() || BlocksWorldInput())
 	{ if (PlacementPreview) PlacementPreview->SetActorHiddenInGame(true); return; }
 	FIntPoint Cell;
 	if (!DYKCityEditorInput::CursorCell(GetOwningPlayer(),Cell))
@@ -176,38 +187,44 @@ UTextureRenderTarget2D* UDYKCityEditorWidget::EnsureThumbnail(FName BuildingType
 
 void UDYKCityEditorWidget::RefreshBuffer()
 {
-	if (!BufferPanel || !BufferScroll) return;
+	if (!BufferPanel || !BufferRow) return;
 	const auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>();
 	TArray<FGuid> Buffered;
 	if (City && City->GetLayoutEditor().IsActive())
 		for (const auto& Entry:City->GetLayoutEditor().Entries()) if (!Entry.bPlaced) Buffered.Add(Entry.InstanceId);
 	BufferPanel->SetVisibility(Buffered.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
-	bool Same=Buffered.Num()==BufferButtons.Num();
-	if (Same) for (int32 I=0;I<Buffered.Num();++I) Same&=BufferButtons[I]->InstanceId==Buffered[I];
+	BufferedTotal=Buffered.Num();
+	const int32 Start=BufferPage.Start(Buffered.Num());
+	const int32 End=FMath::Min(Start+FDYKCityBufferPage::Capacity,Buffered.Num());
+	PreviousPageButton->SetIsEnabled(Start>0); NextPageButton->SetIsEnabled(End<Buffered.Num());
+	bool Same=End-Start==BufferButtons.Num();
+	if (Same) for (int32 I=Start;I<End;++I) Same&=BufferButtons[I-Start]->InstanceId==Buffered[I];
 	if (!Same)
 	{
-		BufferScroll->ClearChildren(); BufferButtons.Reset();
+		BufferRow->ClearChildren(); BufferButtons.Reset();
 		const auto* P=GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>()->GetProfileSnapshot();
-		for (const auto Id:Buffered)
+		for (int32 I=Start;I<End;++I)
 		{
+			const auto Id=Buffered[I];
 			const auto* S=P ? P->CityEconomy.Instances.FindByPredicate([Id](const auto& Row){ return Row.InstanceId==Id; }) : nullptr;
 			if (!S) continue;
 			const auto& B=P->Buildings[S->BuildingIndex]; const auto* Def=DYKCityCatalog::Find(B.BuildingId);
 			auto* Button=WidgetTree->ConstructWidget<UDYKCityBufferButton>(); Button->Editor=this; Button->InstanceId=Id;
 			Button->OnClicked.AddDynamic(Button,&UDYKCityBufferButton::SelectBuffered);
-			auto* Size=WidgetTree->ConstructWidget<USizeBox>(); Size->SetWidthOverride(148); Size->SetHeightOverride(145); Button->AddChild(Size);
-			auto* Box=WidgetTree->ConstructWidget<UVerticalBox>(); Size->AddChild(Box);
-			auto* ImageSize=WidgetTree->ConstructWidget<USizeBox>(); ImageSize->SetHeightOverride(112); Box->AddChild(ImageSize);
-			auto* Image=WidgetTree->ConstructWidget<UImage>(); ImageSize->AddChild(Image);
-			FSlateBrush Brush; Brush.SetResourceObject(EnsureThumbnail(B.BuildingId.Name)); Brush.ImageSize=FVector2D(112,112); Brush.DrawAs=ESlateBrushDrawType::Image;
+			auto Style=MoveButton->GetStyle(); Style.SetNormalPadding(FMargin(2)); Style.SetPressedPadding(FMargin(2)); Button->SetStyle(Style);
+			auto* Size=WidgetTree->ConstructWidget<USizeBox>(); Size->SetWidthOverride(60); Size->SetHeightOverride(64); Button->AddChild(Size);
+			auto* Image=WidgetTree->ConstructWidget<UImage>(); Size->AddChild(Image);
+			FSlateBrush Brush; Brush.SetResourceObject(EnsureThumbnail(B.BuildingId.Name)); Brush.ImageSize=FVector2D(60,60); Brush.DrawAs=ESlateBrushDrawType::Image;
 			Image->SetBrush(Brush); Image->SetVisibility(ESlateVisibility::HitTestInvisible);
-			auto* Label=DYKUI::Text(WidgetTree,Def ? FText::FromString(Def->DisplayName) : FText::GetEmpty(),13);
-			Label->SetAutoWrapText(true); Box->AddChild(Label); Button->SetToolTipText(Label->GetText());
-			BufferScroll->AddChild(Button); BufferButtons.Add(Button);
+			Button->SetToolTipText(Def ? FText::FromString(Def->DisplayName) : FText::GetEmpty());
+			BufferRow->AddChild(Button); BufferButtons.Add(Button);
 		}
 	}
-	for (const auto& Button:BufferButtons) Button->SetBackgroundColor(City && Button->InstanceId==City->GetSelectedBuilding() ? FLinearColor(1.f,.82f,.35f,1.f) : FLinearColor::White);
+	for (const auto& Button:BufferButtons) Button->SetBackgroundColor(City && Button->InstanceId==City->GetSelectedBuilding() ? FLinearColor(1.f,.9f,.65f,1.f) : FLinearColor::White);
 }
+
+void UDYKCityEditorWidget::PreviousPageClicked() { BufferPage.Move(-1,BufferedTotal); RefreshBuffer(); }
+void UDYKCityEditorWidget::NextPageClicked() { BufferPage.Move(1,BufferedTotal); RefreshBuffer(); }
 
 void UDYKCityEditorWidget::NativeDestruct()
 {

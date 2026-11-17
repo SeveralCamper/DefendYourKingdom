@@ -33,10 +33,10 @@ public:
 	void RequestUICommand(FName CommandId);
 
 	AActor* GetSelectedActor() const;
+	void ClearWorldSelection();
 
 private:
 	void HandleWorldSelect();
-	void ClearWorldSelection();
 
 	UPROPERTY(Transient)
 	TObjectPtr<AActor> SelectedActor;
