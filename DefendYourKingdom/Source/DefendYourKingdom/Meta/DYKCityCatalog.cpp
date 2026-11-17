@@ -46,3 +46,43 @@ const TCHAR* DYKCityCatalog::ResourceName(FDYKResourceId Id)
 	}
 	return TEXT("");
 }
+
+FDYKCityProductionLevel DYKCityCatalog::Production(FDYKBuildingId Id, int32 Level)
+{
+	const auto* Def = Find(Id.ToContentId());
+	if (!Def || Level < 1 || Level > 3 || !Def->Resource.IsValid()) return {};
+	// Replaceable per-type/per-level rates and house cycle duration. Only the
+	// 12/16/24-hour basic storage and one-cycle house storage are author rules.
+	const int32 SawmillRates[] = {2,4,6};
+	const int32 QuarryRates[] = {1,2,3};
+	const int32 MillRates[] = {3,6,9};
+	const int32 HouseRates[] = {1,2,3};
+	const int32 StorageHours[] = {12,16,24};
+	FDYKCityProductionLevel Result;
+	if (Def->Category == EDYKCityBuildingCategory::House)
+	{
+		Result.UnitsPerCycle = HouseRates[Level-1];
+		Result.CycleSeconds = 300;
+		Result.Capacity = Result.UnitsPerCycle;
+	}
+	else
+	{
+		Result.UnitsPerCycle = Id.GetName() == TEXT("CITY-SAWMILL") ? SawmillRates[Level-1]
+			: Id.GetName() == TEXT("CITY-QUARRY") ? QuarryRates[Level-1] : MillRates[Level-1];
+		Result.CycleSeconds = 60;
+		Result.Capacity = int64(StorageHours[Level-1]) * 3600 / Result.CycleSeconds * Result.UnitsPerCycle;
+	}
+	return Result;
+}
+
+int64 DYKCityCatalog::WarehouseCapacityDEV_PLACEHOLDER(FDYKResourceId Id, int32 Level)
+{
+	if (ResourceCapacity(Id) == MAX_uint32) return MAX_uint32;
+	if (ResourceCapacity(Id) == 0 || Level < 0 || Level > 4) return 0;
+	// Level 0 is the starter storage available without a warehouse building.
+	const int64 Food[] = {100,150,300,600,1200};
+	const int64 Wood[] = {100,200,400,800,1600};
+	const int64 Stone[] = {100,150,300,600,1200};
+	return Id.GetName() == TEXT("RES-FOOD") ? Food[Level]
+		: Id.GetName() == TEXT("RES-WOOD") ? Wood[Level] : Stone[Level];
+}

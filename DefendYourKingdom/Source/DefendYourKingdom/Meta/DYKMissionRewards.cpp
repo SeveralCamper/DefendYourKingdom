@@ -38,7 +38,7 @@ namespace
 	int64 Room(const FDYKPlayerProfileSaveData& P, const FDYKContentId& Resource)
 	{
 		const FDYKResourceId Id = FDYKResourceId::FromContentId(Resource).GetValue();
-		const int64 Configured = DYKCityCatalog::ResourceCapacity(Id);
+		const int64 Configured = DYKCityEconomy::Capacity(P,Id);
 		// Arbitrary resource entities are allowed. Only warehouse resources have a configured cap.
 		return (Configured > 0 ? Configured : MAX_int64) - DYKCityEconomy::Balance(P, Id);
 	}

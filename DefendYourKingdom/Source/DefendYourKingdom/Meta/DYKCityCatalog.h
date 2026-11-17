@@ -20,6 +20,13 @@ struct FDYKCityBuildingDefinition
 	FIntPoint Footprint;
 };
 
+struct FDYKCityProductionLevel
+{
+	int32 UnitsPerCycle = 0;
+	int32 CycleSeconds = 0;
+	int64 Capacity = 0;
+};
+
 namespace DYKCityCatalog
 {
 	// All rates, house duration, warehouse capacities and starter positions below
@@ -28,5 +35,7 @@ namespace DYKCityCatalog
 	DEFENDYOURKINGDOM_API const FDYKCityBuildingDefinition* Find(const FDYKContentId& Id);
 	DEFENDYOURKINGDOM_API TConstArrayView<FDYKResourceId> Resources();
 	DEFENDYOURKINGDOM_API int64 ResourceCapacity(FDYKResourceId Id);
+	DEFENDYOURKINGDOM_API FDYKCityProductionLevel Production(FDYKBuildingId Id, int32 Level);
+	DEFENDYOURKINGDOM_API int64 WarehouseCapacityDEV_PLACEHOLDER(FDYKResourceId Id, int32 Level);
 	DEFENDYOURKINGDOM_API const TCHAR* ResourceName(FDYKResourceId Id);
 }

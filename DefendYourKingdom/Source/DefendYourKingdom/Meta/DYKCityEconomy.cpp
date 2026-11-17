@@ -8,19 +8,33 @@ namespace
 	{
 		return P.CityEconomy.Instances.FindByPredicate([Id](const auto& Item) { return Item.InstanceId == Id; });
 	}
-	FDYKCityProductionSaveData Accrue(FDYKCityProductionSaveData State, const FDYKCityBuildingDefinition& Def, int64 Now)
+	FDYKCityProductionSaveData Accrue(FDYKCityProductionSaveData State, const FDYKCityProductionLevel& Def, int64 Now)
 	{
 		if (Def.CycleSeconds <= 0) { return State; }
-		const int64 Capacity = int64(Def.UnitsPerCycle) * Def.StorageCycles;
+		const int64 Capacity = Def.Capacity;
 		const int64 Time = FMath::Max(Now, State.UpdatedAtUnix);
+		if (State.Stored >= Capacity)
+		{
+			State.UpdatedAtUnix = Time;
+			State.RemainderSeconds = 0;
+			return State;
+		}
 		// Bound before adding/multiplying, including arbitrary long local offline time.
-		const int64 Seconds = FMath::Min(Time - State.UpdatedAtUnix, int64(Def.CycleSeconds) * Def.StorageCycles)
+		const int64 Seconds = FMath::Min(Time - State.UpdatedAtUnix, (Capacity / Def.UnitsPerCycle + 1) * Def.CycleSeconds)
 			+ State.RemainderSeconds;
 		State.Stored = FMath::Min(Capacity, State.Stored + Seconds / Def.CycleSeconds * Def.UnitsPerCycle);
 		State.RemainderSeconds = State.Stored == Capacity ? 0 : int32(Seconds % Def.CycleSeconds);
 		State.UpdatedAtUnix = Time;
 		return State;
 	}
+}
+
+int64 DYKCityEconomy::Capacity(const FDYKPlayerProfileSaveData& P, FDYKResourceId Id)
+{
+	int32 Level = 0;
+	for (const auto& B : P.Buildings)
+		if (B.BuildingId.Name == TEXT("CITY-WAREHOUSE")) Level = B.Level;
+	return DYKCityCatalog::WarehouseCapacityDEV_PLACEHOLDER(Id,Level);
 }
 
 int64 DYKCityEconomy::Balance(const FDYKPlayerProfileSaveData& P, FDYKResourceId Id)
@@ -45,7 +59,7 @@ bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P, const FDYKCity
 			if (Row.ResourceId == Id.ToContentId())
 			{
 				++Count;
-				if (Row.Amount < 0 || Row.Amount > DYKCityCatalog::ResourceCapacity(Id)) { return false; }
+				if (Row.Amount < 0 || Row.Amount > Capacity(P,Id)) { return false; }
 			}
 		}
 		if (Count != 1) { return false; }
@@ -63,10 +77,11 @@ bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P, const FDYKCity
 		if (!Def || State.Stored < 0 || State.UpdatedAtUnix <= 0
 			|| State.CollectionStartedAtUnix <= 0 || State.CollectionStartedAtUnix > State.UpdatedAtUnix
 			|| State.RemainderSeconds < 0) { return false; }
-		if (Def->CycleSeconds > 0)
+		const auto Production = DYKCityCatalog::Production(Def->Id,Building.Level);
+		if (Production.CycleSeconds > 0)
 		{
-			if (State.Stored > int64(Def->UnitsPerCycle) * Def->StorageCycles
-				|| State.RemainderSeconds >= Def->CycleSeconds) { return false; }
+			// Retain existing goods even if a later content configuration lowers capacity.
+			if (State.Stored > MAX_uint32 || State.RemainderSeconds >= Production.CycleSeconds) { return false; }
 		}
 		else if (State.Stored != 0 || State.RemainderSeconds != 0) { return false; }
 	}
@@ -121,11 +136,12 @@ FDYKCityCollectionView DYKCityEconomy::View(const FDYKPlayerProfileSaveData& P, 
 	if (!State || !Validate(P)) { return Result; }
 	const auto* Def = DYKCityCatalog::Find(P.Buildings[State->BuildingIndex].BuildingId);
 	if (!Def || !Def->Resource.IsValid()) { return Result; }
-	Result.Capacity = int64(Def->UnitsPerCycle) * Def->StorageCycles;
-	Result.Stored = Accrue(*State, *Def, Now).Stored;
+	const auto Production = DYKCityCatalog::Production(Def->Id,P.Buildings[State->BuildingIndex].Level);
+	Result.Capacity = Production.Capacity;
+	Result.Stored = Accrue(*State, Production, Now).Stored;
 	if (Now >= State->CollectionStartedAtUnix && Now - State->CollectionStartedAtUnix >= 60)
 	{
-		Result.Collectable = FMath::Min(Result.Stored, DYKCityCatalog::ResourceCapacity(Def->Resource) - Balance(P, Def->Resource));
+		Result.Collectable = FMath::Min(Result.Stored, Capacity(P,Def->Resource) - Balance(P, Def->Resource));
 	}
 	return Result;
 }
@@ -138,7 +154,7 @@ bool DYKCityEconomy::Collect(IDYKProfileService& Service, FGuid Command, FGuid I
 		if (V.Collectable <= 0) { return false; }
 		auto* State = P.CityEconomy.Instances.FindByPredicate([Instance](const auto& S) { return S.InstanceId == Instance; });
 		const auto& Def = *DYKCityCatalog::Find(P.Buildings[State->BuildingIndex].BuildingId);
-		*State = Accrue(*State, Def, Now);
+		*State = Accrue(*State, DYKCityCatalog::Production(Def.Id,P.Buildings[State->BuildingIndex].Level), Now);
 		State->Stored -= V.Collectable;
 		if (State->Stored == 0)
 		{
@@ -148,6 +164,24 @@ bool DYKCityEconomy::Collect(IDYKProfileService& Service, FGuid Command, FGuid I
 		for (auto& R : P.Resources) { if (R.ResourceId == Def.Resource.ToContentId()) { R.Amount += V.Collectable; } }
 		return true;
 	});
+}
+
+bool DYKCityEconomy::CompleteUpgrade(FDYKPlayerProfileSaveData& P, FGuid Instance, int32 TargetLevel, int64 Now)
+{
+	if (!Validate(P) || Now <= 0) return false;
+	auto* State = P.CityEconomy.Instances.FindByPredicate([Instance](const auto& S) { return S.InstanceId == Instance; });
+	if (!State || Now < State->UpdatedAtUnix) return false;
+	auto& B = P.Buildings[State->BuildingIndex];
+	const auto* Rule = DYKCityBuildingRules::DEV_PLACEHOLDER().Buildings.Find(B.BuildingId.Name);
+	if (!Rule || TargetLevel != B.Level+1 || TargetLevel > Rule->Levels.Num()) return false;
+	const auto Id = FDYKBuildingId::FromContentId(B.BuildingId).GetValue();
+	const auto Old = DYKCityCatalog::Production(Id,B.Level);
+	const auto Next = DYKCityCatalog::Production(Id,TargetLevel);
+	*State = Accrue(*State,Old,Now);
+	if (Old.CycleSeconds > 0 && Next.CycleSeconds > 0)
+		State->RemainderSeconds = int32(int64(State->RemainderSeconds) * Next.CycleSeconds / Old.CycleSeconds);
+	B.Level = TargetLevel;
+	return true;
 }
 
 bool DYKCityEconomy::Spend(IDYKProfileService& Service, FGuid Command, FDYKResourceId Resource, int64 Amount)

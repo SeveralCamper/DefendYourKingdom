@@ -156,9 +156,9 @@ void UDYKCityResourceWidget::Refresh()
 	{
 		if (!Text.IsEmpty()) { Text += TEXT("     "); }
 		Text += FString::Printf(TEXT("%s: %lld"), DYKCityCatalog::ResourceName(Id), DYKCityEconomy::Balance(*P, Id));
-		if (DYKCityCatalog::ResourceCapacity(Id) != MAX_uint32)
+		if (DYKCityEconomy::Capacity(*P,Id) != MAX_uint32)
 		{
-			Text += FString::Printf(TEXT(" / %lld"), DYKCityCatalog::ResourceCapacity(Id));
+			Text += FString::Printf(TEXT(" / %lld"), DYKCityEconomy::Capacity(*P,Id));
 		}
 	}
 	ResourceText->SetText(FText::FromString(Text));
