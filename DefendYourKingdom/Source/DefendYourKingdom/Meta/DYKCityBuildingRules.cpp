@@ -131,6 +131,7 @@ bool DYKCityBuildingRules::Prepare(const FDYKPlayerProfileSaveData& P, const FDY
 	{
 		const auto* B = FindInstance(P,R.InstanceId);
 		if (!B || B->BuildingId != Def->Id.ToContentId() || B->Level != R.ExpectedLevel
+			|| B->bUnderConstruction
 			|| B->ConstructionStartedAtUnix != 0 || B->ConstructionCompletesAtUnix != 0
 			|| B->Level >= Rule->Levels.Num()) return false;
 		R.Origin = B->CellOrigin;

@@ -1,6 +1,8 @@
 #include "DYKCityGameMode.h"
 #include "DYKCityBuildingActor.h"
 #include "DYKCityEconomy.h"
+#include "DYKCityWork.h"
+#include "DYKCityWorkWidget.h"
 #include "DYKCityTerritory.h"
 #include "DYKCityTerritoryActor.h"
 #include "DYKCityTerritoryWidget.h"
@@ -34,6 +36,7 @@ void ADYKCityGameMode::InitGame(const FString& MapName, const FString& Options, 
 		});
 	}
 	else if (P) { Ready = DYKCityEconomy::Validate(*P) && DYKCityTerritory::Validate(*P,DYKCityTerritory::DEV_PLACEHOLDER()); }
+	if (Ready) Ready=DYKCityWork::Update(*Save,FDateTime::UtcNow().ToUnixTimestamp());
 	if (!Ready)
 	{
 		StartupError = ErrorMessage = TEXT("City state initialization failed; existing profile was preserved.");
@@ -66,6 +69,7 @@ void ADYKCityGameMode::StartPlay()
 	{
 		if (auto* Territory = CreateWidget<UDYKCityTerritoryWidget>(PC)) Territory->AddToViewport(10);
 		if (auto* Editor = CreateWidget<UDYKCityEditorWidget>(PC)) Editor->AddToViewport(20);
+		if (auto* WorkUI = CreateWidget<UDYKCityWorkWidget>(PC)) WorkUI->AddToViewport(15);
 		if (auto* HUD = CreateWidget<UDYKCityResourceWidget>(PC, DYKUI::ScreenClass(UDYKCityResourceWidget::StaticClass(), TEXT("WBP_City"))))
 		{
 			HUD->AddToViewport();
@@ -101,6 +105,7 @@ void ADYKCityGameMode::ClearBuildingSelection()
 
 bool ADYKCityGameMode::BeginLayoutEdit()
 {
+	CancelConstructionPlacement();
 	const auto* P = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>()->GetProfileSnapshot();
 	if (!SelectedBuilding.IsValid() || !P || (!LayoutEditor.IsActive() && !LayoutEditor.Begin(*P))) return false;
 	bPlacingBuilding=true;
@@ -182,10 +187,12 @@ void ADYKCityGameMode::SyncLayoutVisuals()
 {
 	const auto* P = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>()->GetProfileSnapshot();
 	if (!P) return;
+	TSet<FGuid> Spawned;
 	for (TActorIterator<ADYKCityBuildingActor> It(GetWorld()); It; ++It)
 	{
 		const auto* State = P->CityEconomy.Instances.FindByPredicate([&](const auto& S) { return S.InstanceId == It->InstanceId; });
-		if (!State) continue;
+		if (!State) { It->Destroy(); continue; }
+		Spawned.Add(State->InstanceId);
 		auto B = P->Buildings[State->BuildingIndex];
 		const auto* Entry = LayoutEditor.Entries().FindByPredicate([&](const auto& E) { return E.InstanceId == It->InstanceId; });
 		const bool Hidden = Entry && !Entry->bPlaced;
@@ -195,6 +202,28 @@ void ADYKCityGameMode::SyncLayoutVisuals()
 		if (Entry) { B.CellOrigin=Entry->Origin; B.RotationQuarterTurns=Entry->QuarterTurns; }
 		if (!Hidden) It->SetActorLocationAndRotation(DYKCityTerritory::BuildingLocation(B,DYKCityTerritory::DEV_PLACEHOLDER()),FRotator(0,B.RotationQuarterTurns*90.,0));
 	}
+	for (const auto& S:P->CityEconomy.Instances) if (!Spawned.Contains(S.InstanceId))
+	{
+		const auto& B=P->Buildings[S.BuildingIndex];
+		const FTransform Transform(FRotator(0,B.RotationQuarterTurns*90.,0),DYKCityTerritory::BuildingLocation(B,DYKCityTerritory::DEV_PLACEHOLDER()));
+		if (auto* Actor=GetWorld()->SpawnActorDeferred<ADYKCityBuildingActor>(ADYKCityBuildingActor::StaticClass(),Transform))
+		{ Actor->InstanceId=S.InstanceId; Actor->BuildingId=B.BuildingId; Actor->FinishSpawning(Transform); }
+	}
 	for (TActorIterator<ADYKCityDecorationActor> It(GetWorld());It;++It) It->Refresh(*P,&LayoutEditor);
 	for (TObjectIterator<UDYKCityEditorWidget> It; It; ++It) if (It->GetWorld()==GetWorld()) It->Refresh();
+}
+
+bool ADYKCityGameMode::BeginConstruction(FName Type)
+{
+	if(LayoutEditor.IsActive() || !DYKCityCatalog::Find(FDYKBuildingId(Type).ToContentId())) return false;
+	ClearBuildingSelection(); ConstructionType=Type; return true;
+}
+
+bool ADYKCityGameMode::PlaceConstruction(FIntPoint Cell)
+{
+	if(ConstructionType.IsNone() || LayoutEditor.IsActive()) return false;
+	FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=FGuid::NewGuid();
+	R.BuildingId=FDYKBuildingId(ConstructionType); R.Origin=Cell;
+	if(!DYKCityWork::Enqueue(*GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>(),R,FDateTime::UtcNow().ToUnixTimestamp())) return false;
+	ConstructionType=NAME_None; SyncLayoutVisuals(); return true;
 }

@@ -55,6 +55,9 @@ struct DEFENDYOURKINGDOM_API FDYKBuildingSaveData
 	UPROPERTY(SaveGame)
 	int64 ConstructionCompletesAtUnix = 0;
 
+	// Includes an unpaid reserved construction site; level 1 is not operational yet.
+	UPROPERTY(SaveGame) bool bUnderConstruction = false;
+
 	// Actual cumulative city-resource expenditure; old/free starters default to empty.
 	// Used for the 100% decoration refund, never reconstructed from current prices.
 	UPROPERTY(SaveGame)

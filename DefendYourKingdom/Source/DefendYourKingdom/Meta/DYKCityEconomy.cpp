@@ -1,5 +1,6 @@
 #include "DYKCityEconomy.h"
 #include "DYKCityBuildingRules.h"
+#include "DYKCityWork.h"
 #include "../Saving/DYKProfileService.h"
 
 namespace
@@ -33,7 +34,7 @@ int64 DYKCityEconomy::Capacity(const FDYKPlayerProfileSaveData& P, FDYKResourceI
 {
 	int32 Level = 0;
 	for (const auto& B : P.Buildings)
-		if (B.BuildingId.Name == TEXT("CITY-WAREHOUSE")) Level = B.Level;
+		if (B.BuildingId.Name == TEXT("CITY-WAREHOUSE") && !B.bUnderConstruction) Level = B.Level;
 	return DYKCityCatalog::WarehouseCapacityDEV_PLACEHOLDER(Id,Level);
 }
 
@@ -135,7 +136,7 @@ FDYKCityCollectionView DYKCityEconomy::View(const FDYKPlayerProfileSaveData& P, 
 	const auto* State = Find(P, Instance);
 	if (!State || !Validate(P)) { return Result; }
 	const auto* Def = DYKCityCatalog::Find(P.Buildings[State->BuildingIndex].BuildingId);
-	if (!Def || !Def->Resource.IsValid()) { return Result; }
+	if (!Def || !Def->Resource.IsValid() || P.Buildings[State->BuildingIndex].bUnderConstruction) { return Result; }
 	const auto Production = DYKCityCatalog::Production(Def->Id,P.Buildings[State->BuildingIndex].Level);
 	Result.Capacity = Production.Capacity;
 	Result.Stored = Accrue(*State, Production, Now).Stored;
@@ -150,6 +151,7 @@ bool DYKCityEconomy::Collect(IDYKProfileService& Service, FGuid Command, FGuid I
 {
 	return Service.ApplyProfileCommand(Command, [Instance, Now](FDYKPlayerProfileSaveData& P)
 	{
+		if (!DYKCityWork::Advance(P,Now)) return false;
 		const auto V = View(P, Instance, Now);
 		if (V.Collectable <= 0) { return false; }
 		auto* State = P.CityEconomy.Instances.FindByPredicate([Instance](const auto& S) { return S.InstanceId == Instance; });

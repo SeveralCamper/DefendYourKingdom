@@ -58,6 +58,12 @@ void ADYKSelectionPlayerController::HandleWorldSelect()
 	// GameAndUI can forward unhandled clicks on panel/text backgrounds to the game.
 	for (TObjectIterator<UDYKCityEditorWidget> It; It; ++It)
 		if (It->GetWorld()==GetWorld() && It->IsInViewport() && It->BlocksWorldInput()) return;
+	if (auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>(); City && !City->GetConstructionType().IsNone())
+	{
+		FIntPoint Cell;
+		if(DYKCityEditorInput::CursorCell(this,Cell)) City->PlaceConstruction(Cell);
+		return;
+	}
 	if (auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>(); City && City->GetLayoutEditor().IsActive())
 	{
 		FHitResult BuildingHit;

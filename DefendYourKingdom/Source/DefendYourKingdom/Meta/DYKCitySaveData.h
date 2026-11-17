@@ -17,6 +17,28 @@ struct DEFENDYOURKINGDOM_API FDYKCityProductionSaveData
 };
 
 USTRUCT()
+struct DEFENDYOURKINGDOM_API FDYKCityWorkCost
+{
+	GENERATED_BODY()
+	UPROPERTY(SaveGame) FName Resource;
+	UPROPERTY(SaveGame) int64 Amount = 0;
+};
+
+USTRUCT()
+struct DEFENDYOURKINGDOM_API FDYKCityWorkSaveData
+{
+	GENERATED_BODY()
+	UPROPERTY(SaveGame) FGuid WorkId;
+	UPROPERTY(SaveGame) FGuid InstanceId;
+	UPROPERTY(SaveGame) bool bUpgrade = false;
+	UPROPERTY(SaveGame) int32 ExpectedLevel = 0;
+	UPROPERTY(SaveGame) int64 EnqueuedAtUnix = 0;
+	UPROPERTY(SaveGame) int64 StartedAtUnix = 0;
+	UPROPERTY(SaveGame) int64 CompletesAtUnix = 0;
+	UPROPERTY(SaveGame) TArray<FDYKCityWorkCost> Paid;
+};
+
+USTRUCT()
 struct DEFENDYOURKINGDOM_API FDYKCitySaveData
 {
 	GENERATED_BODY()
@@ -24,4 +46,9 @@ struct DEFENDYOURKINGDOM_API FDYKCitySaveData
 	UPROPERTY(SaveGame) int32 Version = 0;
 	UPROPERTY(SaveGame) int32 TerritoryVersion = 0;
 	UPROPERTY(SaveGame) TArray<FDYKCityProductionSaveData> Instances;
+	UPROPERTY(SaveGame) int64 WorkUpdatedAtUnix = 0;
+	UPROPERTY(SaveGame) bool bThirdBuilderEntitlement = false;
+	UPROPERTY(SaveGame) TArray<FDYKCityWorkSaveData> Work;
+	// Full cancellation refunds stay claimable if the warehouse was refilled meanwhile.
+	UPROPERTY(SaveGame) TArray<FDYKCityWorkCost> PendingRefunds;
 };

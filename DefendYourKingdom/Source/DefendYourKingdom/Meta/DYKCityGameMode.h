@@ -25,6 +25,10 @@ public:
 	bool CommitLayoutEdit();
 	void CancelLayoutEdit();
 	void SyncLayoutVisuals();
+	bool BeginConstruction(FName Type);
+	bool PlaceConstruction(FIntPoint Cell);
+	void CancelConstructionPlacement() { ConstructionType=NAME_None; }
+	FName GetConstructionType() const { return ConstructionType; }
 	const FDYKCityLayoutEditor& GetLayoutEditor() const { return LayoutEditor; }
 	FGuid GetSelectedBuilding() const { return SelectedBuilding; }
 	int32 GetPlacementTurns() const { return PlacementTurns; }
@@ -35,4 +39,5 @@ private:
 	int32 PlacementTurns = 0;
 	bool bPlacingBuilding = false;
 	FText LayoutMessage;
+	FName ConstructionType;
 };
