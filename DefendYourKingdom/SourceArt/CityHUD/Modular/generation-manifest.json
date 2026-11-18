@@ -1,0 +1,80 @@
+[
+  {
+    "name": "WindowBase",
+    "prompt": "Edit target: supplied WorkshopHUD.png. Create a production game UI background asset, same composition and 4:3 proportions, as high resolution as possible. Keep the entire outer wooden frame, parchment, iron corners, lantern, hanging blue banners, central red title banner, top shield, red X close button, and bottom leather instruction bar exactly in their original locations and at their original quality. REMOVE ALL SIX CARDS completely, ALL navigation arrows and dots and their horizontal lines, ALL writing everywhere including title and footer. Restore uninterrupted natural warm parchment behind removed interior UI, a seamless blank red leather title banner, and seamless blank bottom instruction bar. Do NOT cover removed objects with rectangles or stretched texture strips; reconstruct matching material naturally. The resulting center must be empty parchment from below the title through above the footer. Preserve decorative corners. True transparent background outside outer frame only. No new UI, no new text, no watermark. This is a reusable blank background for native interactive widgets.",
+    "method": "built-in image_gen",
+    "references": [
+      "concept-arts/HUD/WorkshopHUD.png"
+    ],
+    "workspaceSource": "DefendYourKingdom/SourceArt/CityHUD/Modular/WindowBase.png",
+    "sha256": "24b2a381145f535008501d204517943b8d02f0a0996fcd2adab3da46fbfce45f",
+    "width": 1448,
+    "height": 1086,
+    "pngColorType": 6
+  },
+  {
+    "name": "CardFrame",
+    "prompt": "Edit target WorkshopHUD.png. Extract and faithfully recreate JUST ONE empty rectangular collectible card frame from the non-glowing first cell, as a separate reusable high resolution game UI asset with true alpha transparency. Frame aspect ratio 310:245. Preserve original fine antique gold/bronze beveled border, cut corners, brown trim and empty dark brown bottom caption plate. The large picture opening (upper 80 percent) must be FULLY TRANSPARENT alpha=0 so a configurable portrait can be placed underneath. Outside frame fully transparent. Bottom nameplate blank. No portrait, no background parchment, no word, no ribbon Новое, no number shield, no question mark, no padlock, no glow. Frame fills canvas with only minimal transparent margin. Match supplied frame craftsmanship exactly, sharp clean details.",
+    "method": "built-in image_gen",
+    "references": [
+      "concept-arts/HUD/WorkshopHUD.png"
+    ],
+    "workspaceSource": "DefendYourKingdom/SourceArt/CityHUD/Modular/CardFrame.png",
+    "sha256": "cfc2bd087e9a93afe6c007c38348450e0bb22bee08d1d1007058d9226041dc24",
+    "width": 1411,
+    "height": 1115,
+    "pngColorType": 6
+  },
+  {
+    "name": "NewRibbon",
+    "prompt": "Edit target WorkshopHUD.png. Extract faithfully only the small red Новое ribbon from the upper left of a card as a standalone game UI sprite. Exact text Cyrillic: Новое. Keep its angled red leather shape, forked right end, thin gold border, cream serif lettering, subtle original bevel and shadow. Preserve the original design, no redesign. Horizontal aspect ratio about 140:62. Very tight transparent canvas, true alpha outside ribbon. No card, no portrait, no other UI, no background. This ribbon is an overlay independently placed on top of a native game card.",
+    "method": "built-in image_gen",
+    "references": [
+      "concept-arts/HUD/WorkshopHUD.png"
+    ],
+    "workspaceSource": "DefendYourKingdom/SourceArt/CityHUD/Modular/NewRibbon.png",
+    "sha256": "06ee21ec60ec3da660173d52cdb912c4c02ed7c518618eb8979da092089529ad",
+    "width": 1906,
+    "height": 825,
+    "pngColorType": 6
+  },
+  {
+    "name": "TrapPictures",
+    "prompt": "Create ONE production game portrait atlas texture using the supplied WorkshopHUD as visual reference. Exact 2 by 2 grid filling the entire canvas, four equally sized edge-to-edge landscape pictures, no gutters, NO frame, NO UI, NO typography, NO ribbon, NO number, NO lock. Top left: the wooden spike trap from reference, many sharpened stakes in a square wood base. Top right: the iron spiked grid trap death claws from reference. Bottom left: the stacked log trap reinforced with iron brackets from reference. Bottom right: the spiked wood roller avalanche trap from reference. Faithfully preserve each trap design and rich high-quality painted fantasy game rendering, each object fully visible centered within its quadrant on an earthy grassy forest clearing, warm light. All four quadrants have the SAME 4:3 image aspect ratio. No card borders or labels, continuous rectangular backgrounds in each quadrant. This is configurable illustration content placed UNDER a separate native card frame.",
+    "method": "built-in image_gen",
+    "references": [
+      "concept-arts/HUD/WorkshopHUD.png"
+    ],
+    "workspaceSource": "DefendYourKingdom/SourceArt/CityHUD/Modular/TrapPictures.png",
+    "sha256": "edf7b3490dad53156fe0717c57dbd06f5f39d92ef1183c2ec0b64a81c3344ad1",
+    "width": 1448,
+    "height": 1086,
+    "pngColorType": 2
+  },
+  {
+    "name": "UnitPictures",
+    "prompt": "Create ONE production fantasy game unit portrait atlas texture based on the supplied BarraksHUD.png as STYLE and character reference. 2 by 2 grid filling entire canvas, four equally sized edge-to-edge landscape portraits, NO gutters, NO frames, NO UI, NO text, NO ribbons, NO levels. Top left: bearded peasant with brown cap and padded leather vest, holding a spear, like first reference portrait. Top right: bearded guard with iron helmet, mail, blue scarf and shield bearing a gold lion, like lower left reference portrait. Bottom left: archer in green hood aiming a wood longbow, like upper right reference. Bottom right: professional crossbowman with iron helmet and blue surcoat, holding crossbow; clearly different weapon from archer. Half-body compositions in a wood palisade training yard under blue sky. Preserve original high-quality painted fantasy strategy art, fine materials, believable proportions. Every quadrant has the SAME 4:3 image aspect ratio, subject centered, no signs or emblems floating in corners. These are pure pictures for native card widgets, no lettering or badges.",
+    "method": "built-in image_gen",
+    "references": [
+      "concept-arts/HUD/BarraksHUD.png"
+    ],
+    "workspaceSource": "DefendYourKingdom/SourceArt/CityHUD/Modular/UnitPictures.png",
+    "sha256": "f22ffd04c2e28f0d1f17656d0b105e149f9276e785595046a562fda0be314aa1",
+    "width": 1448,
+    "height": 1086,
+    "pngColorType": 2
+  },
+  {
+    "name": "ButtonPlate",
+    "prompt": "Edit reference WorkshopHUD.png. Create ONE standalone reusable empty horizontal fantasy game UI button plate matching the original medieval game materials: rich dark brown leather face with subtle natural texture, polished bevelled bronze/gold double rim, chamfered corners, tiny decorative corner facets, soft restrained shadow. Width-to-height ratio 4:1, very tight canvas with fully transparent alpha outside silhouette. Completely BLANK face: no text, no icon, no symbol, no rune, no glossy white highlight band. Fine sharp painted game asset quality matching the provided HUD card caption borders. This plate will be a native scalable button and stats panel with separately rendered typography. Flat frontal view, symmetrical.",
+    "method": "built-in image_gen",
+    "references": [
+      "concept-arts/HUD/WorkshopHUD.png"
+    ],
+    "workspaceSource": "DefendYourKingdom/SourceArt/CityHUD/Modular/ButtonPlate.png",
+    "sha256": "54c0ce90b94cd7b983dbc4a1b2f437b51adb472cac563265b4b167885c7827ec",
+    "width": 2172,
+    "height": 724,
+    "pngColorType": 6
+  }
+]

@@ -41,4 +41,7 @@ namespace DYKCityBuildingUI
 	DEFENDYOURKINGDOM_API FName Art(FName Building,bool Detail=false);
 	DEFENDYOURKINGDOM_API TArray<FDYKCityInteriorItem> Items(FName Building,int32 LibraryTab=0);
 	DEFENDYOURKINGDOM_API TArray<FName> ConstructionTypes(EDYKCityBuildTab Tab);
+	DEFENDYOURKINGDOM_API bool IsLocked(const FDYKPlayerProfileSaveData& Profile,const FDYKCityInteriorItem& Item);
+	DEFENDYOURKINGDOM_API bool ShowNew(const FDYKPlayerProfileSaveData& Profile,const FDYKCityInteriorItem& Item);
+	DEFENDYOURKINGDOM_API bool VisitCard(IDYKProfileService& Service,FGuid Command,FName Building,int32 LibraryTab,int32 Index);
 }

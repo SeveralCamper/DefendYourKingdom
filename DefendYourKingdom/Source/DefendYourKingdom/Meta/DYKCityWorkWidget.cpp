@@ -7,6 +7,7 @@
 #include "DYKCityBuildingActor.h"
 #include "EngineUtils.h"
 #include "../UI/DYKCityHUDArt.h"
+#include "../UI/DYKCityPresentation.h"
 #include "../Saving/DYKSaveSubsystem.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "Blueprint/WidgetTree.h"
@@ -16,6 +17,7 @@
 #include "Components/SizeBox.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "Engine/FontFace.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
@@ -27,12 +29,12 @@ namespace
 	FString CityDuration(int64 Seconds)
 	{
 		Seconds=FMath::Max<int64>(0,Seconds);
-		if(Seconds>=3600) return FString::Printf(TEXT("%lld ч %lld мин"),Seconds/3600,Seconds%3600/60);
-		if(Seconds>=60) return FString::Printf(TEXT("%lld мин %lld с"),Seconds/60,Seconds%60);
+		if(Seconds>=3600) return Seconds%3600==0 ? FString::Printf(TEXT("%lld ч"),Seconds/3600) : FString::Printf(TEXT("%lld ч %lld мин"),Seconds/3600,Seconds%3600/60);
+		if(Seconds>=60) return Seconds%60==0 ? FString::Printf(TEXT("%lld мин"),Seconds/60) : FString::Printf(TEXT("%lld мин %lld с"),Seconds/60,Seconds%60);
 		return FString::Printf(TEXT("%lld с"),Seconds);
 	}
 	void CityBrown(UWidgetTree* Tree,UCanvasPanel* Canvas,FVector2D Pos,FVector2D Size)
-	{DYKCityHUDArt::Image(Tree,Canvas,TEXT("WorkshopHUD"),FBox2D({258,469},{288,497}),Pos,Size);}
+	{DYKCityHUDArt::Plate(Tree,Canvas,Pos,Size);}
 	FString CityCosts(const FDYKResearchDefinition& D)
 	{
 		FString Result;
@@ -48,17 +50,29 @@ UDYKCityActionButton* UDYKCityWorkWidget::ActionButton(EDYKCityUIAction Action,i
 {
 	auto* Button=WidgetTree->ConstructWidget<UDYKCityActionButton>(); Button->Screen=this; Button->Action=Action; Button->Index=Index; Button->Key=Key;
 	Button->Generation=RenderGeneration;
-	auto Brush=DYKCityHUDArt::Brush(TEXT("SawmillHUD"),FBox2D({271,646},{439,653}));
-	FButtonStyle Style=Button->GetStyle(); Style.SetNormal(Brush); Style.SetHovered(Brush); Style.SetPressed(Brush); Style.SetDisabled(Brush);
-	if(Transparent)
+	const bool Left=Action==EDYKCityUIAction::Previous || Action==EDYKCityUIAction::ResearchPrevious;
+	const bool Right=Action==EDYKCityUIAction::Next || Action==EDYKCityUIAction::ResearchNext;
+	FSlateBrush B;
+	if(Left || Right) B=DYKCityHUDArt::Brush(TEXT("WorkshopHUD"),Left ? FBox2D({578,814},{644,872}) : FBox2D({811,814},{877,872}));
+	else if(const auto* Skin=DYKCityHUDArt::Presentation(); Skin && !Transparent)
 	{
-		Style.Normal.TintColor=FLinearColor(1,1,1,0); Style.Hovered.TintColor=FLinearColor(1,1,1,.10f);
-		Style.Pressed.TintColor=FLinearColor(1,1,1,.18f); Style.Disabled.SetResourceObject(nullptr); Style.Disabled.TintColor=FLinearColor(0,0,0,.55f);
+		B=DYKCityHUDArt::TextureBrush(Skin->ButtonPlate); B.DrawAs=ESlateBrushDrawType::Box; B.Margin=FMargin(.10f,.25f); B.ImageSize=FVector2D(240,72); B.SetUVRegion(FBox2D());
 	}
-	Style.SetNormalPadding(FMargin(8)); Style.SetPressedPadding(FMargin(8)); Button->SetStyle(Style); Button->SetIsEnabled(Enabled);
-	if(!Label.IsEmpty()) {auto* Text=DYKUI::Text(WidgetTree,Label,26); Text->SetAutoWrapText(true); Text->SetColorAndOpacity(FLinearColor(1,.93f,.75f,1)); Button->AddChild(Text);}
+	else {B.DrawAs=ESlateBrushDrawType::Image; B.TintColor=FLinearColor(1,1,1,0);}
+	FButtonStyle Style;
+	Style.SetNormal(B); Style.SetHovered(B); Style.SetPressed(B); Style.SetDisabled(B);
+	Style.Hovered.TintColor=Transparent ? FLinearColor(1,1,1,.06f) : FLinearColor(1.12f,1.09f,1,1);
+	Style.Pressed.TintColor=Transparent ? FLinearColor(1,1,1,.12f) : FLinearColor(.72f,.68f,.55f,1);
+	Style.Disabled.TintColor=Transparent ? FLinearColor(1,1,1,0) : FLinearColor(.46f,.46f,.46f,.75f);
+	Style.SetNormalPadding(FMargin(0)); Style.SetPressedPadding(FMargin(0)); Button->SetStyle(Style); Button->SetIsEnabled(Enabled);
 	Button->OnClicked.AddDynamic(Button,&UDYKCityActionButton::Invoke); Button->SetToolTipText(Label);
-	DYKCityHUDArt::Place(DesignCanvas,Button,Pos,Size); Actions.Add(Button); return Button;
+	DYKCityHUDArt::Place(DesignCanvas,Button,Pos,Size); Actions.Add(Button);
+	if(!Label.IsEmpty() && !Left && !Right)
+	{
+		auto* Caption=DYKCityHUDArt::Label(WidgetTree,DesignCanvas,Label,Pos+FVector2D(14,5),Size-FVector2D(28,10),Size.Y>=65 ? 30 : 24,true);
+		if(!Enabled) Caption->SetColorAndOpacity(FLinearColor(.62f,.58f,.48f,1));
+	}
+	return Button;
 }
 
 TSharedRef<SWidget> UDYKCityWorkWidget::RebuildWidget()
@@ -69,6 +83,8 @@ TSharedRef<SWidget> UDYKCityWorkWidget::RebuildWidget()
 		auto* Root=WidgetTree->ConstructWidget<UCanvasPanel>(); WidgetTree->RootWidget=Root; Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		DevelopmentButton=DYKUI::Button(WidgetTree,this,NSLOCTEXT("DYKCity","Development","Развитие города"));
 		DevelopmentButton->OnClicked.AddDynamic(this,&ThisClass::ToggleClicked);
+		if(auto* Caption=Cast<UTextBlock>(DevelopmentButton->GetContent()))
+			if(const auto* Skin=DYKCityHUDArt::Presentation(); Skin && Skin->Typeface) Caption->SetFont(FSlateFontInfo(Skin->Typeface,22));
 		auto* DevelopmentSlot=Root->AddChildToCanvas(DevelopmentButton); DevelopmentSlot->SetPosition({16,115}); DevelopmentSlot->SetAutoSize(true);
 		ModalBlocker=WidgetTree->ConstructWidget<UButton>();
 		FButtonStyle BlockingStyle=ModalBlocker->GetStyle();
@@ -128,7 +144,7 @@ void UDYKCityWorkWidget::Refresh()
 		if(Current && !LiveResearch.IsNone())
 		{
 			const auto* W=Current->CityEconomy.ResearchQueue.FindByPredicate([this](const auto& Row){return Row.ResearchId==LiveResearch;});
-			if(W) LiveStatus->SetText(CityText(W->StartedAtUnix>0 ? TEXT("Осталось: ")+CityDuration(W->CompletesAtUnix-Now) : TEXT("Ожидает исследовательскую ячейку")));
+			if(W) LiveStatus->SetText(CityText(W->StartedAtUnix>0 ? TEXT("Осталось: ")+CityDuration(W->CompletesAtUnix-Now) : TEXT("Ожидает ячейку или ресурсы")));
 		}
 		else if(Current) if(const auto* S=ScreenInstance(*Current,State.Instance); S && !S->Orders.IsEmpty())
 		{
@@ -159,7 +175,7 @@ void UDYKCityWorkWidget::RebuildModal()
 		if(Items.IsValidIndex(State.SelectedItem)) Title=CityText(Items[State.SelectedItem].Name);
 		if(DYKCityBuildingUI::Interior(State.Building)!=EDYKCityInterior::Barracks) Art=TEXT("AllTrapHUD");
 	}
-	DYKCityHUDArt::Frame(WidgetTree,DesignCanvas,Art,Title,CityText(Message.IsEmpty() ? TEXT("Выберите действие") : Message),!Production && !Detail,!Detail);
+	DYKCityHUDArt::Frame(WidgetTree,DesignCanvas,Art,Title,CityText(Message.IsEmpty() ? TEXT("Выберите действие") : Message),!Production && !Detail,true);
 	for(TActorIterator<ADYKCityBuildingActor> It(GetWorld());It;++It) It->SetHovered(false);
 	ActionButton(EDYKCityUIAction::Close,0,FText::GetEmpty(),{1240,76},{110,110},NAME_None,true,true)->SetToolTipText(NSLOCTEXT("DYKCity","Close","Закрыть"));
 	if(State.Window!=EDYKCityWindow::Construction && State.Window!=EDYKCityWindow::Building)
@@ -194,16 +210,14 @@ void UDYKCityWorkWidget::BuildConstruction(const FDYKPlayerProfileSaveData& P)
 		const int32 Limit=Rule.LimitsByCastleLevel.IsValidIndex(Castle-1) ? Rule.LimitsByCastleLevel[Castle-1] : 1;
 		const bool Available=Owned<Limit && Castle>=Rule.Levels[0].RequiredCastleLevel;
 		const FVector2D Pos(242+(I%3)*332,335+(I/3)*240);
-		DYKCityHUDArt::Image(WidgetTree,DesignCanvas,TEXT("WorkshopHUD"),FBox2D({576,545},{883,785}),Pos,{308,225});
-		// Reuse the author's resource/building emblems; captions and availability are live data.
-		DYKCityHUDArt::Paper(WidgetTree,DesignCanvas,Pos+FVector2D(10,10),{288,170});
+		// Separate image content, frame and live caption. No baked card text underneath.
 		FBox2D IconRegion=Regions[int32(State.BuildTab)]; FName IconArt=Icons[int32(State.BuildTab)];
 		if(D->Id.GetName()==TEXT("CITY-SAWMILL") || D->Id.GetName()==TEXT("CITY-QUARRY") || D->Id.GetName()==TEXT("CITY-MILL"))
 		{IconArt=DYKCityBuildingUI::Art(D->Id.GetName()); IconRegion=FBox2D({245,270},{450,429});}
 		DYKCityHUDArt::Image(WidgetTree,DesignCanvas,IconArt,IconRegion,Pos+FVector2D(65,12),{178,112});
 		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(FString::Printf(TEXT("Замок: %d · %d / %d"),Rule.Levels[0].RequiredCastleLevel,Owned,Limit)),Pos+FVector2D(10,128),{288,44},20);
-		CityBrown(WidgetTree,DesignCanvas,Pos+FVector2D(8,176),{292,43});
-		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(D->DisplayName),Pos+FVector2D(12,177),{284,40},25,true);
+		if(const auto* Skin=DYKCityHUDArt::Presentation()) DYKCityHUDArt::Texture(WidgetTree,DesignCanvas,Skin->CardFrame,Pos,{308,225});
+		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(D->DisplayName),Pos+FVector2D(22,181),{264,32},25,true);
 		auto* B=ActionButton(EDYKCityUIAction::Build,I,FText::GetEmpty(),Pos,{308,225},Types[I],Available,true);
 		B->SetToolTipText(CityText(DYKCityBuildingUI::Description(Types[I])+(Available ? TEXT("\nВыбрать место строительства") : TEXT("\nНе выполнены условия или достигнут лимит"))));
 	}
@@ -261,23 +275,34 @@ void UDYKCityWorkWidget::BuildInterior(const FDYKPlayerProfileSaveData& P)
 	if(Kind==EDYKCityInterior::Library)
 	{
 		const TCHAR* Tabs[]={TEXT("Экономика"),TEXT("Военное дело"),TEXT("Оборона")};
-		for(int32 I=0;I<3;++I) ActionButton(EDYKCityUIAction::LibraryTab,I,CityText(Tabs[I]),{285.+I*310.,265},{290,55});
+		for(int32 I=0;I<3;++I) ActionButton(EDYKCityUIAction::LibraryTab,I,CityText(Tabs[I]),{420.+I*270.,218},{255,48});
 	}
+	const auto* Skin=DYKCityHUDArt::Presentation();
 	const auto Items=DYKCityBuildingUI::Items(State.Building,State.LibraryTab); State.TurnPage(0,Items.Num());
-	const int32 StartY=Kind==EDYKCityInterior::Library ? 335 : 275;
 	for(int32 SlotIndex=0;SlotIndex<6;++SlotIndex)
 	{
 		const int32 ItemIndex=State.Page*6+SlotIndex; if(!Items.IsValidIndex(ItemIndex)) break;
-		const auto& Item=Items[ItemIndex]; const FVector2D Pos(240+(SlotIndex%3)*335,StartY+(SlotIndex/3)*240);
-		DYKCityHUDArt::Image(WidgetTree,DesignCanvas,TEXT("WorkshopHUD"),FBox2D({576,545},{883,785}),Pos,{310,225});
-		DYKCityHUDArt::Image(WidgetTree,DesignCanvas,Item.Art,Item.ImageRegion,Pos+FVector2D(9,10),{292,170});
-		CityBrown(WidgetTree,DesignCanvas,Pos+FVector2D(8,180),{294,38});
-		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Item.Name),Pos+FVector2D(10,179),{290,42},Item.Name.Len()>23 ? 18 : 25,true);
-		auto* Click=ActionButton(EDYKCityUIAction::Item,ItemIndex,FText::GetEmpty(),Pos,{310,225},Item.Key,true,true); Click->SetToolTipText(CityText(Item.Description));
+		const auto& Item=Items[ItemIndex]; const FVector2D Pos(238+(SlotIndex%3)*335,275+(SlotIndex/3)*270);
+		const bool Locked=DYKCityBuildingUI::IsLocked(P,Item);
+		if(Locked)
+			DYKCityHUDArt::Image(WidgetTree,DesignCanvas,TEXT("WorkshopHUD"),FBox2D({580,550},{878,780}),Pos+FVector2D(7,7),{296,226});
+		else if(!DYKCityHUDArt::Illustration(WidgetTree,DesignCanvas,Item.Key,Pos+FVector2D(13,14),{284,184}))
+			DYKCityHUDArt::Image(WidgetTree,DesignCanvas,Item.Art,Item.ImageRegion,Pos+FVector2D(13,14),{284,184});
+		if(Skin) DYKCityHUDArt::Texture(WidgetTree,DesignCanvas,Skin->CardFrame,Pos,{310,245});
+		if(!Locked)
+		{
+			DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Item.Name),Pos+FVector2D(23,198),{264,35},29,true);
+			if(DYKCityBuildingUI::ShowNew(P,Item) && Skin)
+				DYKCityHUDArt::Texture(WidgetTree,DesignCanvas,Skin->NewRibbon,Pos+FVector2D(-6,-3),{145,60},FBox2D({.07,.16},{.93,.89}));
+		}
+		else
+			DYKCityHUDArt::Image(WidgetTree,DesignCanvas,TEXT("WorkshopHUD"),FBox2D({706,713},{751,761}),Pos+FVector2D(135,195),{40,43});
+		auto* Click=ActionButton(EDYKCityUIAction::Item,ItemIndex,FText::GetEmpty(),Pos,{310,245},Item.Key,true,true);
+		Click->SetToolTipText(CityText(Locked ? TEXT("Пока недоступно") : Item.Description));
 	}
 	const int32 Pages=FMath::Max(1,(Items.Num()+5)/6);
-	ActionButton(EDYKCityUIAction::Previous,0,CityText(TEXT("◀")),{580,820},{68,55},NAME_None,State.Page>0);
-	ActionButton(EDYKCityUIAction::Next,0,CityText(TEXT("▶")),{813,820},{68,55},NAME_None,State.Page+1<Pages);
+	ActionButton(EDYKCityUIAction::Previous,0,CityText(TEXT("Предыдущая страница")),{580,816},{66,58},NAME_None,State.Page>0);
+	ActionButton(EDYKCityUIAction::Next,0,CityText(TEXT("Следующая страница")),{811,816},{66,58},NAME_None,State.Page+1<Pages);
 	for(int32 I=0;I<Pages;++I)
 		DYKCityHUDArt::Image(WidgetTree,DesignCanvas,TEXT("WorkshopHUD"),I==State.Page ? FBox2D({670,821},{703,857}) : FBox2D({711,823},{744,856}),{671.+I*41.,826},{30,30});
 }
@@ -303,84 +328,86 @@ void UDYKCityWorkWidget::BuildDetail(const FDYKPlayerProfileSaveData& P)
 {
 	const auto Items=DYKCityBuildingUI::Items(State.Building,State.LibraryTab); if(!Items.IsValidIndex(State.SelectedItem)) {State.Visit(); return;}
 	const auto& Item=Items[State.SelectedItem];
-	DYKCityHUDArt::Paper(WidgetTree,DesignCanvas,{480,194},{490,244});
-	DYKCityHUDArt::Image(WidgetTree,DesignCanvas,Item.Art,Item.ImageRegion,{530,210},{380,225});
-	DYKCityHUDArt::Paper(WidgetTree,DesignCanvas,{248,277},{231,83});
+	const bool Locked=DYKCityBuildingUI::IsLocked(P,Item);
 	const bool Known=P.CityEconomy.CompletedResearch.Contains(Item.ResearchRoot);
-	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Known ? TEXT("Изучено") : TEXT("Не изучено")),{250,292},{225,65},27);
-	CityBrown(WidgetTree,DesignCanvas,{1028,293},{174,43});
-	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Item.Name),{1025,295},{180,55},22,true);
-	DYKCityHUDArt::Paper(WidgetTree,DesignCanvas,{270,448},{905,61});
-	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Item.Description),{275,449},{895,60},24);
-	CityBrown(WidgetTree,DesignCanvas,{252,538},{942,152});
-	FString Stats=Item.bFuture ? TEXT("Пока недоступно") : TEXT("Характеристики пока недоступны");
-	if(DYKCityBuildingUI::Interior(State.Building)==EDYKCityInterior::Workshop)
+	if(!Locked)
+	{
+		if(!DYKCityHUDArt::Illustration(WidgetTree,DesignCanvas,Item.Key,{514,230},{420,230}))
+			DYKCityHUDArt::Image(WidgetTree,DesignCanvas,Item.Art,Item.ImageRegion,{514,230},{420,230});
+	}
+	else DYKCityHUDArt::Image(WidgetTree,DesignCanvas,TEXT("WorkshopHUD"),FBox2D({589,554},{870,772}),{579,240},{290,225});
+	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Locked ? TEXT("Недоступно") : Known ? TEXT("Изучено") : TEXT("Не изучено")),{260,326},{220,70},28);
+	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(State.Building==TEXT("CITY-WORKSHOP") ? TEXT("Ловушка") : State.Building==TEXT("CITY-BARRACKS") ? TEXT("Боец") : TEXT("Исследование")),{975,326},{215,65},28);
+	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Locked ? TEXT("Условия открытия ещё не выполнены.") : Item.Description),{275,470},{900,68},25);
+	CityBrown(WidgetTree,DesignCanvas,{255,530},{940,118});
+	FString Stats=Locked ? TEXT("Характеристики пока недоступны") : TEXT("Постоянное исследование");
+	if(!Locked && DYKCityBuildingUI::Interior(State.Building)==EDYKCityInterior::Workshop)
 		Stats=TEXT("Автоматическое срабатывание\nНеуязвима · Ограниченный запас зарядов");
-	else if(const auto* Root=DYKCityResearch::Find(Item.ResearchRoot))
+	else if(!Locked) if(const auto* Root=DYKCityResearch::Find(Item.ResearchRoot))
 	{
 		if(const auto* Unit=DYKUnitCatalog::Find(Root->Unlock))
 		{
 			const auto Bonus=DYKCityResearch::Bonus(P,*Unit);
 			const auto Personal=DYKCityResearch::Bonus(P,*Unit,EDYKResearchScope::Type);
-			Stats=FString::Printf(TEXT("Урон: %d · Здоровье: %d\nФизическая броня: %d · Магическая броня: %d\nРазмещение: %d припасов"),Unit->Base.Attack.DamagePerHit.Value+Bonus.Damage,Unit->Base.MaxHP.Value+Bonus.HP,Unit->Base.PhysicalArmor.Value+Bonus.PhysicalArmor,Unit->Base.MagicalArmor.Value,Unit->Base.PlacementSupplies.Value);
+			Stats=FString::Printf(TEXT("Урон: %d    Здоровье: %d    Физическая броня: %d\nМагическая броня: %d    Размещение: %d припасов"),Unit->Base.Attack.DamagePerHit.Value+Bonus.Damage,Unit->Base.MaxHP.Value+Bonus.HP,Unit->Base.PhysicalArmor.Value+Bonus.PhysicalArmor,Unit->Base.MagicalArmor.Value,Unit->Base.PlacementSupplies.Value);
 			if(Personal.HP || Personal.PhysicalArmor || Personal.Damage) Stats+=FString::Printf(TEXT("\nПерсональные бонусы: HP +%d · Броня +%d · Урон +%d"),Personal.HP,Personal.PhysicalArmor,Personal.Damage);
 		}
 		else if(Root->TargetLine!=EDYKUnitLine::None)
 			Stats=FString::Printf(TEXT("Бонус линии\nЗдоровье: +%d · Броня: +%d · Урон: +%d"),Root->Bonus.HP,Root->Bonus.PhysicalArmor,Root->Bonus.Damage);
 	}
-	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Stats),{280,543},{885,140},27,true);
-	const auto Options=ResearchOptions(P,Item); ResearchChoice=FMath::Clamp(ResearchChoice,0,FMath::Max(0,Options.Num()-1));
+	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Stats),{285,542},{880,94},26,true);
+	const auto Options=Locked ? TArray<FName>() : ResearchOptions(P,Item); ResearchChoice=FMath::Clamp(ResearchChoice,0,FMath::Max(0,Options.Num()-1));
 	const auto* R=Options.IsEmpty() ? nullptr : DYKCityResearch::Find(Options[ResearchChoice]);
-	FString Status=Item.bFuture ? TEXT("Пока недоступно") : TEXT("Доступно");
-	const auto* Queued=P.CityEconomy.ResearchQueue.FindByPredicate([&Item](const auto& W){return W.ResearchId==Item.ResearchRoot;});
-	if(R) Queued=P.CityEconomy.ResearchQueue.FindByPredicate([R](const auto& W){return W.ResearchId==R->Id;});
-	if(Queued) Status=Queued->StartedAtUnix>0 ? TEXT("Осталось: ")+CityDuration(Queued->CompletesAtUnix-FDateTime::UtcNow().ToUnixTimestamp()) : TEXT("Ожидает исследовательскую ячейку");
-	DYKCityHUDArt::Paper(WidgetTree,DesignCanvas,{270,697},{925,140});
-	LiveStatus=DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Status),{335,695},{780,34},24);
+	FString Status=Locked ? TEXT("Пока недоступно") : TEXT("Доступно");
+	const auto* Queued=R ? P.CityEconomy.ResearchQueue.FindByPredicate([R](const auto& W){return W.ResearchId==R->Id;}) : nullptr;
+	if(Queued) Status=Queued->StartedAtUnix>0 ? TEXT("Осталось: ")+CityDuration(Queued->CompletesAtUnix-FDateTime::UtcNow().ToUnixTimestamp()) : TEXT("Ожидает ячейку или ресурсы");
+	LiveStatus=DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Status),{330,664},{790,35},25);
 	if(R)
 	{
 		LiveResearch=R->Id;
-		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(R->DisplayName),{335,735},{790,40},26);
-		ActionButton(EDYKCityUIAction::ResearchPrevious,0,CityText(TEXT("◀")),{250,731},{65,45},NAME_None,ResearchChoice>0);
-		ActionButton(EDYKCityUIAction::ResearchNext,0,CityText(TEXT("▶")),{1140,731},{65,45},NAME_None,ResearchChoice+1<Options.Num());
-		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(CityCosts(*R)+TEXT(" · ")+CityDuration(R->DurationSeconds)),{275,784},{930,47},23);
-		const bool Initial=R->Id==Item.ResearchRoot;
-		ActionButton(EDYKCityUIAction::Research,0,Initial ? NSLOCTEXT("DYKCity","Learn","Изучить") : NSLOCTEXT("DYKCity","Improve","Улучшить"),{350,881},{360,70},R->Id,DYKCityResearch::CanEnqueue(P,R->Id));
+		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(R->DisplayName),{345,717},{760,42},28);
+		ActionButton(EDYKCityUIAction::ResearchPrevious,0,CityText(TEXT("Предыдущее улучшение")),{260,710},{60,53},NAME_None,ResearchChoice>0);
+		ActionButton(EDYKCityUIAction::ResearchNext,0,CityText(TEXT("Следующее улучшение")),{1130,710},{60,53},NAME_None,ResearchChoice+1<Options.Num());
+		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(CityCosts(*R)+TEXT(" · ")+CityDuration(R->DurationSeconds)),{290,772},{870,34},24);
+		ActionButton(EDYKCityUIAction::Research,0,R->Id==Item.ResearchRoot ? NSLOCTEXT("DYKCity","Learn","Изучить") : NSLOCTEXT("DYKCity","Improve","Улучшить"),{355,820},{355,64},R->Id,DYKCityResearch::CanEnqueue(P,R->Id));
 	}
-	else ActionButton(EDYKCityUIAction::Research,0,CityText(Item.bFuture ? TEXT("Недоступно") : TEXT("Изучено")),{350,881},{360,70},NAME_None,false);
-	ActionButton(EDYKCityUIAction::CancelResearch,0,NSLOCTEXT("DYKCity","CancelResearch","Отменить"),{760,881},{350,70},Queued ? FName(*Queued->WorkId.ToString()) : NAME_None,Queued!=nullptr);
+	else ActionButton(EDYKCityUIAction::Research,0,CityText(Locked ? TEXT("Недоступно") : TEXT("Изучено")),{355,820},{355,64},NAME_None,false);
+	ActionButton(EDYKCityUIAction::CancelResearch,0,NSLOCTEXT("DYKCity","CancelResearch","Отменить"),{755,820},{355,64},Queued ? FName(*Queued->WorkId.ToString()) : NAME_None,Queued!=nullptr);
 }
+
 void UDYKCityWorkWidget::BuildProduction(const FDYKPlayerProfileSaveData& P)
 {
 	const auto* S=ScreenInstance(P,State.Instance); if(!S) return;
+	const FName Art=DYKCityBuildingUI::Art(State.Building);
+	const auto* Skin=DYKCityHUDArt::Presentation();
+	const auto* Definition=DYKCityCatalog::Find(FDYKBuildingId(State.Building).ToContentId());
+	const FString Resource=Definition ? DYKCityCatalog::ResourceName(Definition->Resource) : TEXT("");
 	for(int32 I=0;I<4;++I)
 	{
+		const FVector2D Pos(237+I*253,282);
 		const auto R=DYKCityOrders::DEV_PLACEHOLDER()[I];
-		CityBrown(WidgetTree,DesignCanvas,{346.+I*253.,510},{108,45});
-		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,FText::AsNumber(R.Amount),{345.+I*253.,509},{111,46},34,true);
-		CityBrown(WidgetTree,DesignCanvas,{310.+I*253.,577},{145,44});
-		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(CityDuration(R.Seconds)),{311.+I*253.,579},{142,43},24,true);
-		auto* Button=ActionButton(EDYKCityUIAction::Order,I,FText::GetEmpty(),{246.+I*253.,638},{220,78},NAME_None,S->Orders.Num()<DYKCityOrders::QueueCapacity,true);
-		Button->SetToolTipText(CityText(FString::Printf(TEXT("Заказать %lld · %s"),R.Amount,*CityDuration(R.Seconds))));
-		if(State.Building==TEXT("CITY-MILL"))
-		{
-			CityBrown(WidgetTree,DesignCanvas,{246.+I*253.,443},{215,42});
-			DYKCityHUDArt::Label(WidgetTree,DesignCanvas,NSLOCTEXT("DYKCity","Food","Еда"),{251.+I*253.,447},{205,37},28,true);
-		}
+		// Content and rim are distinct layers; none of the source example text is reused.
+		DYKCityHUDArt::Image(WidgetTree,DesignCanvas,Art,FBox2D({245.+I*253.,275},{461.+I*253.,429}),Pos+FVector2D(9,11),{215,139});
+		if(Skin) DYKCityHUDArt::Texture(WidgetTree,DesignCanvas,Skin->CardFrame,Pos,{234,185});
+		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Resource),Pos+FVector2D(18,150),{198,28},28,true);
+		CityBrown(WidgetTree,DesignCanvas,Pos+FVector2D(4,215),{226,56});
+		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,FText::AsNumber(R.Amount),Pos+FVector2D(15,222),{204,40},31,true);
+		CityBrown(WidgetTree,DesignCanvas,Pos+FVector2D(4,283),{226,56});
+		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(CityDuration(R.Seconds)),Pos+FVector2D(15,290),{204,40},28,true);
+		ActionButton(EDYKCityUIAction::Order,I,NSLOCTEXT("DYKCity","Order","Заказать"),Pos+FVector2D(4,355),{226,68},NAME_None,S->Orders.Num()<DYKCityOrders::QueueCapacity);
 	}
-	CityBrown(WidgetTree,DesignCanvas,{700,785},{530,72});
-	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(FString::Printf(TEXT("Очередь заказов: %d / %d"),S->Orders.Num(),DYKCityOrders::QueueCapacity)),{710,797},{510,50},28,true);
 	const auto V=DYKCityEconomy::View(P,State.Instance,FDateTime::UtcNow().ToUnixTimestamp());
 	FString Progress=FString::Printf(TEXT("В здании: %lld / %lld"),V.Stored,V.Capacity);
 	if(!S->Orders.IsEmpty())
 	{
 		const auto& O=S->Orders[0];
-		Progress+=O.StartedAtUnix==0 ? TEXT(" · Ожидает места в накопителе") : O.CompletesAtUnix>FDateTime::UtcNow().ToUnixTimestamp()
-			? TEXT(" · Готово через ")+CityDuration(O.CompletesAtUnix-FDateTime::UtcNow().ToUnixTimestamp()) : TEXT(" · Результат ожидает места в накопителе");
+		Progress+=O.StartedAtUnix==0 ? TEXT(" · Ожидает места") : O.CompletesAtUnix>FDateTime::UtcNow().ToUnixTimestamp()
+			? TEXT(" · Готово через ")+CityDuration(O.CompletesAtUnix-FDateTime::UtcNow().ToUnixTimestamp()) : TEXT(" · Выпуск ожидает места");
 	}
-	DYKCityHUDArt::Paper(WidgetTree,DesignCanvas,{235,737},{995,37});
-	LiveStatus=DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Progress),{245,739},{975,38},23);
-	ActionButton(EDYKCityUIAction::Collect,0,CityText(FString::Printf(TEXT("Собрать: %lld"),V.Collectable)),{245,862},{400,42},NAME_None,V.Collectable>0);
+	LiveStatus=DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Progress),{255,752},{940,43},26);
+	CityBrown(WidgetTree,DesignCanvas,{700,807},{510,63});
+	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(FString::Printf(TEXT("Очередь заказов: %d / %d"),S->Orders.Num(),DYKCityOrders::QueueCapacity)),{716,815},{478,45},27,true);
+	ActionButton(EDYKCityUIAction::Collect,0,CityText(FString::Printf(TEXT("Собрать: %lld"),V.Collectable)),{245,807},{415,63},NAME_None,V.Collectable>0);
 }
 
 void UDYKCityWorkWidget::Dispatch(EDYKCityUIAction Action,int32 Index,FName Key)
@@ -411,7 +438,13 @@ void UDYKCityWorkWidget::Dispatch(EDYKCityUIAction Action,int32 Index,FName Key)
 	case EDYKCityUIAction::Order: if(!DYKCityOrders::Enqueue(*Save,FGuid::NewGuid(),State.Instance,Index,Now)) Message=TEXT("Очередь заполнена или не удалось сохранить заказ."); break;
 	case EDYKCityUIAction::Item:
 		if(State.Window==EDYKCityWindow::Interior && DYKCityBuildingUI::Items(State.Building,State.LibraryTab).IsValidIndex(Index))
-		{State.SelectedItem=Index; State.Window=EDYKCityWindow::Detail; ResearchChoice=0;} break;
+		{
+			const auto Item=DYKCityBuildingUI::Items(State.Building,State.LibraryTab)[Index];
+			if(!DYKCityBuildingUI::IsLocked(*P,Item) && !P->CityEconomy.VisitedCards.Contains(Item.Key)
+				&& !DYKCityBuildingUI::VisitCard(*Save,FGuid::NewGuid(),State.Building,State.LibraryTab,Index))
+			{Message=TEXT("Не удалось сохранить просмотр. Повторите попытку."); break;}
+			State.SelectedItem=Index; State.Window=EDYKCityWindow::Detail; ResearchChoice=0;
+		} break;
 	case EDYKCityUIAction::Previous: State.TurnPage(-1,DYKCityBuildingUI::Items(State.Building,State.LibraryTab).Num()); break;
 	case EDYKCityUIAction::Next: State.TurnPage(1,DYKCityBuildingUI::Items(State.Building,State.LibraryTab).Num()); break;
 	case EDYKCityUIAction::ResearchPrevious: ResearchChoice=FMath::Max(0,ResearchChoice-1); break;

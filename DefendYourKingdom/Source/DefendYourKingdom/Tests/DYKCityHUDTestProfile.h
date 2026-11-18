@@ -2,6 +2,13 @@
 #include "../Meta/DYKCityOrders.h"
 #include "../Meta/DYKCityResearch.h"
 #include "../Saving/DYKProfileService.h"
+#if WITH_DEV_AUTOMATION_TESTS
+#include "../Saving/DYKSaveSubsystem.h"
+struct FDYKCityHUDTestAccess
+{
+	static void Open(UDYKSaveSubsystem& S,const FString& Prefix) {S.SlotPrefix=Prefix; S.LoadOrCreateProfile();}
+};
+#endif
 
 namespace DYKCityHUDTest
 {

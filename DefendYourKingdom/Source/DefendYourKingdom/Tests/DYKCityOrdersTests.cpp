@@ -8,10 +8,6 @@
 #include "UObject/StrongObjectPtr.h"
 #include "../Meta/DYKCityLayoutEditor.h"
 
-struct FDYKCityHUDTestAccess
-{
-	static void Open(UDYKSaveSubsystem& S,const FString& Prefix) {S.SlotPrefix=Prefix; S.LoadOrCreateProfile();}
-};
 constexpr auto CityOrdersTestFlags=EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKOrderMigrationTest,"DYK.CityHUD.Orders.MigrationAndNoUnrequestedIncome",CityOrdersTestFlags)

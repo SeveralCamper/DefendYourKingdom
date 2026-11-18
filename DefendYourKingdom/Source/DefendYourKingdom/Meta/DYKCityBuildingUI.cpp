@@ -1,4 +1,5 @@
 #include "DYKCityBuildingUI.h"
+#include "../Saving/DYKProfileService.h"
 
 EDYKCityBuildTab DYKCityBuildingUI::Tab(FName Type)
 {
@@ -87,10 +88,12 @@ TArray<FDYKCityInteriorItem> DYKCityBuildingUI::Items(FName Type,int32 LibraryTa
 	else if(Kind==EDYKCityInterior::Barracks)
 	{
 		const TCHAR* Names[]={TEXT("Крестьянин"),TEXT("Страж"),TEXT("Гвардеец"),TEXT("Лучник"),TEXT("Опытный лучник"),TEXT("Арбалетчик")};
-		for(int32 I=0;I<6;++I)
+		for(int32 I=0;I<18;++I)
 		{
 			FDYKCityInteriorItem Item;
-			Item.Key=FName(*FString::Printf(TEXT("UNIT-CARD-%d"),I)); Item.Name=Names[I];
+			Item.Key=FName(*FString::Printf(TEXT("UNIT-CARD-%d"),I));
+			if(I>=6) {Item.bFuture=true; Item.Name=TEXT("Неизвестный боец"); Item.Description=TEXT("Этот боец пока недоступен."); Result.Add(Item); continue;}
+			Item.Name=Names[I];
 			Item.Description=I<3 ? TEXT("Пехотинец. Во время волны остаётся на выбранном месте обороны.") : TEXT("Стрелок. Атакует противников в пределах своей дальности.");
 			Item.ResearchRoot=FName(*FString::Printf(TEXT("RESEARCH-%s-T%d"),I<3 ? TEXT("INFANTRY") : TEXT("RANGED"),I%3+1));
 			Item.Art=TEXT("BarraksHUD"); Item.ImageRegion=Region(I==0 ? 0 : I==3 ? 2 : 1);
@@ -125,4 +128,28 @@ TArray<FDYKCityInteriorItem> DYKCityBuildingUI::Items(FName Type,int32 LibraryTa
 		}
 	}
 	return Result;
+}
+
+bool DYKCityBuildingUI::IsLocked(const FDYKPlayerProfileSaveData& P,const FDYKCityInteriorItem& Item)
+{
+	if(Item.bFuture) return true;
+	const auto* Root=DYKCityResearch::Find(Item.ResearchRoot);
+	if(!Root) return true;
+	for(const auto Prerequisite:Root->Prerequisites) if(!P.CityEconomy.CompletedResearch.Contains(Prerequisite)) return true;
+	return false;
+}
+
+bool DYKCityBuildingUI::ShowNew(const FDYKPlayerProfileSaveData& P,const FDYKCityInteriorItem& Item)
+{return !IsLocked(P,Item) && !P.CityEconomy.VisitedCards.Contains(Item.Key);}
+
+bool DYKCityBuildingUI::VisitCard(IDYKProfileService& Service,FGuid Command,FName Building,int32 LibraryTab,int32 Index)
+{
+	const auto Cards=Items(Building,LibraryTab);
+	if(!Cards.IsValidIndex(Index)) return false;
+	const auto Item=Cards[Index];
+	return Service.ApplyProfileCommand(Command,[=](auto& P)
+	{
+		if(IsLocked(P,Item) || !P.Buildings.ContainsByPredicate([Building](const auto& B){return B.BuildingId.Name==Building && !B.bUnderConstruction;})) return false;
+		P.CityEconomy.VisitedCards.AddUnique(Item.Key); return true;
+	});
 }

@@ -82,4 +82,6 @@ struct DEFENDYOURKINGDOM_API FDYKCitySaveData
 	UPROPERTY(SaveGame) int64 ResearchUpdatedAtUnix = 0;
 	UPROPERTY(SaveGame) TArray<FName> CompletedResearch;
 	UPROPERTY(SaveGame) TArray<FDYKCityResearchWorkSaveData> ResearchQueue;
+	// Stable card keys, independent of page, building instance and research completion.
+	UPROPERTY(SaveGame) TArray<FName> VisitedCards;
 };

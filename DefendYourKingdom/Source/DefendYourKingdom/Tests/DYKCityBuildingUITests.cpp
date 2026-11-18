@@ -5,6 +5,7 @@
 #include "../Meta/DYKCityBuildingActor.h"
 #include "../Saving/DYKSaveSubsystem.h"
 #include "../UI/DYKCityHUDArt.h"
+#include "../UI/DYKCityPresentation.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
@@ -16,7 +17,13 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/Image.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/CanvasPanel.h"
 #include "Components/WidgetComponent.h"
+#include "Components/ScaleBox.h"
+#include "Components/TextBlock.h"
+#include "Blueprint/WidgetTree.h"
+#include "Engine/FontFace.h"
+#include "Misc/Paths.h"
 #include "Input/Events.h"
 #include "Widgets/SWidget.h"
 #include "UObject/StrongObjectPtr.h"
@@ -37,7 +44,8 @@ bool FDYKCityUIRoutesTest::RunTest(const FString& Parameters)
 	FDYKCityWindowState Window; Window.Select(FGuid::NewGuid(),TEXT("CITY-WORKSHOP")); Window.Visit();
 	Window.TurnPage(1,18); TestEqual(TEXT("Second page"),Window.Page,1); Window.TurnPage(1,18); TestEqual(TEXT("Third page"),Window.Page,2);
 	Window.TurnPage(1,18); TestEqual(TEXT("Cannot exceed third"),Window.Page,2); Window.TurnPage(-9,18); TestEqual(TEXT("Cannot go before first"),Window.Page,0);
-	for(const auto& I:Items(TEXT("CITY-BARRACKS"))) TestEqual(TEXT("Barracks contains only its own research roots"),DYKCityResearch::Find(I.ResearchRoot)->Building,FName(TEXT("CITY-BARRACKS")));
+	const auto Units=Items(TEXT("CITY-BARRACKS")); TestEqual(TEXT("Barracks has three pages"),Units.Num(),18);
+	for(const auto& I:Units) if(!I.bFuture) TestEqual(TEXT("Barracks contains only its own research roots"),DYKCityResearch::Find(I.ResearchRoot)->Building,FName(TEXT("CITY-BARRACKS")));
 	for(const auto& I:Items(TEXT("CITY-LIBRARY"),1)) TestEqual(TEXT("Library contains its common research"),DYKCityResearch::Find(I.ResearchRoot)->Building,FName(TEXT("CITY-LIBRARY")));
 	TestTrue(TEXT("Separate hero route"),Interior(TEXT("CITY-TAVERN"))==EDYKCityInterior::Tavern);
 	TestTrue(TEXT("Separate magic route"),Interior(TEXT("CITY-WIZARD-TOWER"))==EDYKCityInterior::Magic);
@@ -112,6 +120,18 @@ bool FDYKCityNativeWindowsTest::RunTest(const FString& Parameters)
 	const auto Revision=Save->GetRevision(); UI->Dispatch(EDYKCityUIAction::Research,0,TEXT("RESEARCH-INFANTRY-HP"));
 	TestEqual(TEXT("Cross-building payload cannot spend through wrong window"),Save->GetRevision(),Revision);
 	UI->FindAction(EDYKCityUIAction::Back)->OnClicked.Broadcast(); TestEqual(TEXT("Back preserves list page"),UI->GetWindowState().Page,2);
+	UI->Dispatch(EDYKCityUIAction::Previous); UI->Dispatch(EDYKCityUIAction::Previous);
+	UI->FindAction(EDYKCityUIAction::Item,0)->OnClicked.Broadcast();
+	TestTrue(TEXT("Opening available card records view in actual service"),Save->GetProfileSnapshot()->CityEconomy.VisitedCards.Contains(TEXT("TRAP-CARD-0")));
+	UI->CloseClicked();
+	const auto Barracks=DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-BARRACKS")); UI->OpenBuilding(Barracks,TEXT("CITY-BARRACKS")); UI->Dispatch(EDYKCityUIAction::Visit);
+	for(int32 I=0;I<2;++I)
+	{
+		auto* NextButton=UI->FindAction(EDYKCityUIAction::Next); const auto Next=NextButton->TakeWidget();
+		TestTrue(TEXT("Arrow uses artwork at authored aspect, not a text glyph"),NextButton->GetContent()==nullptr && NextButton->GetStyle().Normal.GetResourceObject()!=nullptr);
+		Next->OnKeyDown(Geometry,Space); Next->OnKeyUp(Geometry,Space);
+	}
+	TestEqual(TEXT("Barracks third page through native inputs"),UI->GetWindowState().Page,2);
 	UI->CloseClicked();
 	const auto Saw=DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-SAWMILL"));
 	TestTrue(TEXT("Prepare completed output only"),Save->ApplyProfileCommand(FGuid::NewGuid(),[Saw,Now](auto& P)
@@ -153,5 +173,94 @@ bool FDYKCityHoverTest::RunTest(const FString& Parameters)
 	Actor->HoverBegin(Actor->Body); TestTrue(TEXT("Native hover event reveals text"),Actor->CollectionWidget->IsVisible());
 	Actor->HoverEnd(Actor->Body); TestFalse(TEXT("Leaving building hides text"),Actor->CollectionWidget->IsVisible());
 	return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKCityNewBadgeTest,"DYK.CityHUD.Cards.NewBadgeDurableAndLocked",CityBuildingUITestFlags)
+bool FDYKCityNewBadgeTest::RunTest(const FString& Parameters)
+{
+	using namespace DYKCityBuildingUI;
+	DYKCityHUDTest::Service S;
+	const auto Traps=Items(TEXT("CITY-WORKSHOP"));
+	TestTrue(TEXT("Legacy profile treats available unseen card as new"),ShowNew(S.State,Traps[0]));
+	TestFalse(TEXT("Closed cell has no new badge"),ShowNew(S.State,Traps[6]));
+	TestFalse(TEXT("Blocked unit has no new badge"),ShowNew(S.State,Items(TEXT("CITY-BARRACKS"))[2]));
+	const auto Command=FGuid::NewGuid(); S.Fail=true;
+	TestFalse(TEXT("Failed save does not dismiss new badge"),VisitCard(S,Command,TEXT("CITY-WORKSHOP"),0,0));
+	TestTrue(TEXT("Unseen after failed command"),ShowNew(S.State,Traps[0]));
+	S.Fail=false; const auto Wallet=S.State.Resources;
+	TestTrue(TEXT("Opening available card"),VisitCard(S,Command,TEXT("CITY-WORKSHOP"),0,0));
+	TestFalse(TEXT("Dismissed immediately after first successful open"),ShowNew(S.State,Traps[0]));
+	TestTrue(TEXT("Duplicate command remains harmless"),VisitCard(S,Command,TEXT("CITY-WORKSHOP"),0,0));
+	TestEqual(TEXT("Only one view marker"),S.State.CityEconomy.VisitedCards.Num(),1);
+	for(int32 I=0;I<Wallet.Num();++I) TestEqual(TEXT("Viewing costs no resources"),Wallet[I].Amount,S.State.Resources[I].Amount);
+	TestFalse(TEXT("Future card cannot acquire viewed state"),VisitCard(S,FGuid::NewGuid(),TEXT("CITY-WORKSHOP"),0,6));
+	TestFalse(TEXT("Invalid index rejected"),VisitCard(S,FGuid::NewGuid(),TEXT("CITY-WORKSHOP"),0,-1));
+	TStrongObjectPtr<UGameInstance> Owner(NewObject<UGameInstance>());
+	const FString Prefix=FPaths::ConvertRelativePathToFull(FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("CityHUD/seen-files"),FGuid::NewGuid().ToString(EGuidFormats::Digits),TEXT("profile")));
+	auto* Save=NewObject<UDYKSaveSubsystem>(Owner.Get()); FDYKCityHUDTestAccess::Open(*Save,Prefix);
+	TestTrue(TEXT("Prepare durable profile"),Save->ApplyProfileCommand(FGuid::NewGuid(),[](auto& P){return DYKCityHUDTest::Seed(P);}));
+	TestTrue(TEXT("Persist card visit"),VisitCard(*Save,FGuid::NewGuid(),TEXT("CITY-WORKSHOP"),0,0));
+	auto* Reload=NewObject<UDYKSaveSubsystem>(Owner.Get()); FDYKCityHUDTestAccess::Open(*Reload,Prefix);
+	if(!TestNotNull(TEXT("Actual file reload"),Reload->GetProfileSnapshot())) return false;
+	TestFalse(TEXT("New badge never reappears after reload"),ShowNew(*Reload->GetProfileSnapshot(),Traps[0]));
+	TestTrue(TEXT("Other item stays new"),ShowNew(*Reload->GetProfileSnapshot(),Traps[1]));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKCityModularLayoutTest,"DYK.CityHUD.Cards.ModularAssetsAndBoundedLayout",CityBuildingUITestFlags)
+bool FDYKCityModularLayoutTest::RunTest(const FString& Parameters)
+{
+	const auto* Skin=DYKCityHUDArt::Presentation(); if(!TestNotNull(TEXT("Editable presentation asset"),Skin)) return false;
+	TestNotNull(TEXT("Standalone blank window"),Skin->Window.Get()); TestNotNull(TEXT("Standalone alpha card rim"),Skin->CardFrame.Get());
+	TestNotNull(TEXT("Independent new overlay"),Skin->NewRibbon.Get()); TestNotNull(TEXT("Licensed serif font face"),Skin->Typeface.Get());
+	TestTrue(TEXT("All defined traps and units have individually editable picture rows"),Skin->Pictures.Num()>=10);
+	for(const auto& Row:Skin->Pictures)
+	{
+		TestNotNull(TEXT("Real configurable illustration"),Row.Illustration.LoadSynchronous());
+		TestTrue(TEXT("Valid atlas region"),Row.UVMin.X>=0 && Row.UVMin.Y>=0 && Row.UVMax.X<=1 && Row.UVMax.Y<=1 && Row.UVMax.X>Row.UVMin.X && Row.UVMax.Y>Row.UVMin.Y);
+	}
+	TStrongObjectPtr<UGameInstance> GI(NewObject<UGameInstance>(GEngine)); GI->Init();
+	UWorld* World=UWorld::CreateWorld(EWorldType::Game,false); World->SetGameInstance(GI.Get());
+	struct FCityModularCleanup {UWorld* W; UGameInstance* G; ~FCityModularCleanup(){W->DestroyWorld(false); G->Shutdown();}} Cleanup{World,GI.Get()};
+	auto* Save=GI->GetSubsystem<UDYKSaveSubsystem>();
+	TestTrue(TEXT("Seed test owners"),Save->ApplyProfileCommand(FGuid::NewGuid(),[](auto& P){return DYKCityHUDTest::Seed(P,FDateTime::UtcNow().ToUnixTimestamp());}));
+	FURL URL; URL.AddOption(TEXT("game=/Script/DefendYourKingdom.DYKCityGameMode")); if(!World->SetGameMode(URL)) return false;
+	auto* UI=NewObject<UDYKCityWorkWidget>(World); UI->Initialize(); const auto Slate=UI->TakeWidget();
+	const auto CheckLayout=[this,UI,Skin]()
+	{
+		for(const auto& Button:UI->Actions)
+		{
+			const auto* S=Cast<UCanvasPanelSlot>(Button->Slot); if(!S) continue;
+			if(Button->Action!=EDYKCityUIAction::Close) TestTrue(TEXT("Actions stay above footer"),S->GetPosition().Y+S->GetSize().Y<=890);
+			for(const auto& Other:UI->Actions)
+			{
+				if(Button==Other) continue;
+				const auto* O=Cast<UCanvasPanelSlot>(Other->Slot); if(!O) continue;
+				const FBox2D A(S->GetPosition()+FVector2D(1,1),S->GetPosition()+S->GetSize()-FVector2D(1,1));
+				const FBox2D B(O->GetPosition(),O->GetPosition()+O->GetSize());
+				TestFalse(TEXT("Clickable controls never overlap"),A.Intersect(B));
+			}
+		}
+		UI->WidgetTree->ForEachWidget([this,Skin,UI](UWidget* Widget)
+		{
+			if(const auto* Label=Cast<UTextBlock>(Widget))
+			{
+				const UWidget* Parent=Label;
+				while(Parent && Parent!=UI->DesignCanvas.Get()) Parent=Parent->GetParent();
+				if(!Parent) return;
+				const auto* Fit=Cast<UScaleBox>(Label->GetParent());
+				TestNotNull(TEXT("Text has a fitting container"),Fit);
+				if(Fit) TestTrue(TEXT("Text cannot spill beyond its assigned rectangle"),Fit->GetClipping()==EWidgetClipping::ClipToBounds);
+				TestTrue(TEXT("Text uses configured serif face"),Label->GetFont().FontObject.Get()==Skin->Typeface.Get());
+			}
+		});
+	};
+	UI->OpenBuilding(DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-BARRACKS")),TEXT("CITY-BARRACKS")); UI->Dispatch(EDYKCityUIAction::Visit); CheckLayout();
+	int32 FrameCount=0,NewCount=0;
+	UI->WidgetTree->ForEachWidget([&](UWidget* W){if(const auto* I=Cast<UImage>(W)) {FrameCount+=I->GetBrush().GetResourceObject()==Skin->CardFrame; NewCount+=I->GetBrush().GetResourceObject()==Skin->NewRibbon;}});
+	TestEqual(TEXT("Six separate card rims over content"),FrameCount,6);
+	TestEqual(TEXT("Only four available unviewed cards get new overlays"),NewCount,4);
+	UI->Dispatch(EDYKCityUIAction::Item,0); CheckLayout(); UI->CloseClicked();
+	UI->OpenBuilding(DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-SAWMILL")),TEXT("CITY-SAWMILL")); UI->Dispatch(EDYKCityUIAction::Visit); CheckLayout();
+	UI->ReleaseSlateResources(true); return true;
 }
 #endif

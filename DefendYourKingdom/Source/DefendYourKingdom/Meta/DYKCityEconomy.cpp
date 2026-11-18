@@ -54,6 +54,12 @@ bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P)
 bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P, const FDYKCityBuildingRulesConfig& Config)
 {
 	if (P.CityEconomy.Version != 1) { return false; }
+	TSet<FName> Viewed;
+	for(const auto Key:P.CityEconomy.VisitedCards)
+	{
+		if(Key.IsNone() || Viewed.Contains(Key)) return false;
+		Viewed.Add(Key);
+	}
 	TSet<FDYKContentId> SeenResourceIds;
 	for (const auto& Row:P.Resources)
 	{
