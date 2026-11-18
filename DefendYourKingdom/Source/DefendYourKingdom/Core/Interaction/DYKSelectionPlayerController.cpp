@@ -4,7 +4,9 @@
 #include "../../Meta/DYKCityGameMode.h"
 #include "../../Meta/DYKCityBuildingActor.h"
 #include "../../Meta/DYKCityEditorWidget.h"
+#include "../../Meta/DYKCityWorkWidget.h"
 #include "Engine/World.h"
+#include "InputCoreTypes.h"
 
 void ADYKSelectionPlayerController::BeginPlay()
 {
@@ -27,7 +29,15 @@ void ADYKSelectionPlayerController::SetupInputComponent()
 	if (InputComponent)
 	{
 		InputComponent->BindAction(TEXT("DYK_SelectWorld"), IE_Pressed, this, &ThisClass::HandleWorldSelect);
+		InputComponent->BindKey(EKeys::Escape,IE_Pressed,this,&ThisClass::CancelCityAction);
 	}
+}
+
+void ADYKSelectionPlayerController::CancelCityAction()
+{
+	for(TObjectIterator<UDYKCityWorkWidget> It;It;++It)
+		if(It->GetWorld()==GetWorld() && It->IsInViewport() && It->GetWindowState().IsModal()) {It->CloseClicked(); return;}
+	if(auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>()) City->CancelConstructionPlacement();
 }
 
 FDYKWorldSelectionChanged& ADYKSelectionPlayerController::OnWorldSelectionChanged()
@@ -55,6 +65,8 @@ AActor* ADYKSelectionPlayerController::GetSelectedActor() const
 
 void ADYKSelectionPlayerController::HandleWorldSelect()
 {
+	for(TObjectIterator<UDYKCityWorkWidget> It;It;++It)
+		if(It->GetWorld()==GetWorld() && It->IsInViewport() && It->BlocksWorldInput()) return;
 	// GameAndUI can forward unhandled clicks on panel/text backgrounds to the game.
 	for (TObjectIterator<UDYKCityEditorWidget> It; It; ++It)
 		if (It->GetWorld()==GetWorld() && It->IsInViewport() && It->BlocksWorldInput()) return;

@@ -27,6 +27,11 @@ namespace
 			NotApplicable(0.f), NotApplicable(0.f), DevPlaceholder(0.01f)},
 		{0.f}, {7}, {30.f}, NotApplicable(0)
 	};
+	// Authored base metadata is also used by the clickable barracks cards.
+	constexpr FDYKUnitBaseStats GuardBase=[] {auto S=PeasantBase; S.MaxHP.Value=25; S.PhysicalArmor.Value=1; S.Attack.DamagePerHit.Value=7; return S;}();
+	constexpr FDYKUnitBaseStats RoyalGuardBase=[] {auto S=PeasantBase; S.MaxHP.Value=35; S.PhysicalArmor.Value=2; S.Attack.DamagePerHit.Value=10; return S;}();
+	constexpr FDYKUnitBaseStats VeteranArcherBase=[] {auto S=ArcherBase; S.MaxHP.Value=15; S.PhysicalArmor.Value=1; S.Attack.DamagePerHit.Value=11; return S;}();
+	constexpr FDYKUnitBaseStats CrossbowmanBase=[] {auto S=ArcherBase; S.MaxHP.Value=25; S.PhysicalArmor.Value=2; S.Attack.DamagePerHit.Value=18; S.Attack.IntervalSeconds.Value=4; S.Attack.Range.Value=60; return S;}();
 	// spec/catalog/enemies/01-goblin.md and 03-goblin-assassin.md.
 	// Missing impact timings are replaceable DEV_PLACEHOLDER fields, not passport edits.
 	constexpr FDYKUnitBaseStats GoblinBase = {
@@ -50,6 +55,10 @@ namespace
 				1, EDYKUnitMovement::Stationary, PeasantBase},
 			{DYKUnitIds::Archer(), EDYKUnitSide::Defender, EDYKUnitLine::Ranged,
 				1, EDYKUnitMovement::Stationary, ArcherBase},
+			{FDYKUnitTypeId(TEXT("DYK-GUARD")),EDYKUnitSide::Defender,EDYKUnitLine::Infantry,2,EDYKUnitMovement::Stationary,GuardBase},
+			{FDYKUnitTypeId(TEXT("DYK-ROYAL-GUARD")),EDYKUnitSide::Defender,EDYKUnitLine::Infantry,3,EDYKUnitMovement::Stationary,RoyalGuardBase},
+			{FDYKUnitTypeId(TEXT("DYK-VETERAN-ARCHER")),EDYKUnitSide::Defender,EDYKUnitLine::Ranged,2,EDYKUnitMovement::Stationary,VeteranArcherBase},
+			{FDYKUnitTypeId(TEXT("DYK-CROSSBOWMAN")),EDYKUnitSide::Defender,EDYKUnitLine::Ranged,3,EDYKUnitMovement::Stationary,CrossbowmanBase},
 			{DYKUnitIds::Goblin(), EDYKUnitSide::Enemy, EDYKUnitLine::None,
 				0, EDYKUnitMovement::GroundRoute, GoblinBase},
 			{DYKUnitIds::GoblinAssassin(), EDYKUnitSide::Enemy, EDYKUnitLine::None,

@@ -37,6 +37,7 @@ public:
 
 private:
 	void HandleWorldSelect();
+	void CancelCityAction();
 
 	UPROPERTY(Transient)
 	TObjectPtr<AActor> SelectedActor;

@@ -24,6 +24,7 @@ TSharedRef<SWidget> UDYKCityCollectWidget::RebuildWidget()
 		auto* Paper = DYKUI::Panel(WidgetTree,this);
 		Paper->SetPadding(FMargin(10.f,6.f)); Paper->AddChild(Panel);
 		WidgetTree->RootWidget = Paper;
+		Paper->SetVisibility(ESlateVisibility::HitTestInvisible);
 		NameText = DYKUI::Text(WidgetTree, FText::GetEmpty(), 18);
 		NameText->SetJustification(ETextJustify::Center);
 		Panel->AddChild(NameText);
@@ -63,7 +64,7 @@ void UDYKCityCollectWidget::Refresh()
 	const auto* P = Save ? Save->GetProfileSnapshot() : nullptr;
 	if (!Def || !P || !CollectButton) { return; }
 	NameText->SetText(FText::FromString(Def->DisplayName));
-	CollectButton->SetVisibility(Def->Resource.IsValid() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	CollectButton->SetVisibility(ESlateVisibility::Collapsed);
 	const auto View = DYKCityEconomy::View(*P, InstanceId, FDateTime::UtcNow().ToUnixTimestamp());
 	CollectButton->SetIsEnabled(View.Collectable > 0);
 	StatusText->SetText(!Def->Resource.IsValid() ? FText::GetEmpty() : FText::FromString(bSaveFailed

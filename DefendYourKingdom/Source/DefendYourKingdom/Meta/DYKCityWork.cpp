@@ -191,6 +191,12 @@ bool DYKCityWork::Update(IDYKProfileService& Service,int64 Now)
 	// Avoid writing the profile each second just to advance a clock.
 	Candidate.CityEconomy.WorkUpdatedAtUnix=P->CityEconomy.WorkUpdatedAtUnix;
 	Candidate.CityEconomy.ResearchUpdatedAtUnix=P->CityEconomy.ResearchUpdatedAtUnix;
+	for (auto& S:Candidate.CityEconomy.Instances)
+		if (const auto* Original=P->CityEconomy.Instances.FindByPredicate([&S](const auto& Row){return Row.InstanceId==S.InstanceId;}))
+		{
+			S.OrdersUpdatedAtUnix=Original->OrdersUpdatedAtUnix;
+			if(S.OrdersVersion==1) S.UpdatedAtUnix=Original->UpdatedAtUnix;
+		}
 	if(FDYKPlayerProfileSaveData::StaticStruct()->CompareScriptStruct(&Candidate,P,0)) return true;
 	return Service.ApplyProfileCommand(FGuid::NewGuid(),[Now](auto& State){return DYKCityResearch::Advance(State,Now);});
 }
@@ -208,6 +214,8 @@ bool DYKCityWork::Enqueue(IDYKProfileService& Service,const FDYKCityBuildingWork
 			B.RotationQuarterTurns=R.QuarterTurns; B.bUnderConstruction=true;
 			FDYKCityProductionSaveData S; S.InstanceId=R.InstanceId; S.BuildingIndex=P.Buildings.Add(B);
 			S.UpdatedAtUnix=S.CollectionStartedAtUnix=FMath::Max(Now,P.CityEconomy.WorkUpdatedAtUnix);
+			if(DYKCityCatalog::Find(B.BuildingId)->Category==EDYKCityBuildingCategory::Production)
+			{S.OrdersVersion=1; S.OrdersUpdatedAtUnix=S.UpdatedAtUnix;}
 			P.CityEconomy.Instances.Add(S);
 		}
 		FDYKCityWorkSaveData W; W.WorkId=R.CommandId; W.InstanceId=R.InstanceId;

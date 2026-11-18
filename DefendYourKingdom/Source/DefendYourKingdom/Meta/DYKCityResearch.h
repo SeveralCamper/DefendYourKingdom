@@ -23,6 +23,8 @@ struct FDYKResearchDefinition
 	EDYKUnitLine TargetLine=EDYKUnitLine::None;
 	FDYKUnitTypeId TargetType;
 	FDYKResearchBonus Bonus;
+	// Owning gameplay building, independent of the shared logical research slot.
+	FName Building;
 };
 
 struct FDYKResearchConfig

@@ -40,6 +40,18 @@ namespace
 			Warehouse.Level=4; Warehouse.CellOrigin={27,25};
 			FDYKCityProductionSaveData S; S.InstanceId=FGuid::NewGuid(); S.BuildingIndex=State.Buildings.Add(Warehouse);
 			S.UpdatedAtUnix=S.CollectionStartedAtUnix=ResearchTestTime; State.CityEconomy.Instances.Add(S);
+			for(const auto BuildingName:{TEXT("CITY-BARRACKS"),TEXT("CITY-LIBRARY")})
+			{
+				FDYKBuildingSaveData Owned; Owned.BuildingId=FDYKBuildingId(BuildingName).ToContentId();
+				bool Found=false;
+				for(int32 Y=0;Y<50 && !Found;++Y) for(int32 X=0;X<50 && !Found;++X)
+				{
+					Owned.CellOrigin={X,Y}; auto Layout=State.Buildings; Layout.Add(Owned);
+					Found=DYKCityTerritory::ValidateLayout(State,Layout,DYKCityTerritory::DEV_PLACEHOLDER());
+				}
+				FDYKCityProductionSaveData BuildingState; BuildingState.InstanceId=FGuid::NewGuid(); BuildingState.BuildingIndex=State.Buildings.Add(Owned);
+				BuildingState.UpdatedAtUnix=BuildingState.CollectionStartedAtUnix=ResearchTestTime; State.CityEconomy.Instances.Add(BuildingState);
+			}
 			for(auto& R:State.Resources) R.Amount=FMath::Min<int64>(2400,DYKCityEconomy::Capacity(State,FDYKResourceId(R.ResourceId.Name)));
 			State.Resources.Add({FDYKResourceId(TEXT("RES-MEDALS")).ToContentId(),100});
 			DYKCityResearch::Advance(State,ResearchTestTime);

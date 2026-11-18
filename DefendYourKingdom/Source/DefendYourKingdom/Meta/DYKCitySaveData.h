@@ -4,6 +4,19 @@
 #include "DYKCitySaveData.generated.h"
 
 USTRUCT()
+struct DEFENDYOURKINGDOM_API FDYKCityOrderSaveData
+{
+	GENERATED_BODY()
+	UPROPERTY(SaveGame) FGuid OrderId;
+	UPROPERTY(SaveGame) int32 Recipe = 0;
+	UPROPERTY(SaveGame) int64 EnqueuedAtUnix = 0;
+	UPROPERTY(SaveGame) int64 StartedAtUnix = 0;
+	UPROPERTY(SaveGame) int64 CompletesAtUnix = 0;
+	// Frozen at start. Completed output waits here if the building store is full.
+	UPROPERTY(SaveGame) int64 RemainingOutput = 0;
+};
+
+USTRUCT()
 struct DEFENDYOURKINGDOM_API FDYKCityProductionSaveData
 {
 	GENERATED_BODY()
@@ -14,6 +27,9 @@ struct DEFENDYOURKINGDOM_API FDYKCityProductionSaveData
 	UPROPERTY(SaveGame) int64 UpdatedAtUnix = 0;
 	UPROPERTY(SaveGame) int64 CollectionStartedAtUnix = 0;
 	UPROPERTY(SaveGame) int32 RemainderSeconds = 0;
+	UPROPERTY(SaveGame) int32 OrdersVersion = 0;
+	UPROPERTY(SaveGame) int64 OrdersUpdatedAtUnix = 0;
+	UPROPERTY(SaveGame) TArray<FDYKCityOrderSaveData> Orders;
 };
 
 USTRUCT()

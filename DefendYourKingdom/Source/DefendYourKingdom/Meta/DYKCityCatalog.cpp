@@ -18,6 +18,7 @@ namespace
 		{FDYKBuildingId(TEXT("CITY-WORKSHOP")), TEXT("Мастерская"), {}, 0, 0, 0, {}, EDYKCityBuildingCategory::Unique, false, {3,3}},
 		{FDYKBuildingId(TEXT("CITY-WIZARD-TOWER")), TEXT("Башня волшебника"), {}, 0, 0, 0, {}, EDYKCityBuildingCategory::Unique, false, {2,2}},
 		{FDYKBuildingId(TEXT("CITY-TAVERN")), TEXT("Таверна"), {}, 0, 0, 0, {}, EDYKCityBuildingCategory::Unique, false, {3,2}},
+		{FDYKBuildingId(TEXT("CITY-LIBRARY")), TEXT("Библиотека"), {}, 0, 0, 0, {}, EDYKCityBuildingCategory::Unique, false, {3,3}},
 		// Temporary decoration for placement/sale rules; no unspecified gameplay bonus.
 		{FDYKBuildingId(TEXT("CITY-DECOR-DEV_PLACEHOLDER")), TEXT("Украшение"), {}, 0, 0, 0, {}, EDYKCityBuildingCategory::Decoration, false, {1,1}}};
 }

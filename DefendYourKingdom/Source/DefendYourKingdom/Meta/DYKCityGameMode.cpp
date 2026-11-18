@@ -2,6 +2,7 @@
 #include "DYKCityBuildingActor.h"
 #include "DYKCityEconomy.h"
 #include "DYKCityWork.h"
+#include "DYKCityOrders.h"
 #include "DYKCityWorkWidget.h"
 #include "DYKCityTerritory.h"
 #include "DYKCityTerritoryActor.h"
@@ -37,6 +38,13 @@ void ADYKCityGameMode::InitGame(const FString& MapName, const FString& Options, 
 	}
 	else if (P) { Ready = DYKCityEconomy::Validate(*P) && DYKCityTerritory::Validate(*P,DYKCityTerritory::DEV_PLACEHOLDER()); }
 	if (Ready) Ready=DYKCityWork::Update(*Save,FDateTime::UtcNow().ToUnixTimestamp());
+	if (Ready)
+	{
+		const auto* Current=Save->GetProfileSnapshot();
+		const bool LegacyProducer=Current->CityEconomy.Instances.ContainsByPredicate([Current](const auto& S)
+			{return S.OrdersVersion==0 && DYKCityCatalog::Find(Current->Buildings[S.BuildingIndex].BuildingId)->Category==EDYKCityBuildingCategory::Production;});
+		if(LegacyProducer) Ready=Save->ApplyProfileCommand(FGuid::NewGuid(),[](auto& State){return DYKCityOrders::Migrate(State,FDateTime::UtcNow().ToUnixTimestamp());});
+	}
 	if (!Ready)
 	{
 		StartupError = ErrorMessage = TEXT("City state initialization failed; existing profile was preserved.");
@@ -93,6 +101,8 @@ bool ADYKCityGameMode::SelectBuilding(FGuid Instance)
 		bPlacingBuilding=!Entry->bPlaced;
 	}
 	LayoutMessage = FText::GetEmpty();
+	if(!LayoutEditor.IsActive()) for(TObjectIterator<UDYKCityWorkWidget> It;It;++It)
+		if(It->GetWorld()==GetWorld() && It->IsInViewport()) It->OpenBuilding(Instance,P->Buildings[State->BuildingIndex].BuildingId.Name);
 	return true;
 }
 
@@ -198,7 +208,7 @@ void ADYKCityGameMode::SyncLayoutVisuals()
 		const bool Hidden = Entry && !Entry->bPlaced;
 		It->SetActorHiddenInGame(Hidden); It->SetActorEnableCollision(!Hidden);
 		// Collection is available again after exit. Production remains clock-driven in the profile.
-		It->CollectionWidget->SetVisibility(!LayoutEditor.IsActive());
+		It->CollectionWidget->SetVisibility(It->IsHovered() && !LayoutEditor.IsActive());
 		if (Entry) { B.CellOrigin=Entry->Origin; B.RotationQuarterTurns=Entry->QuarterTurns; }
 		if (!Hidden) It->SetActorLocationAndRotation(DYKCityTerritory::BuildingLocation(B,DYKCityTerritory::DEV_PLACEHOLDER()),FRotator(0,B.RotationQuarterTurns*90.,0));
 	}

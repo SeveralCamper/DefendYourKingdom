@@ -1,5 +1,6 @@
 #include "DYKCityResearch.h"
 #include "DYKCityEconomy.h"
+#include "DYKCityOrders.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "../Saving/DYKProfileService.h"
 
@@ -16,6 +17,8 @@ namespace
 	}
 	bool ResearchReady(const FDYKPlayerProfileSaveData& P,const FDYKResearchDefinition& D,const FDYKResearchConfig& C)
 	{
+		if(!D.Building.IsNone() && !P.Buildings.ContainsByPredicate([&D](const auto& B)
+			{return B.BuildingId.Name==D.Building && !B.bUnderConstruction;})) return false;
 		for(const auto Key:D.Prerequisites) if(!P.CityEconomy.CompletedResearch.Contains(Key)) return false;
 		for(const auto Key:D.Conditions)
 		{
@@ -71,6 +74,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 			for(int32 Tier=1;Tier<=3;++Tier)
 			{
 				FDYKResearchDefinition D; D.Id=FName(*FString::Printf(TEXT("RESEARCH-%s-T%d"),LineKeys[LineIndex],Tier));
+				D.Building=TEXT("CITY-BARRACKS");
 				D.DisplayName=Names[LineIndex][Tier-1]; D.Unlock=FDYKUnitTypeId(Types[LineIndex][Tier-1]).ToContentId();
 				if(!Previous.IsNone()) D.Prerequisites.Add(Previous);
 				// T1 remains the existing free initial rank. The node supplies the explicit graph root.
@@ -80,6 +84,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 			for(int32 Stat=0;Stat<3;++Stat)
 			{
 				FDYKResearchDefinition D; D.Id=FName(*FString::Printf(TEXT("RESEARCH-%s-%s"),LineKeys[LineIndex],StatKeys[Stat]));
+				D.Building=TEXT("CITY-LIBRARY");
 				D.DisplayName=FString::Printf(TEXT("%s: %s"),LineIndex==0 ? TEXT("Пехота") : TEXT("Стрелки"),StatNames[Stat]);
 				D.Prerequisites.Add(FName(*FString::Printf(TEXT("RESEARCH-%s-T1"),LineKeys[LineIndex])));
 				D.TargetLine=Line; D.Bonus=Stat==0 ? FDYKResearchBonus{10,0,0} : Stat==1 ? FDYKResearchBonus{0,1,0} : FDYKResearchBonus{0,0,2};
@@ -91,6 +96,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 					for(int32 Level=1;Level<=Tier-1;++Level)
 					{
 						auto Personal=D;
+						Personal.Building=TEXT("CITY-BARRACKS");
 						Personal.Id=FName(*FString::Printf(TEXT("RESEARCH-%s-T%d-%s-%d"),LineKeys[LineIndex],Tier,StatKeys[Stat],Level));
 						Personal.DisplayName=FString::Printf(TEXT("%s: %s %d"),Names[LineIndex][Tier-1],StatNames[Stat],Level);
 						Personal.Prerequisites={FName(*FString::Printf(TEXT("RESEARCH-%s-T%d"),LineKeys[LineIndex],Tier))};
@@ -101,6 +107,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 				}
 			}
 			FDYKResearchDefinition Ability;
+			Ability.Building=TEXT("CITY-BARRACKS");
 			Ability.Id=FName(*FString::Printf(TEXT("RESEARCH-%s-T3-ABILITY"),LineKeys[LineIndex]));
 			Ability.DisplayName=FString::Printf(TEXT("%s: уникальное умение"),Names[LineIndex][2]);
 			Ability.Prerequisites={FName(*FString::Printf(TEXT("RESEARCH-%s-T3"),LineKeys[LineIndex]))};
@@ -108,6 +115,23 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 			// Unspecified price: replaceable DEV_PLACEHOLDER, no invented final ability rules.
 			Ability.Costs={{FDYKResourceId(TEXT("RES-GOLD")).ToContentId(),20}};
 			C.Definitions.Add(MoveTemp(Ability));
+		}
+		const TCHAR* TrapKeys[]={TEXT("SPIKES"),TEXT("DEATH-CLAWS"),TEXT("LOGS"),TEXT("PAIN-AVALANCHE")};
+		const TCHAR* TrapNames[]={TEXT("Шипы"),TEXT("Когти смерти"),TEXT("Бревна"),TEXT("Лавина боли")};
+		for(int32 Type=0;Type<4;++Type)
+		{
+			FName PreviousTrap;
+			for(int32 Level=1;Level<=3;++Level)
+			{
+				FDYKResearchDefinition D;
+				D.Id=FName(*FString::Printf(TEXT("RESEARCH-TRAP-%s-L%d"),TrapKeys[Type],Level));
+				D.Building=TEXT("CITY-WORKSHOP"); D.DisplayName=FString::Printf(TEXT("%s · уровень %d"),TrapNames[Type],Level);
+				if(!PreviousTrap.IsNone()) D.Prerequisites.Add(PreviousTrap);
+				if(Level==1) D.Unlock=FDYKTrapId(FName(*FString::Printf(TEXT("DYK-TRAP-%s"),TrapKeys[Type]))).ToContentId();
+				// Unspecified trap research prices/level count: replaceable DEV_PLACEHOLDER.
+				D.Costs=ResearchCosts(10*Level,10*Level,5*Level,0);
+				PreviousTrap=D.Id; C.Definitions.Add(MoveTemp(D));
+			}
 		}
 		return C;
 	}();
@@ -203,7 +227,8 @@ bool DYKCityResearch::Advance(FDYKPlayerProfileSaveData& P,int64 Now,const FDYKR
 		int64 Step=Now;
 		for(const auto& W:P.CityEconomy.Work) if(W.StartedAtUnix>0) Step=FMath::Min(Step,W.CompletesAtUnix);
 		for(const auto& W:P.CityEconomy.ResearchQueue) if(W.StartedAtUnix>0) Step=FMath::Min(Step,W.CompletesAtUnix);
-		if(!DYKCityWork::Advance(P,Step) || !ResearchBoundary(P,Step,C)) return false;
+		if(!DYKCityOrders::Advance(P,Step) || !DYKCityWork::Advance(P,Step) || !ResearchBoundary(P,Step,C)
+			|| !DYKCityOrders::Advance(P,Step)) return false;
 		if(Step==Now) break;
 	}
 	return Validate(P,C);

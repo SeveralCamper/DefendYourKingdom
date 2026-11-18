@@ -31,9 +31,9 @@
 | `M2.02` | Здания, ограничения и улучшения | [`01`](./01-city-and-meta.md) CITY12.02; [`01`](./01-city-and-meta.md) CITY14.04; [`01`](./01-city-and-meta.md) CITY14.05 | P12-T08;P12-T10;P14-T10 | M2 |
 | `M2.03` | Городской редактор: хранилище и завершение изменения | [`01`](./01-city-and-meta.md) CITY12.03; [`01`](./01-city-and-meta.md) CITY16 | P12-T16;P12-T17;P16-T06;P16-T07 | M2 |
 | `M2.04` | Городские дороги и декоративные NPC | [`01`](./01-city-and-meta.md) CITY12.04; [`01`](./01-city-and-meta.md) CITY16 | P12-T20;P12-T21;P12-T22 | M2 |
-| `M2.05` | Производство и офлайн-расчёт | [`01`](./01-city-and-meta.md) CITY13.01; [`01`](./01-city-and-meta.md) CITY13.05; [`08`](./08-tech-and-production.md) P18.05 | P13-T09;P13-T20;P13-T30 | M2 |
+| `M2.05` | Заказы производства, сбор и офлайн-расчёт | [`01`](./01-city-and-meta.md) CITY13.01; [`01`](./01-city-and-meta.md) CITY13.05; [`08`](./08-tech-and-production.md) P18.05 | P13-T09;P13-T20;P13-T30;P16-CITY-05;P16-CITY-06 | M2 |
 | `M2.06` | Таймеры строительства и улучшений (Q40) | [`01`](./01-city-and-meta.md) CITY13.03; [`01`](./01-city-and-meta.md) CITY13.06; [`01`](./01-city-and-meta.md) CITY14.07 | P13-T15;P13-T16;P13-T21;P14-T07 | M2 |
-| `M2.07` | Исследования и деревья улучшений | [`01`](./01-city-and-meta.md) CITY14.01; [`01`](./01-city-and-meta.md) CITY14.02; [`10`](./10-player-units.md) общие исследования | P14-T02;P14-T03;P14-T04;P14-T05;P14-T07 | M2 |
+| `M2.07` | Исследования и деревья улучшений по зданиям | [`01`](./01-city-and-meta.md) CITY14.01; [`01`](./01-city-and-meta.md) CITY14.02; [`01`](./01-city-and-meta.md) CITY16; [`10`](./10-player-units.md) общие исследования | P14-T02;P14-T03;P14-T04;P14-T05;P14-T07;P16-CITY-04 | M2 |
 | `M2.08` | Герой-паладин и его развитие | [`06`](./06-heroes.md) §2–§5; [`10`](./10-player-units.md) Паладин; [`01`](./01-city-and-meta.md) CITY14.03 | P07-T01;P14-T09;PG-019 | M2 |
 | `M2.09` | Контракты и наёмники | [`02`](./02-mission-economy.md) P02.02/P02.08; [`01`](./01-city-and-meta.md) CITY14.06; [`10`](./10-player-units.md) Боевой наёмник | QA-P02-03;QA-P02-04;QA-P02-05;P14-T14 | M2 |
 | `M2.10` | Шесть союзных типов | [`10`](./10-player-units.md) все 6 паспортов; [`04`](./04-unit-combat.md) §2–§5; [`01`](./01-city-and-meta.md) CITY14.02 | P17-T15;P17-T26;P18-T06 | M2 |

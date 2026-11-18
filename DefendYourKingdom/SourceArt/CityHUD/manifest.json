@@ -1,0 +1,74 @@
+[
+  {
+    "source": "concept-arts/HUD/AllTrapHUD.png",
+    "sha256": "AA71850C4F15C9C191E4B9B12663737D4E964FA5D88A6C6D87EBD87D1A1F4C00",
+    "asset": "/Game/DefendYourKingdom/Art/CityHUD/AllTrapHUD",
+    "role": "Мастерская: предметная карточка",
+    "origin": "Предоставлено автором проекта, 18.11.2026",
+    "modifiedSource": false
+  },
+  {
+    "source": "concept-arts/HUD/AllUnitHUD.png",
+    "sha256": "BF988978BF5AFFF1084AF2C53DD3281775F77E2BAFD554F6BA31B964616D3D0D",
+    "asset": "/Game/DefendYourKingdom/Art/CityHUD/AllUnitHUD",
+    "role": "Казармы: предметная карточка",
+    "origin": "Предоставлено автором проекта, 18.11.2026",
+    "modifiedSource": false
+  },
+  {
+    "source": "concept-arts/HUD/BarraksHUD.png",
+    "sha256": "7F1D13678E530072236F2E9D294C2DB8923D23DED8359D11605A85E0419B5B22",
+    "asset": "/Game/DefendYourKingdom/Art/CityHUD/BarraksHUD",
+    "role": "Казармы: каталог бойцов",
+    "origin": "Предоставлено автором проекта, 18.11.2026",
+    "modifiedSource": false
+  },
+  {
+    "source": "concept-arts/HUD/ForgeHUD.png",
+    "sha256": "C8C2450F0C778839AB3A93099BD3648EDAB7703DB4AB0F72DBBC821E6718B1F5",
+    "asset": "/Game/DefendYourKingdom/Art/CityHUD/ForgeHUD",
+    "role": "Резервный макет производственного окна",
+    "origin": "Предоставлено автором проекта, 18.11.2026",
+    "modifiedSource": false
+  },
+  {
+    "source": "concept-arts/HUD/LibraryHUD.png",
+    "sha256": "9F1D55EA290E481025797BB75599A15C97A2B1AEEA4547BF691804C6E19C06C1",
+    "asset": "/Game/DefendYourKingdom/Art/CityHUD/LibraryHUD",
+    "role": "Библиотека",
+    "origin": "Предоставлено автором проекта, 18.11.2026",
+    "modifiedSource": false
+  },
+  {
+    "source": "concept-arts/HUD/MillHUD.png",
+    "sha256": "053299B0405D1BC82C79FC9F183468366BE4BD5EBCCC5446267734A8D0A03179",
+    "asset": "/Game/DefendYourKingdom/Art/CityHUD/MillHUD",
+    "role": "Заказы еды",
+    "origin": "Предоставлено автором проекта, 18.11.2026",
+    "modifiedSource": false
+  },
+  {
+    "source": "concept-arts/HUD/QuarryHUD.png",
+    "sha256": "5AA476137240ACBFD36701B7C3C98CA74D689E5088E597AFD70F9C31E4E22EC2",
+    "asset": "/Game/DefendYourKingdom/Art/CityHUD/QuarryHUD",
+    "role": "Заказы камня",
+    "origin": "Предоставлено автором проекта, 18.11.2026",
+    "modifiedSource": false
+  },
+  {
+    "source": "concept-arts/HUD/SawmillHUD.png",
+    "sha256": "6CA401D2B0F5ED283FD2C6AC0752818742A361F0E598D8CB42EF704C2EECEF08",
+    "asset": "/Game/DefendYourKingdom/Art/CityHUD/SawmillHUD",
+    "role": "Заказы древесины",
+    "origin": "Предоставлено автором проекта, 18.11.2026",
+    "modifiedSource": false
+  },
+  {
+    "source": "concept-arts/HUD/WorkshopHUD.png",
+    "sha256": "39F82CFF264028FDF5B703CAF353291E24FE1F8396B6425610F7EFF19FB50761",
+    "asset": "/Game/DefendYourKingdom/Art/CityHUD/WorkshopHUD",
+    "role": "Мастерская: каталог ловушек",
+    "origin": "Предоставлено автором проекта, 18.11.2026",
+    "modifiedSource": false
+  }
+]

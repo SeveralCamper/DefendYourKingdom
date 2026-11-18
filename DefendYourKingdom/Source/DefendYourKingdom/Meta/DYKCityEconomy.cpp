@@ -12,6 +12,7 @@ namespace
 	}
 	FDYKCityProductionSaveData Accrue(FDYKCityProductionSaveData State, const FDYKCityProductionLevel& Def, int64 Now)
 	{
+		if (State.OrdersVersion==1) return State;
 		if (Def.CycleSeconds <= 0) { return State; }
 		const int64 Capacity = Def.Capacity;
 		const int64 Time = FMath::Max(Now, State.UpdatedAtUnix);

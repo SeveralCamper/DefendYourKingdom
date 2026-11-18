@@ -13,6 +13,7 @@
 #include "UObject/StrongObjectPtr.h"
 #include "../Meta/DYKCityBuildingActor.h"
 #include "../Meta/DYKCityWidgets.h"
+#include "../Meta/DYKCityWorkWidget.h"
 #include "Components/Button.h"
 #include "Components/WidgetComponent.h"
 #include "Engine/Engine.h"
@@ -343,33 +344,26 @@ bool FDYKCityRuntimeInputTest::RunTest(const FString& Parameters)
 		for (auto& S : P.CityEconomy.Instances)
 		{
 			S.UpdatedAtUnix = S.CollectionStartedAtUnix = Now - 60;
-			S.Stored = 0;
+			S.Stored = P.Buildings[S.BuildingIndex].BuildingId.Name==TEXT("CITY-SAWMILL") ? 2 : 0;
 			S.RemainderSeconds = 0;
 		}
 		Resource(P, Wood).Amount = 0;
 		return true;
 	}));
-	UDYKCityCollectWidget* Widget = nullptr;
-	for (TObjectIterator<ADYKCityBuildingActor> It; It; ++It)
-	{
-		if (It->GetWorld() == World && It->BuildingId == BuildingId(TEXT("CITY-SAWMILL")))
-		{
-			Widget = Cast<UDYKCityCollectWidget>(It->CollectionWidget->GetUserWidgetObject());
-			break;
-		}
-	}
-	if (!TestNotNull(TEXT("Owned sawmill has production widget"), Widget)) return false;
-	Widget->Refresh();
-	if (!TestNotNull(TEXT("Widget has actual UButton"), Widget->CollectButton.Get())) return false;
-	if (!TestTrue(TEXT("Accrued production enables button"), Widget->CollectButton->GetIsEnabled())) return false;
-	const auto SlateButton = Widget->CollectButton->TakeWidget();
+	UDYKCityWorkWidget* Widget=nullptr;
+	for(TObjectIterator<UDYKCityWorkWidget> It;It;++It) if(It->GetWorld()==World && It->IsInViewport()) {Widget=*It; break;}
+	if(!TestNotNull(TEXT("Actual building window"),Widget)) return false;
+	Widget->CloseClicked(); Widget->OpenBuilding(Instance(*Save->GetProfileSnapshot(),TEXT("CITY-SAWMILL")),TEXT("CITY-SAWMILL"));
+	auto* Button=Widget->FindAction(EDYKCityUIAction::Collect);
+	if(!TestNotNull(TEXT("Native card collect button"),Button) || !TestTrue(TEXT("Completed output enables collection"),Button->GetIsEnabled())) return false;
+	const auto SlateButton = Button->TakeWidget();
 	const FGeometry Geometry = FGeometry::MakeRoot(FVector2D(240.f, 40.f), FSlateLayoutTransform());
 	const FKeyEvent Accept(EKeys::SpaceBar, FModifierKeysState(), 0, false, 0, 0);
 	TestTrue(TEXT("Slate accepts key-down"), SlateButton->OnKeyDown(Geometry, Accept).IsEventHandled());
 	TestTrue(TEXT("Slate key-up executes UButton delegate"), SlateButton->OnKeyUp(Geometry, Accept).IsEventHandled());
 	const int64 Collected = DYKCityEconomy::Balance(*Save->GetProfileSnapshot(), Wood);
 	TestTrue(TEXT("Native Slate input collected actual resource"), Collected > 0);
-	TestFalse(TEXT("Emptied producer disables same real button"), Widget->CollectButton->GetIsEnabled());
+	TestFalse(TEXT("Emptied producer disables the current card button"), Widget->FindAction(EDYKCityUIAction::Collect)->GetIsEnabled());
 	SlateButton->OnKeyDown(Geometry, Accept);
 	SlateButton->OnKeyUp(Geometry, Accept);
 	TestEqual(TEXT("Repeated disabled input cannot collect twice"), DYKCityEconomy::Balance(*Save->GetProfileSnapshot(), Wood), Collected);

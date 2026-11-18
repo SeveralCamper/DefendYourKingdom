@@ -83,7 +83,7 @@ void UDYKCityEditorWidget::Refresh()
 	const auto* City=GetWorld() ? GetWorld()->GetAuthGameMode<ADYKCityGameMode>() : nullptr;
 	if (!City || !Panel) return;
 	const bool Active=City->GetLayoutEditor().IsActive();
-	Panel->SetVisibility(Active || City->GetSelectedBuilding().IsValid() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	Panel->SetVisibility(Active ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	MoveButton->SetVisibility(Active && City->IsPlacingBuilding() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	MoveButton->SetIsEnabled(City->GetSelectedBuilding().IsValid());
 	for (auto* B : {RotateButton.Get(),StoreButton.Get(),ApplyButton.Get()})
