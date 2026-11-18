@@ -1,5 +1,6 @@
 #pragma once
 #include "Styling/SlateBrush.h"
+#include "Fonts/SlateFontInfo.h"
 class UCanvasPanel;
 class UImage;
 class UTextBlock;
@@ -10,6 +11,8 @@ class UDYKCityPresentation;
 namespace DYKCityHUDArt
 {
 	DEFENDYOURKINGDOM_API UDYKCityPresentation* Presentation();
+	DEFENDYOURKINGDOM_API FSlateFontInfo FontInfo(int32 Size);
+	DEFENDYOURKINGDOM_API FSlateBrush PlateBrush();
 	DEFENDYOURKINGDOM_API FSlateBrush TextureBrush(UTexture2D* Texture,FBox2D UV=FBox2D(FVector2D::ZeroVector,FVector2D(1,1)));
 	DEFENDYOURKINGDOM_API UImage* Texture(UWidgetTree* Tree,UCanvasPanel* Canvas,UTexture2D* Texture,FVector2D Position,FVector2D Size,FBox2D UV=FBox2D(FVector2D::ZeroVector,FVector2D(1,1)));
 	DEFENDYOURKINGDOM_API void Plate(UWidgetTree* Tree,UCanvasPanel* Canvas,FVector2D Position,FVector2D Size);

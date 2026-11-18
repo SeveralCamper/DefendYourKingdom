@@ -22,7 +22,7 @@
 #include "Components/ScaleBox.h"
 #include "Components/TextBlock.h"
 #include "Blueprint/WidgetTree.h"
-#include "Engine/FontFace.h"
+#include "Engine/Font.h"
 #include "Misc/Paths.h"
 #include "Input/Events.h"
 #include "Widgets/SWidget.h"

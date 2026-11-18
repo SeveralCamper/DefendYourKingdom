@@ -9,6 +9,7 @@ sources = root / 'DefendYourKingdom/SourceArt/CityHUD'
 destination = '/Game/DefendYourKingdom/Art/CityHUD'
 assets = {}
 report = []
+font_only = '-CityFontOnly' in u.SystemLibrary.get_command_line()
 
 def import_file(filename, name, folder=destination, factory=None):
     task = u.AssetImportTask()
@@ -35,12 +36,20 @@ def import_file(filename, name, folder=destination, factory=None):
     return asset
 
 for name in ['WindowBase', 'CardFrame', 'NewRibbon', 'TrapPictures', 'UnitPictures', 'ButtonPlate']:
-    assets[name] = import_file(sources / 'Modular' / (name + '.png'), name)
-font = import_file(sources / 'Fonts/NotoSerif-Regular.ttf', 'CitySerif', destination + '/Fonts', u.FontFileImportFactory())
+    assets[name] = u.load_asset(destination + '/' + name) if font_only else import_file(sources / 'Modular' / (name + '.png'), name)
+font = u.load_asset(destination + '/Fonts/CitySerif') if font_only else import_file(sources / 'Fonts/NotoSerif-Regular.ttf', 'CitySerif', destination + '/Fonts', u.FontFileImportFactory())
 if not isinstance(font, u.FontFace):
     raise RuntimeError('Expected self-contained FontFace, got ' + str(font))
 font.set_editor_property('loading_policy', u.FontLoadingPolicy.INLINE)
 u.EditorAssetLibrary.save_loaded_asset(font)
+
+# A bare FontFace is not an IFontProviderInterface. UMG must receive a runtime UFont.
+runtime_font = u.load_asset(destination + '/Fonts/CitySerifFont') if u.EditorAssetLibrary.does_asset_exist(destination + '/Fonts/CitySerifFont') else None
+if not runtime_font:
+    runtime_font = u.AssetToolsHelpers.get_asset_tools().create_asset('CitySerifFont', destination + '/Fonts', u.Font, u.FontFactory())
+if not u.DYKCityPresentation.configure_runtime_font(runtime_font, font):
+    raise RuntimeError('Runtime composite font configuration failed')
+u.EditorAssetLibrary.save_loaded_asset(runtime_font)
 
 cls = u.load_class(None, '/Script/DefendYourKingdom.DYKCityPresentation')
 presentation = u.load_asset(destination + '/CityPresentation')
@@ -48,9 +57,10 @@ if not presentation:
     factory = u.DataAssetFactory()
     factory.set_editor_property('data_asset_class', cls)
     presentation = u.AssetToolsHelpers.get_asset_tools().create_asset('CityPresentation', destination, cls, factory)
-for prop, name in [('window', 'WindowBase'), ('card_frame', 'CardFrame'), ('new_ribbon', 'NewRibbon'), ('button_plate', 'ButtonPlate')]:
-    presentation.set_editor_property(prop, assets[name])
-presentation.set_editor_property('typeface', font)
+if not font_only:
+    for prop, name in [('window', 'WindowBase'), ('card_frame', 'CardFrame'), ('new_ribbon', 'NewRibbon'), ('button_plate', 'ButtonPlate')]:
+        presentation.set_editor_property(prop, assets[name])
+presentation.set_editor_property('typeface', runtime_font)
 
 # Reimport intentionally preserves manually configured card pictures on an existing asset.
 if not presentation.get_editor_property('pictures'):
@@ -74,4 +84,4 @@ u.EditorAssetLibrary.save_loaded_asset(presentation)
 out = root / 'DefendYourKingdom/Saved/CityHUDModular'
 out.mkdir(parents=True, exist_ok=True)
 (out / 'import-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf8')
-print('CITY_MODULAR_HUD_IMPORTED ' + str(len(report)))
+print('CITY_MODULAR_HUD_IMPORTED ' + str(len(report)) + ' COMPOSITE_FONT_READY')

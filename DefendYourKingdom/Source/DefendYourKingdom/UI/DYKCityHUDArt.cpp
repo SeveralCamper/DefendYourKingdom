@@ -7,11 +7,29 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/ScaleBox.h"
-#include "Engine/FontFace.h"
+#include "Engine/Font.h"
 #include "Engine/Texture2D.h"
+#include "Styling/CoreStyle.h"
 
 UDYKCityPresentation* DYKCityHUDArt::Presentation()
 {return LoadObject<UDYKCityPresentation>(nullptr,TEXT("/Game/DefendYourKingdom/Art/CityHUD/CityPresentation.CityPresentation"));}
+
+FSlateFontInfo DYKCityHUDArt::FontInfo(int32 Size)
+{
+	const auto* Skin=Presentation();
+	if(Skin && Skin->Typeface && Skin->Typeface->GetCompositeFont() && !Skin->Typeface->GetCompositeFont()->DefaultTypeface.Fonts.IsEmpty())
+		return FSlateFontInfo(Skin->Typeface,Size);
+	// A missing authoring asset must still produce readable text, never LastResort boxes.
+	return FCoreStyle::GetDefaultFontStyle("Regular",Size);
+}
+
+FSlateBrush DYKCityHUDArt::PlateBrush()
+{
+	const auto* Skin=Presentation();
+	// Sample the complete plate face, excluding its transparent canvas padding.
+	// Image drawing has no texture-pixel nine-slice borders that could swallow the body.
+	return TextureBrush(Skin ? Skin->ButtonPlate.Get() : nullptr,FBox2D({.014,.16},{.986,.80}));
+}
 
 FSlateBrush DYKCityHUDArt::TextureBrush(UTexture2D* Texture,FBox2D UV)
 {
@@ -38,11 +56,8 @@ UImage* DYKCityHUDArt::Image(UWidgetTree* Tree,UCanvasPanel* Canvas,FName Asset,
 }
 void DYKCityHUDArt::Plate(UWidgetTree* Tree,UCanvasPanel* Canvas,FVector2D Position,FVector2D Size)
 {
-	if(const auto* Skin=Presentation())
-	{
-		auto* Art=Texture(Tree,Canvas,Skin->ButtonPlate,Position,Size);
-		auto B=Art->GetBrush(); B.DrawAs=ESlateBrushDrawType::Box; B.Margin=FMargin(.10f,.25f); B.ImageSize=FVector2D(240,72); B.SetUVRegion(FBox2D()); Art->SetBrush(B);
-	}
+	auto* Art=Tree->ConstructWidget<UImage>(); Art->SetBrush(PlateBrush());
+	Art->SetVisibility(ESlateVisibility::HitTestInvisible); Place(Canvas,Art,Position,Size);
 }
 void DYKCityHUDArt::Paper(UWidgetTree*,UCanvasPanel*,FVector2D,FVector2D)
 {
@@ -60,7 +75,7 @@ bool DYKCityHUDArt::Illustration(UWidgetTree* Tree,UCanvasPanel* Canvas,FName Ke
 UTextBlock* DYKCityHUDArt::Label(UWidgetTree* Tree,UCanvasPanel* Canvas,const FText& Text,FVector2D Position,FVector2D Size,int32 Font,bool Light)
 {
 	auto* LabelWidget=DYKUI::Text(Tree,Text,Font);
-	if(const auto* Skin=Presentation(); Skin && Skin->Typeface) LabelWidget->SetFont(FSlateFontInfo(Skin->Typeface,Font));
+	LabelWidget->SetFont(FontInfo(Font));
 	LabelWidget->SetAutoWrapText(false);
 	if(Size.Y>Font*2.4) LabelWidget->SetWrapTextAt(Size.X-8);
 	LabelWidget->SetColorAndOpacity(Light ? FLinearColor(1,.91f,.70f,1) : FLinearColor(.18f,.085f,.025f,1));

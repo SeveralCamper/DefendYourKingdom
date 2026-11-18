@@ -17,7 +17,6 @@
 #include "Components/SizeBox.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
-#include "Engine/FontFace.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
@@ -54,10 +53,7 @@ UDYKCityActionButton* UDYKCityWorkWidget::ActionButton(EDYKCityUIAction Action,i
 	const bool Right=Action==EDYKCityUIAction::Next || Action==EDYKCityUIAction::ResearchNext;
 	FSlateBrush B;
 	if(Left || Right) B=DYKCityHUDArt::Brush(TEXT("WorkshopHUD"),Left ? FBox2D({578,814},{644,872}) : FBox2D({811,814},{877,872}));
-	else if(const auto* Skin=DYKCityHUDArt::Presentation(); Skin && !Transparent)
-	{
-		B=DYKCityHUDArt::TextureBrush(Skin->ButtonPlate); B.DrawAs=ESlateBrushDrawType::Box; B.Margin=FMargin(.10f,.25f); B.ImageSize=FVector2D(240,72); B.SetUVRegion(FBox2D());
-	}
+	else if(!Transparent) B=DYKCityHUDArt::PlateBrush();
 	else {B.DrawAs=ESlateBrushDrawType::Image; B.TintColor=FLinearColor(1,1,1,0);}
 	FButtonStyle Style;
 	Style.SetNormal(B); Style.SetHovered(B); Style.SetPressed(B); Style.SetDisabled(B);
@@ -83,8 +79,7 @@ TSharedRef<SWidget> UDYKCityWorkWidget::RebuildWidget()
 		auto* Root=WidgetTree->ConstructWidget<UCanvasPanel>(); WidgetTree->RootWidget=Root; Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		DevelopmentButton=DYKUI::Button(WidgetTree,this,NSLOCTEXT("DYKCity","Development","Развитие города"));
 		DevelopmentButton->OnClicked.AddDynamic(this,&ThisClass::ToggleClicked);
-		if(auto* Caption=Cast<UTextBlock>(DevelopmentButton->GetContent()))
-			if(const auto* Skin=DYKCityHUDArt::Presentation(); Skin && Skin->Typeface) Caption->SetFont(FSlateFontInfo(Skin->Typeface,22));
+		if(auto* Caption=Cast<UTextBlock>(DevelopmentButton->GetContent())) Caption->SetFont(DYKCityHUDArt::FontInfo(22));
 		auto* DevelopmentSlot=Root->AddChildToCanvas(DevelopmentButton); DevelopmentSlot->SetPosition({16,115}); DevelopmentSlot->SetAutoSize(true);
 		ModalBlocker=WidgetTree->ConstructWidget<UButton>();
 		FButtonStyle BlockingStyle=ModalBlocker->GetStyle();

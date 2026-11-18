@@ -2,6 +2,7 @@
 #include "Engine/DataAsset.h"
 #include "DYKCityPresentation.generated.h"
 class UTexture2D;
+class UFont;
 class UFontFace;
 
 // Presentation only: changing an illustration never changes unlock rules or balance.
@@ -24,8 +25,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) TObjectPtr<UTexture2D> CardFrame;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) TObjectPtr<UTexture2D> NewRibbon;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) TObjectPtr<UTexture2D> ButtonPlate;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly) TObjectPtr<UFontFace> Typeface;
+	// Slate needs a runtime composite UFont, not a bare UFontFace.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly) TObjectPtr<UFont> Typeface;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly) TArray<FDYKCityCardPicture> Pictures;
+	// Import bridge: FFontData is not exposed by UE5.5 Python. No gameplay side effects.
+	UFUNCTION(BlueprintCallable, Category="Presentation")
+	static bool ConfigureRuntimeFont(UFont* Font,UFontFace* Face);
 	const FDYKCityCardPicture* Find(FName Key) const
 	{return Pictures.FindByPredicate([Key](const auto& Row){return Row.Key==Key;});}
 };
