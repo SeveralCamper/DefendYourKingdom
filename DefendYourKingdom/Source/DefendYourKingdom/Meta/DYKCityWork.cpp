@@ -1,5 +1,6 @@
 #include "DYKCityWork.h"
 #include "DYKCityEconomy.h"
+#include "DYKCityResearch.h"
 #include "../Saving/DYKProfileService.h"
 
 namespace
@@ -185,20 +186,20 @@ bool DYKCityWork::Update(IDYKProfileService& Service,int64 Now)
 {
 	const auto* P=Service.GetProfileSnapshot();
 	if(!P) return false;
-	if(P->CityEconomy.Work.IsEmpty() && P->CityEconomy.PendingRefunds.IsEmpty()) return Validate(*P);
 	auto Candidate=*P;
-	if(!Advance(Candidate,Now)) return false;
+	if(!DYKCityResearch::Advance(Candidate,Now)) return false;
 	// Avoid writing the profile each second just to advance a clock.
 	Candidate.CityEconomy.WorkUpdatedAtUnix=P->CityEconomy.WorkUpdatedAtUnix;
+	Candidate.CityEconomy.ResearchUpdatedAtUnix=P->CityEconomy.ResearchUpdatedAtUnix;
 	if(FDYKPlayerProfileSaveData::StaticStruct()->CompareScriptStruct(&Candidate,P,0)) return true;
-	return Service.ApplyProfileCommand(FGuid::NewGuid(),[Now](auto& State){return Advance(State,Now);});
+	return Service.ApplyProfileCommand(FGuid::NewGuid(),[Now](auto& State){return DYKCityResearch::Advance(State,Now);});
 }
 
 bool DYKCityWork::Enqueue(IDYKProfileService& Service,const FDYKCityBuildingWorkRequest& R,int64 Now)
 {
 	return Service.ApplyProfileCommand(R.CommandId,[&R,Now](auto& P)
 	{
-		if(!Advance(P,Now) || P.CityEconomy.Work.ContainsByPredicate([&R](const auto& W){return W.InstanceId==R.InstanceId;})) return false;
+		if(!DYKCityResearch::Advance(P,Now) || P.CityEconomy.Work.ContainsByPredicate([&R](const auto& W){return W.InstanceId==R.InstanceId;})) return false;
 		FDYKCityBuildingWorkPlan Plan;
 		if(!DYKCityBuildingRules::Prepare(P,R,DYKCityTerritory::DEV_PLACEHOLDER(),DYKCityBuildingRules::DEV_PLACEHOLDER(),Plan)) return false;
 		if(R.Kind==EDYKCityBuildingWorkKind::Build)
@@ -212,7 +213,7 @@ bool DYKCityWork::Enqueue(IDYKProfileService& Service,const FDYKCityBuildingWork
 		FDYKCityWorkSaveData W; W.WorkId=R.CommandId; W.InstanceId=R.InstanceId;
 		W.bUpgrade=R.Kind==EDYKCityBuildingWorkKind::Upgrade; W.ExpectedLevel=R.ExpectedLevel;
 		W.EnqueuedAtUnix=FMath::Max(Now,P.CityEconomy.WorkUpdatedAtUnix); P.CityEconomy.Work.Add(W);
-		return Advance(P,Now);
+		return DYKCityResearch::Advance(P,Now);
 	});
 }
 
@@ -220,7 +221,7 @@ bool DYKCityWork::Cancel(IDYKProfileService& Service,FGuid Command,FGuid Work,in
 {
 	return Service.ApplyProfileCommand(Command,[Work,Now](auto& P)
 	{
-		if(!Advance(P,Now)) return false;
+		if(!DYKCityResearch::Advance(P,Now)) return false;
 		const int32 Index=P.CityEconomy.Work.IndexOfByPredicate([Work](const auto& W){return W.WorkId==Work;});
 		if(Index==INDEX_NONE) return false;
 		const auto W=P.CityEconomy.Work[Index];
@@ -232,6 +233,6 @@ bool DYKCityWork::Cancel(IDYKProfileService& Service,FGuid Command,FGuid Work,in
 		}
 		else RemoveWorkBuilding(P,W.InstanceId);
 		P.CityEconomy.Work.RemoveAt(Index);
-		return Advance(P,Now);
+		return DYKCityResearch::Advance(P,Now);
 	});
 }

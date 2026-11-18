@@ -1,5 +1,6 @@
 #include "DYKCityWorkWidget.h"
 #include "DYKCityWork.h"
+#include "DYKCityResearch.h"
 #include "DYKCityEconomy.h"
 #include "DYKCityGameMode.h"
 #include "DYKCityEditorWidget.h"
@@ -11,6 +12,7 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/SizeBox.h"
+#include "Components/ScrollBox.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
@@ -30,7 +32,9 @@ TSharedRef<SWidget> UDYKCityWorkWidget::RebuildWidget()
 		auto* Box=WidgetTree->ConstructWidget<UVerticalBox>(); Width->AddChild(Box);
 		auto* Toggle=DYKUI::Button(WidgetTree,this,NSLOCTEXT("DYKWork","Development","Развитие города"));
 		Toggle->OnClicked.AddDynamic(this,&ThisClass::ToggleClicked); Box->AddChild(Toggle);
-		Menu=WidgetTree->ConstructWidget<UVerticalBox>(); Box->AddChild(Menu);
+		MenuFrame=WidgetTree->ConstructWidget<USizeBox>(); MenuFrame->SetMaxDesiredHeight(500); Box->AddChild(MenuFrame);
+		auto* Scroller=WidgetTree->ConstructWidget<UScrollBox>(); MenuFrame->AddChild(Scroller);
+		Menu=WidgetTree->ConstructWidget<UVerticalBox>(); Scroller->AddChild(Menu);
 		Details=DYKUI::Text(WidgetTree,FText::GetEmpty(),15); Details->SetAutoWrapText(true); Menu->AddChild(Details);
 		auto* Previous=DYKUI::Button(WidgetTree,this,NSLOCTEXT("DYKWork","Previous","◀ Предыдущее здание"));
 		Previous->OnClicked.AddDynamic(this,&ThisClass::PreviousClicked); Menu->AddChild(Previous);
@@ -42,6 +46,15 @@ TSharedRef<SWidget> UDYKCityWorkWidget::RebuildWidget()
 		UpgradeButton->OnClicked.AddDynamic(this,&ThisClass::UpgradeClicked); Menu->AddChild(UpgradeButton);
 		CancelWorkButton=DYKUI::Button(WidgetTree,this,NSLOCTEXT("DYKWork","Cancel","Отменить работу выбранного здания"));
 		CancelWorkButton->OnClicked.AddDynamic(this,&ThisClass::CancelClicked); Menu->AddChild(CancelWorkButton);
+		ResearchDetails=DYKUI::Text(WidgetTree,FText::GetEmpty(),15); ResearchDetails->SetAutoWrapText(true); Menu->AddChild(ResearchDetails);
+		auto* PreviousResearch=DYKUI::Button(WidgetTree,this,NSLOCTEXT("DYKResearch","Previous","◀ Предыдущее исследование"));
+		PreviousResearch->OnClicked.AddDynamic(this,&ThisClass::ResearchPreviousClicked); Menu->AddChild(PreviousResearch);
+		auto* NextResearch=DYKUI::Button(WidgetTree,this,NSLOCTEXT("DYKResearch","Next","Следующее исследование ▶"));
+		NextResearch->OnClicked.AddDynamic(this,&ThisClass::ResearchNextClicked); Menu->AddChild(NextResearch);
+		ResearchStartButton=DYKUI::Button(WidgetTree,this,NSLOCTEXT("DYKResearch","Start","Поставить исследование в очередь"));
+		ResearchStartButton->OnClicked.AddDynamic(this,&ThisClass::ResearchStartClicked); Menu->AddChild(ResearchStartButton);
+		ResearchCancelButton=DYKUI::Button(WidgetTree,this,NSLOCTEXT("DYKResearch","Cancel","Отменить это исследование"));
+		ResearchCancelButton->OnClicked.AddDynamic(this,&ThisClass::ResearchCancelClicked); Menu->AddChild(ResearchCancelButton);
 	}
 	Refresh(); return Super::RebuildWidget();
 }
@@ -59,7 +72,7 @@ void UDYKCityWorkWidget::NativeDestruct()
 void UDYKCityWorkWidget::Refresh()
 {
 	if(!Menu) return;
-	Menu->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	MenuFrame->SetVisibility(bOpen ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 	auto* City=GetWorld() ? GetWorld()->GetAuthGameMode<ADYKCityGameMode>() : nullptr;
 	auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
 	if(!City || !Save) return;
@@ -94,6 +107,21 @@ void UDYKCityWorkWidget::Refresh()
 	const bool HasWork=P->CityEconomy.Work.ContainsByPredicate([Selected](const auto& W){return W.InstanceId==Selected;});
 	UpgradeButton->SetIsEnabled(!Editing && S && !HasWork && DYKCityBuildingRules::Prepare(*P,R,DYKCityTerritory::DEV_PLACEHOLDER(),DYKCityBuildingRules::DEV_PLACEHOLDER(),Plan));
 	CancelWorkButton->SetIsEnabled(!Editing && HasWork);
+	const auto& Researches=DYKCityResearch::DEV_PLACEHOLDER().Definitions;
+	ResearchIndex=FMath::Clamp(ResearchIndex,0,Researches.Num()-1);
+	const auto& Research=Researches[ResearchIndex];
+	FString ResearchText=FString::Printf(TEXT("Исследование: %s · %lld с"),*Research.DisplayName,Research.DurationSeconds);
+	for(const auto& Cost:Research.Costs) ResearchText+=FString::Printf(TEXT("\n%s: %lld"),DYKCityCatalog::ResourceName(FDYKResourceId(Cost.ResourceId.Name)),Cost.Amount);
+	for(const auto Key:Research.Prerequisites)
+		if(const auto* Dependency=DYKCityResearch::Find(Key)) ResearchText+=FString::Printf(TEXT("\nТребуется: %s — %s"),*Dependency->DisplayName,P->CityEconomy.CompletedResearch.Contains(Key) ? TEXT("изучено") : TEXT("не изучено"));
+	if(P->CityEconomy.CompletedResearch.Contains(Research.Id)) ResearchText+=TEXT("\nИзучено навсегда");
+	const auto* Queued=P->CityEconomy.ResearchQueue.FindByPredicate([&Research](const auto& W){return W.ResearchId==Research.Id;});
+	if(Queued) ResearchText+=Queued->StartedAtUnix>0 ? FString::Printf(TEXT("\nОсталось %lld с"),FMath::Max<int64>(0,Queued->CompletesAtUnix-FDateTime::UtcNow().ToUnixTimestamp())) : TEXT("\nОжидает независимую ячейку или ресурсы");
+	for(const auto& W:P->CityEconomy.ResearchQueue) if(W.StartedAtUnix>0 && W.ResearchId!=Research.Id)
+		if(const auto* ActiveResearch=DYKCityResearch::Find(W.ResearchId)) ResearchText+=TEXT("\nЯчейка занята: ")+ActiveResearch->DisplayName;
+	ResearchDetails->SetText(FText::FromString(ResearchText));
+	ResearchStartButton->SetIsEnabled(DYKCityResearch::CanEnqueue(*P,Research.Id));
+	ResearchCancelButton->SetIsEnabled(Queued!=nullptr);
 }
 void UDYKCityWorkWidget::ToggleClicked() {bOpen=!bOpen; Refresh();}
 void UDYKCityWorkWidget::PreviousClicked() {CatalogIndex=(CatalogIndex+DYKCityCatalog::Buildings().Num()-1)%DYKCityCatalog::Buildings().Num(); Refresh();}
@@ -145,4 +173,25 @@ void UDYKCityWorkWidget::NativeTick(const FGeometry& Geometry,float DeltaTime)
 		FDYKBuildingSaveData B; B.BuildingId=FDYKBuildingId(SitePreviewType).ToContentId(); B.CellOrigin=Cell;
 		SitePreview->SetActorHiddenInGame(false); SitePreview->SetActorLocation(DYKCityTerritory::BuildingLocation(B,DYKCityTerritory::DEV_PLACEHOLDER()));
 	}
+}
+
+void UDYKCityWorkWidget::ResearchPreviousClicked()
+{ResearchIndex=(ResearchIndex+DYKCityResearch::DEV_PLACEHOLDER().Definitions.Num()-1)%DYKCityResearch::DEV_PLACEHOLDER().Definitions.Num(); Refresh();}
+void UDYKCityWorkWidget::ResearchNextClicked()
+{ResearchIndex=(ResearchIndex+1)%DYKCityResearch::DEV_PLACEHOLDER().Definitions.Num(); Refresh();}
+void UDYKCityWorkWidget::ResearchStartClicked()
+{
+	auto* Save=GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
+	const auto Id=DYKCityResearch::DEV_PLACEHOLDER().Definitions[ResearchIndex].Id;
+	WorkMessage=DYKCityResearch::Enqueue(*Save,FGuid::NewGuid(),Id,FDateTime::UtcNow().ToUnixTimestamp()) ? TEXT("") : TEXT("Исследование недоступно или не удалось сохранить.");
+	Refresh();
+}
+void UDYKCityWorkWidget::ResearchCancelClicked()
+{
+	auto* Save=GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
+	const auto* P=Save->GetProfileSnapshot(); const auto Id=DYKCityResearch::DEV_PLACEHOLDER().Definitions[ResearchIndex].Id;
+	const auto* W=P ? P->CityEconomy.ResearchQueue.FindByPredicate([Id](const auto& Row){return Row.ResearchId==Id;}) : nullptr;
+	if(!W) return; const auto WorkId=W->WorkId;
+	WorkMessage=DYKCityResearch::Cancel(*Save,FGuid::NewGuid(),WorkId,FDateTime::UtcNow().ToUnixTimestamp()) ? TEXT("") : TEXT("Исследование уже завершено или не удалось сохранить отмену.");
+	Refresh();
 }

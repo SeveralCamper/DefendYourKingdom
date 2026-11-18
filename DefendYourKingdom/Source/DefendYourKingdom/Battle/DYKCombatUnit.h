@@ -41,6 +41,7 @@ private:
 	void ResolveHit();
 	void RestoreIdleFacing();
 	const FDYKUnitDefinition* Definition = nullptr;
+	FDYKUnitDefinition InstanceDefinition;
 	int32 HP = 0;
 	TArray<TWeakObjectPtr<ADYKCombatUnit>> Targets;
 	TWeakObjectPtr<ADYKCombatUnit> PendingTarget;

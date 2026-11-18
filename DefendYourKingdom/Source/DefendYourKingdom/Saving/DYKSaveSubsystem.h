@@ -39,6 +39,7 @@ public:
 	const FString& GetLoadError() const;
 
 private:
+	friend struct FDYKCityResearchTestAccess;
 	friend struct FDYKProfileTestAccess;
 	friend struct FDYKCityEconomyTestAccess;
 	friend struct FDYKCityTerritoryTestAccess;

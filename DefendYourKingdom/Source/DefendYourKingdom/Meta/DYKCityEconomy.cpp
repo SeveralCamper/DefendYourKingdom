@@ -1,6 +1,7 @@
 #include "DYKCityEconomy.h"
 #include "DYKCityBuildingRules.h"
 #include "DYKCityWork.h"
+#include "DYKCityResearch.h"
 #include "../Saving/DYKProfileService.h"
 
 namespace
@@ -52,6 +53,13 @@ bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P)
 bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P, const FDYKCityBuildingRulesConfig& Config)
 {
 	if (P.CityEconomy.Version != 1) { return false; }
+	TSet<FDYKContentId> SeenResourceIds;
+	for (const auto& Row:P.Resources)
+	{
+		if (!FDYKResourceId::FromContentId(Row.ResourceId) || SeenResourceIds.Contains(Row.ResourceId)
+			|| Row.Amount<0 || Row.Amount>MAX_uint32) return false;
+		SeenResourceIds.Add(Row.ResourceId);
+	}
 	for (const auto& Id : DYKCityCatalog::Resources())
 	{
 		int32 Count = 0;
@@ -151,7 +159,7 @@ bool DYKCityEconomy::Collect(IDYKProfileService& Service, FGuid Command, FGuid I
 {
 	return Service.ApplyProfileCommand(Command, [Instance, Now](FDYKPlayerProfileSaveData& P)
 	{
-		if (!DYKCityWork::Advance(P,Now)) return false;
+		if (!DYKCityResearch::Advance(P,Now)) return false;
 		const auto V = View(P, Instance, Now);
 		if (V.Collectable <= 0) { return false; }
 		auto* State = P.CityEconomy.Instances.FindByPredicate([Instance](const auto& S) { return S.InstanceId == Instance; });

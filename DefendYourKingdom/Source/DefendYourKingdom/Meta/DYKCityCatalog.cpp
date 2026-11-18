@@ -31,6 +31,7 @@ const FDYKCityBuildingDefinition* DYKCityCatalog::Find(const FDYKContentId& Id)
 }
 int64 DYKCityCatalog::ResourceCapacity(FDYKResourceId Id)
 {
+	if (Id.GetName()==TEXT("RES-MEDALS")) return MAX_uint32;
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ResourceIds); ++Index)
 	{
 		if (Id == ResourceIds[Index]) { return Index == 3 ? MAX_uint32 : 100; }
@@ -39,7 +40,8 @@ int64 DYKCityCatalog::ResourceCapacity(FDYKResourceId Id)
 }
 const TCHAR* DYKCityCatalog::ResourceName(FDYKResourceId Id)
 {
-	const TCHAR* Names[] = {TEXT("Пища"), TEXT("Древесина"), TEXT("Камень"), TEXT("Золото")};
+	if (Id.GetName()==TEXT("RES-MEDALS")) return TEXT("Медали");
+	const TCHAR* Names[] = {TEXT("Еда"), TEXT("Древесина"), TEXT("Камень"), TEXT("Золото")};
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ResourceIds); ++Index)
 	{
 		if (Id == ResourceIds[Index]) { return Names[Index]; }
@@ -80,9 +82,9 @@ int64 DYKCityCatalog::WarehouseCapacityDEV_PLACEHOLDER(FDYKResourceId Id, int32 
 	if (ResourceCapacity(Id) == MAX_uint32) return MAX_uint32;
 	if (ResourceCapacity(Id) == 0 || Level < 0 || Level > 4) return 0;
 	// Level 0 is the starter storage available without a warehouse building.
-	const int64 Food[] = {100,150,300,600,1200};
+	const int64 Food[] = {100,150,300,600,2400};
 	const int64 Wood[] = {100,200,400,800,1600};
-	const int64 Stone[] = {100,150,300,600,1200};
+	const int64 Stone[] = {100,150,300,600,1600};
 	return Id.GetName() == TEXT("RES-FOOD") ? Food[Level]
 		: Id.GetName() == TEXT("RES-WOOD") ? Wood[Level] : Stone[Level];
 }

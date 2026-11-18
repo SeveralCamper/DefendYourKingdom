@@ -1,10 +1,16 @@
 #include "DYKMissionRewards.h"
 #include "DYKCityEconomy.h"
+#include "DYKCityResearch.h"
 #include "../Battle/DYKBattleSession.h"
 #include "../Saving/DYKProfileService.h"
 
 namespace
 {
+	bool SettleBeforeRewardCredit(FDYKPlayerProfileSaveData& P)
+	{
+		return (P.CityEconomy.Work.IsEmpty() && P.CityEconomy.ResearchQueue.IsEmpty())
+			|| DYKCityResearch::Advance(P,FDateTime::UtcNow().ToUnixTimestamp());
+	}
 	bool ValidResources(const TArray<FDYKResourceSaveData>& Resources)
 	{
 		TSet<FDYKContentId> Seen;
@@ -40,7 +46,7 @@ namespace
 		const FDYKResourceId Id = FDYKResourceId::FromContentId(Resource).GetValue();
 		const int64 Configured = DYKCityEconomy::Capacity(P,Id);
 		// Arbitrary resource entities are allowed. Only warehouse resources have a configured cap.
-		return (Configured > 0 ? Configured : MAX_int64) - DYKCityEconomy::Balance(P, Id);
+		return (Configured > 0 ? Configured : MAX_uint32) - DYKCityEconomy::Balance(P, Id);
 	}
 
 	bool Deliver(FDYKPlayerProfileSaveData& P, FDYKMissionRewardSaveData& Receipt)
@@ -80,7 +86,7 @@ bool DYKMissionRewards::Settle(IDYKProfileService& Service, const FDYKBattleResu
 	{
 		// Direct entry to the technical polygon can precede the first city load.
 		if (P.CityEconomy.Version == 0 && !DYKCityEconomy::Initialize(P, FDateTime::UtcNow().ToUnixTimestamp())) return false;
-		if (!ValidProfile(P)) return false;
+		if (!ValidProfile(P) || !SettleBeforeRewardCredit(P)) return false;
 		const auto* Issued = P.MissionRewards.FindByPredicate([&](const auto& R) { return R.RewardId == Def.RewardId; });
 		if (Issued && Issued->CampaignId != Def.Campaign.ToContentId()) return false;
 		if (!P.MissionCompletions.ContainsByPredicate([&](const auto& R)
@@ -108,7 +114,7 @@ bool DYKMissionRewards::Collect(IDYKProfileService& Service, FGuid Command, FDYK
 {
 	return Service.ApplyProfileCommand(Command, [Campaign](FDYKPlayerProfileSaveData& P)
 	{
-		if (!HasCollectable(P, Campaign)) return false;
+		if (!SettleBeforeRewardCredit(P) || !HasCollectable(P, Campaign)) return false;
 		for (auto& Receipt : P.MissionRewards)
 			if (Receipt.CampaignId == Campaign.ToContentId()) Deliver(P, Receipt);
 		return true;

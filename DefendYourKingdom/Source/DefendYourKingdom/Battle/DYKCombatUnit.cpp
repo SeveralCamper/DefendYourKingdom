@@ -5,6 +5,9 @@
 #include "TimerManager.h"
 #include "../UI/DYKUnitHealthWidget.h"
 #include "Components/WidgetComponent.h"
+#include "../Meta/DYKCityResearch.h"
+#include "../Saving/DYKSaveSubsystem.h"
+#include "Engine/GameInstance.h"
 
 ADYKCombatUnit::ADYKCombatUnit()
 {
@@ -15,7 +18,16 @@ ADYKCombatUnit::ADYKCombatUnit()
 void ADYKCombatUnit::InitializeCombat(ADYKPolygonGameMode* OwnerMode, const FDYKUnitDefinition* UnitDefinition)
 {
 	Mode = OwnerMode;
-	Definition = UnitDefinition;
+	InstanceDefinition = *UnitDefinition;
+	if (auto* Session=GetGameInstance()) if (const auto* Save=Session->GetSubsystem<UDYKSaveSubsystem>())
+		if (const auto* P=Save->GetProfileSnapshot())
+		{
+			const auto Bonus=DYKCityResearch::Bonus(*P,*UnitDefinition);
+			InstanceDefinition.Base.MaxHP.Value+=Bonus.HP;
+			InstanceDefinition.Base.PhysicalArmor.Value+=Bonus.PhysicalArmor;
+			InstanceDefinition.Base.Attack.DamagePerHit.Value+=Bonus.Damage;
+		}
+	Definition = &InstanceDefinition;
 	HP = Definition->Base.MaxHP.Value;
 	IdleFacing = GetActorRotation();
 	auto* Health = NewObject<UWidgetComponent>(this,TEXT("UnitHealth"));

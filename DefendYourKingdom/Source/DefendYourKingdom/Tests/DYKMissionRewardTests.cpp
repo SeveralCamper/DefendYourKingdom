@@ -153,12 +153,13 @@ bool FDYKRewardValidationTest::RunTest(const FString& Parameters)
 	auto Generic = Good;
 	Generic.Resources = {{RewardCustom.ToContentId(), MAX_int64}, {RewardGold.ToContentId(), MAX_int64}};
 	TestTrue(TEXT("Arbitrary resource entity accepted without hardcoded whitelist"), DYKMissionRewards::Settle(*Save, RewardResult(), Generic));
-	TestEqual(TEXT("Generic resource safely reaches int64 maximum"), DYKCityEconomy::Balance(*Save->GetProfileSnapshot(), RewardCustom), MAX_int64);
+	TestEqual(TEXT("Generic special resource obeys uint32 representation bound"), DYKCityEconomy::Balance(*Save->GetProfileSnapshot(), RewardCustom), int64(MAX_uint32));
+	TestEqual(TEXT("Generic overflow remains claimable"), RewardRemainder(*Save->GetProfileSnapshot(), Generic.RewardId, RewardCustom), MAX_int64-int64(MAX_uint32));
 	TestEqual(TEXT("Configured gold cap obeyed"), DYKCityEconomy::Balance(*Save->GetProfileSnapshot(), RewardGold), int64(MAX_uint32));
 	TestEqual(TEXT("Gold overflow conserved without signed wrap"), RewardRemainder(*Save->GetProfileSnapshot(), Generic.RewardId, RewardGold), MAX_int64 - int64(MAX_uint32));
 	auto Extra = Generic; Extra.RewardId = TEXT("QA-SECOND-SOURCE"); Extra.Resources = {{RewardCustom.ToContentId(), 1}};
 	TestTrue(TEXT("New entitlement at representation limit still saved"), DYKMissionRewards::Settle(*Save, RewardResult(), Extra));
-	TestEqual(TEXT("No overflow past int64 max"), DYKCityEconomy::Balance(*Save->GetProfileSnapshot(), RewardCustom), MAX_int64);
+	TestEqual(TEXT("No overflow past uint32 max"), DYKCityEconomy::Balance(*Save->GetProfileSnapshot(), RewardCustom), int64(MAX_uint32));
 	TestEqual(TEXT("Unrepresentable one resource retained"), RewardRemainder(*Save->GetProfileSnapshot(), Extra.RewardId, RewardCustom), int64(1));
 	return true;
 }

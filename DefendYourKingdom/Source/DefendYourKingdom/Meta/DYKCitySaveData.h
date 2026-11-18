@@ -39,6 +39,18 @@ struct DEFENDYOURKINGDOM_API FDYKCityWorkSaveData
 };
 
 USTRUCT()
+struct DEFENDYOURKINGDOM_API FDYKCityResearchWorkSaveData
+{
+	GENERATED_BODY()
+	UPROPERTY(SaveGame) FGuid WorkId;
+	UPROPERTY(SaveGame) FName ResearchId;
+	UPROPERTY(SaveGame) int64 EnqueuedAtUnix = 0;
+	UPROPERTY(SaveGame) int64 StartedAtUnix = 0;
+	UPROPERTY(SaveGame) int64 CompletesAtUnix = 0;
+	UPROPERTY(SaveGame) TArray<FDYKCityWorkCost> Paid;
+};
+
+USTRUCT()
 struct DEFENDYOURKINGDOM_API FDYKCitySaveData
 {
 	GENERATED_BODY()
@@ -51,4 +63,7 @@ struct DEFENDYOURKINGDOM_API FDYKCitySaveData
 	UPROPERTY(SaveGame) TArray<FDYKCityWorkSaveData> Work;
 	// Full cancellation refunds stay claimable if the warehouse was refilled meanwhile.
 	UPROPERTY(SaveGame) TArray<FDYKCityWorkCost> PendingRefunds;
+	UPROPERTY(SaveGame) int64 ResearchUpdatedAtUnix = 0;
+	UPROPERTY(SaveGame) TArray<FName> CompletedResearch;
+	UPROPERTY(SaveGame) TArray<FDYKCityResearchWorkSaveData> ResearchQueue;
 };
