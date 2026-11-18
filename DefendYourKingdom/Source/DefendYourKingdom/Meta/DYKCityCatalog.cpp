@@ -10,7 +10,8 @@ namespace
 		// Level 1 basic storage = 12 hours, house = one cycle (approved rules).
 		{FDYKBuildingId(TEXT("CITY-SAWMILL")), TEXT("Лесопилка"), ResourceIds[1], 2, 60, 720, {-2, 0}, EDYKCityBuildingCategory::Production, true, {3,2}},
 		{FDYKBuildingId(TEXT("CITY-QUARRY")), TEXT("Каменоломня"), ResourceIds[2], 1, 60, 720, {2, 0}, EDYKCityBuildingCategory::Production, true, {3,3}},
-		{FDYKBuildingId(TEXT("CITY-MILL")), TEXT("Мельница"), ResourceIds[0], 3, 60, 720, {0, -2}, EDYKCityBuildingCategory::Production, true, {3,2}},
+		// Stable save ID retained: former mill becomes the bakery, still producing food.
+		{FDYKBuildingId(TEXT("CITY-MILL")), TEXT("Пекарня"), ResourceIds[0], 3, 60, 720, {0, -2}, EDYKCityBuildingCategory::Production, true, {3,2}},
 		// One gold per cycle at level 1 is approved; 300 seconds is DEV_PLACEHOLDER.
 		{FDYKBuildingId(TEXT("CITY-HOUSE")), TEXT("Жилой дом"), ResourceIds[3], 1, 300, 1, {0, 2}, EDYKCityBuildingCategory::House, true, {2,2}},
 		{FDYKBuildingId(TEXT("CITY-WAREHOUSE")), TEXT("Склад"), {}, 0, 0, 0, {}, EDYKCityBuildingCategory::Unique, false, {3,3}},

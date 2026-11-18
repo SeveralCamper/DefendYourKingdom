@@ -11,12 +11,14 @@
 #include "../Saving/DYKSaveSubsystem.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "Blueprint/WidgetTree.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/ScaleBox.h"
 #include "Components/SizeBox.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
@@ -89,7 +91,7 @@ TSharedRef<SWidget> UDYKCityWorkWidget::RebuildWidget()
 		auto* BlockingSlot=Root->AddChildToCanvas(ModalBlocker); BlockingSlot->SetAnchors(FAnchors(0,0,1,1)); BlockingSlot->SetOffsets(FMargin(0));
 		auto* Scale=WidgetTree->ConstructWidget<UScaleBox>(); Scale->SetStretch(EStretch::ScaleToFit);
 		auto* ModalSlot=Root->AddChildToCanvas(Scale); ModalSlot->SetAnchors(FAnchors(.025f,.025f,.975f,.975f)); ModalSlot->SetOffsets(FMargin(0));
-		auto* DesignSize=WidgetTree->ConstructWidget<USizeBox>(); DesignSize->SetWidthOverride(1448); DesignSize->SetHeightOverride(1086); Scale->AddChild(DesignSize);
+		DesignSize=WidgetTree->ConstructWidget<USizeBox>(); DesignSize->SetWidthOverride(1448); DesignSize->SetHeightOverride(1086); Scale->AddChild(DesignSize);
 		DesignCanvas=WidgetTree->ConstructWidget<UCanvasPanel>(); DesignSize->AddChild(DesignCanvas); ModalRoot=Scale;
 	}
 	RebuildModal(); return Super::RebuildWidget();
@@ -101,7 +103,7 @@ void UDYKCityWorkWidget::NativeDestruct()
 	if(GetWorld()) GetWorld()->GetTimerManager().ClearTimer(WorkTimer);
 	if(SitePreview) SitePreview->Destroy(); SitePreview=nullptr; Super::NativeDestruct();
 }
-bool UDYKCityWorkWidget::BlocksWorldInput() const {return State.IsModal() || DYKCityPointer::HUDUnderPointer(this);}
+bool UDYKCityWorkWidget::BlocksWorldInput() const {return (State.IsModal() && !(ResourceScreen && !ResourceScreen->IsInterior())) || DYKCityPointer::HUDUnderPointer(this);}
 UDYKCityActionButton* UDYKCityWorkWidget::FindAction(EDYKCityUIAction Action,int32 Index) const
 {for(const auto& B:Actions) if(B->Action==Action && B->Index==Index) return B.Get(); return nullptr;}
 void UDYKCityWorkWidget::ToggleClicked()
@@ -114,7 +116,7 @@ void UDYKCityWorkWidget::ToggleClicked()
 void UDYKCityWorkWidget::CloseClicked() {State.Close(); RebuildModal();}
 void UDYKCityWorkWidget::OpenBuilding(FGuid Instance,FName Type)
 {
-	if(State.IsModal()) return;
+	if(State.IsModal() && !(ResourceScreen && !ResourceScreen->IsInterior())) return;
 	const auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
 	const auto* Profile=Save ? Save->GetProfileSnapshot() : nullptr;
 	const auto* Owned=Profile ? ScreenInstance(*Profile,Instance) : nullptr;
@@ -132,6 +134,7 @@ void UDYKCityWorkWidget::Refresh()
 	DevelopmentButton->SetIsEnabled(!City->GetLayoutEditor().IsActive());
 	// Do not rebuild live buttons every second: retain pointer capture, focus and mouse-up.
 	if(Revision!=Save->GetRevision() && State.IsModal()) RebuildModal();
+	if(ResourceScreen) if(const auto* Current=Save->GetProfileSnapshot()) ResourceScreen->UpdateView(ResourceView(*Current));
 	if(LiveStatus)
 	{
 		const auto* Current=Save->GetProfileSnapshot();
@@ -152,6 +155,8 @@ void UDYKCityWorkWidget::Refresh()
 void UDYKCityWorkWidget::RebuildModal()
 {
 	if(!DesignCanvas) return;
+	if(ResourceScreen) ResourceScreen->Deactivate();
+	ResourceScreen=nullptr;
 	++RenderGeneration;
 	Actions.Reset(); LiveStatus=nullptr; LiveResearch=NAME_None; DesignCanvas->ClearChildren();
 	ModalRoot->SetVisibility(State.IsModal() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
@@ -159,6 +164,22 @@ void UDYKCityWorkWidget::RebuildModal()
 	if(!State.IsModal()) return;
 	const auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
 	const auto* P=Save ? Save->GetProfileSnapshot() : nullptr; if(!P) return;
+	if(auto* Content=UDYKResourceBuildingWidget::FindDefinition(State.Building); Content && (State.Window==EDYKCityWindow::Building || State.Window==EDYKCityWindow::Interior))
+	{
+		const bool Inside=State.Window==EDYKCityWindow::Interior;
+		const FVector2D Pixels=Inside ? Content->InteriorSize : Content->FirstSize;
+		DesignSize->SetWidthOverride(Pixels.X); DesignSize->SetHeightOverride(Pixels.Y);
+		ResourceScreen=WidgetTree->ConstructWidget<UDYKResourceBuildingWidget>(); ResourceScreen->Configure(Content,Inside);
+		ResourceScreen->OnAction.AddDynamic(this,&ThisClass::ResourceAction);
+		DYKCityHUDArt::Place(DesignCanvas,ResourceScreen,{0,0},Pixels);
+		ResourceScreen->TakeWidget(); ResourceScreen->UpdateView(ResourceView(*P));
+		ModalBlocker->SetVisibility(Inside ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		PositionResourceWindow();
+		for(TActorIterator<ADYKCityBuildingActor> It(GetWorld());It;++It) It->SetHovered(false);
+		return;
+	}
+	DesignSize->SetWidthOverride(1448); DesignSize->SetHeightOverride(1086);
+	if(auto* Layout=Cast<UCanvasPanelSlot>(ModalRoot->Slot)) {Layout->SetAnchors(FAnchors(.025f,.025f,.975f,.975f)); Layout->SetAlignment({0,0}); Layout->SetOffsets(FMargin(0));}
 	const auto* D=DYKCityCatalog::Find(FDYKBuildingId(State.Building).ToContentId());
 	auto Title=State.Window==EDYKCityWindow::Construction ? NSLOCTEXT("DYKCity","Construction","Развитие города") : CityText(D ? D->DisplayName : TEXT("Город"));
 	const bool Production=State.Window==EDYKCityWindow::Interior && D && D->Category==EDYKCityBuildingCategory::Production;
@@ -460,6 +481,7 @@ void UDYKCityWorkWidget::Dispatch(EDYKCityUIAction Action,int32 Index,FName Key)
 void UDYKCityWorkWidget::NativeTick(const FGeometry& Geometry,float DeltaTime)
 {
 	Super::NativeTick(Geometry,DeltaTime);
+	if(ResourceScreen) PositionResourceWindow();
 	const auto* City=GetWorld()->GetAuthGameMode<ADYKCityGameMode>(); FIntPoint Cell;
 	if(State.IsModal() || !City || City->GetConstructionType().IsNone() || DYKCityPointer::HUDUnderPointer(this) || !DYKCityEditorInput::CursorCell(GetOwningPlayer(),Cell))
 	{if(SitePreview) SitePreview->SetActorHiddenInGame(true); return;}
@@ -469,4 +491,64 @@ void UDYKCityWorkWidget::NativeTick(const FGeometry& Geometry,float DeltaTime)
 		if(SitePreview && !SitePreview->Configure(SitePreviewType,true)) {SitePreview->Destroy(); SitePreview=nullptr;}
 	}
 	if(SitePreview) {FDYKBuildingSaveData B; B.BuildingId=FDYKBuildingId(SitePreviewType).ToContentId(); B.CellOrigin=Cell; SitePreview->SetActorHiddenInGame(false); SitePreview->SetActorLocation(DYKCityTerritory::BuildingLocation(B,DYKCityTerritory::DEV_PLACEHOLDER()));}
+}
+
+FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfileSaveData& P) const
+{
+	FDYKResourceBuildingView V; V.Instance=State.Instance;
+	const auto* S=ScreenInstance(P,State.Instance); if(!S) return V;
+	V.bCanVisit=!P.Buildings[S->BuildingIndex].bUnderConstruction;
+	const int64 Now=FDateTime::UtcNow().ToUnixTimestamp();
+	const auto Store=DYKCityEconomy::View(P,State.Instance,Now);
+	V.Stored=Store.Stored; V.Capacity=Store.Capacity; V.Orders=S->Orders.Num(); V.bCanCollect=Store.Collectable>0;
+	if(!S->Orders.IsEmpty())
+	{
+		const auto& O=S->Orders[0]; V.bWorking=O.StartedAtUnix>0; V.Seconds=FMath::Max<int64>(0,O.CompletesAtUnix-Now);
+	}
+	if(const auto* W=P.CityEconomy.Work.FindByPredicate([this](const auto& Row){return Row.InstanceId==State.Instance;}))
+	{V.bCanCancel=true; V.bWorking=W->StartedAtUnix>0; V.Seconds=FMath::Max<int64>(0,W->CompletesAtUnix-Now);}
+	FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=State.Instance; R.Kind=EDYKCityBuildingWorkKind::Upgrade;
+	R.BuildingId=FDYKBuildingId(State.Building); R.ExpectedLevel=P.Buildings[S->BuildingIndex].Level;
+	FDYKCityBuildingWorkPlan Plan;
+	V.bCanUpgrade=!V.bCanCancel && DYKCityBuildingRules::Prepare(P,R,DYKCityTerritory::DEV_PLACEHOLDER(),DYKCityBuildingRules::DEV_PLACEHOLDER(),Plan);
+	return V;
+}
+void UDYKCityWorkWidget::ResourceAction(EDYKResourceAction Action,int32 Index)
+{
+	switch(Action)
+	{
+	case EDYKResourceAction::Close: Dispatch(EDYKCityUIAction::Close); break;
+	case EDYKResourceAction::Back: Dispatch(EDYKCityUIAction::Back); break;
+	case EDYKResourceAction::Collect: Dispatch(EDYKCityUIAction::Collect); break;
+	case EDYKResourceAction::Upgrade: Dispatch(EDYKCityUIAction::Upgrade); break;
+	case EDYKResourceAction::CancelWork: Dispatch(EDYKCityUIAction::CancelWork); break;
+	case EDYKResourceAction::Visit: Dispatch(EDYKCityUIAction::Visit); break;
+	case EDYKResourceAction::Rotate: Dispatch(EDYKCityUIAction::Rotate); break;
+	case EDYKResourceAction::Move: Dispatch(EDYKCityUIAction::Move); break;
+	case EDYKResourceAction::Order: Dispatch(EDYKCityUIAction::Order,Index); break;
+	default: break;
+	}
+}
+void UDYKCityWorkWidget::PositionResourceWindow()
+{
+	auto* Layout=ModalRoot ? Cast<UCanvasPanelSlot>(ModalRoot->Slot) : nullptr;
+	if(!Layout || !ResourceScreen) return;
+	if(ResourceScreen->IsInterior())
+	{
+		// The old .025..975 rectangle reduced about its center by exactly 1.5.
+		Layout->SetAnchors(FAnchors(.18333333f,.18333333f,.81666667f,.81666667f)); Layout->SetAlignment({0,0}); Layout->SetOffsets(FMargin(0)); return;
+	}
+	FVector2D Viewport=UWidgetLayoutLibrary::GetViewportSize(this)/FMath::Max(.01f,UWidgetLayoutLibrary::GetViewportScale(this));
+	if(Viewport.X<=0 || Viewport.Y<=0) Viewport={1920,1080};
+	const double Scale=FMath::Min(1.,FMath::Min((Viewport.X-16)/440.,(Viewport.Y-16)/550.));
+	const FVector2D Popup=FVector2D(440,550)*Scale;
+	FVector2D Anchor=Viewport*.5;
+	for(TActorIterator<ADYKCityBuildingActor> It(GetWorld());It;++It) if(It->InstanceId==State.Instance)
+	{
+		const FVector Center=It->Body ? It->Body->Bounds.Origin : It->GetActorLocation();
+		if(GetOwningPlayer()) UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(GetOwningPlayer(),Center,Anchor,false);
+		break;
+	}
+	Layout->SetAnchors(FAnchors(0)); Layout->SetAlignment({0,0});
+	Layout->SetPosition(UDYKResourceBuildingWidget::PopupPosition(Anchor,Viewport,Popup)); Layout->SetSize(Popup);
 }

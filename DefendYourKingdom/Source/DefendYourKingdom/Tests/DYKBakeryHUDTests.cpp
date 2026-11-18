@@ -1,0 +1,112 @@
+#include "DYKCityHUDTestProfile.h"
+#include "../UI/DYKResourceBuildingWidget.h"
+#include "../Meta/DYKCityWorkWidget.h"
+#include "../Meta/DYKCityGameMode.h"
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Misc/AutomationTest.h"
+#include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "Engine/EngineBaseTypes.h"
+#include "Components/CanvasPanelSlot.h"
+#include "UObject/StrongObjectPtr.h"
+#include "Input/Events.h"
+#include "InputCoreTypes.h"
+constexpr auto BakeryTestFlags=EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter;
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKBakeryBindingTest,"DYK.BakeryHUD.BindingAndCommands",BakeryTestFlags)
+bool FDYKBakeryBindingTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UGameInstance> GI(NewObject<UGameInstance>(GEngine)); GI->Init();
+	UWorld* World=UWorld::CreateWorld(EWorldType::Game,false); World->SetGameInstance(GI.Get());
+	struct FCleanup {UWorld* W; UGameInstance* G; ~FCleanup(){W->DestroyWorld(false); G->Shutdown();}} Cleanup{World,GI.Get()};
+	auto* Save=GI->GetSubsystem<UDYKSaveSubsystem>(); const int64 Now=FDateTime::UtcNow().ToUnixTimestamp();
+	TestTrue(TEXT("Prepare owned bakery using stable legacy GUID"),Save->ApplyProfileCommand(FGuid::NewGuid(),[Now](auto& P){return DYKCityHUDTest::Seed(P,Now);}));
+	FURL URL; URL.AddOption(TEXT("game=/Script/DefendYourKingdom.DYKCityGameMode")); if(!World->SetGameMode(URL)) return false;
+	auto* UI=NewObject<UDYKCityWorkWidget>(World); UI->Initialize(); const auto Slate=UI->TakeWidget();
+	const auto Instance=DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-MILL")); UI->OpenBuilding(Instance,TEXT("CITY-MILL"));
+	if(!TestNotNull(TEXT("Reusable resource widget, not BuildProduction layout"),UI->ResourceScreen.Get())) return false;
+	TestTrue(TEXT("First card is nonmodal"),UI->ModalBlocker->GetVisibility()==ESlateVisibility::Collapsed);
+	TestTrue(TEXT("Binds clicked instance"),UI->ResourceScreen->GetView().Instance==Instance);
+	UI->ResourceScreen->FindAction(EDYKResourceAction::Visit)->OnClicked.Broadcast();
+	TestTrue(TEXT("Visit opens interior"),UI->ResourceScreen->IsInterior());
+	const auto* Slot=Cast<UCanvasPanelSlot>(UI->ModalRoot->Slot);
+	TestTrue(TEXT("Old window reduced exactly 1.5 about screen center"),FMath::IsNearlyEqual(Slot->GetAnchors().Maximum.X,.81666667f));
+	const auto Stale=UI->ResourceScreen->FindAction(EDYKResourceAction::Order,0)->TakeWidget();
+	UI->ResourceScreen->FindAction(EDYKResourceAction::Back)->OnClicked.Broadcast();
+	const auto Before=Save->GetRevision();
+	const FGeometry Geometry=FGeometry::MakeRoot(FVector2D(225,77),FSlateLayoutTransform());
+	const FKeyEvent Space(EKeys::SpaceBar,FModifierKeysState(),0,false,0,0);
+	Stale->OnKeyDown(Geometry,Space); Stale->OnKeyUp(Geometry,Space);
+	TestEqual(TEXT("Late real Slate input from previous screen cannot order"),Save->GetRevision(),Before);
+	UI->ResourceScreen->FindAction(EDYKResourceAction::Visit)->OnClicked.Broadcast();
+	for(int32 I=0;I<3;++I) UI->ResourceScreen->FindAction(EDYKResourceAction::Order,I)->OnClicked.Broadcast();
+	TestEqual(TEXT("Orders affect only bakery instance"),UI->ResourceScreen->GetView().Orders,3);
+	TestFalse(TEXT("Fourth order disabled"),UI->ResourceScreen->FindAction(EDYKResourceAction::Order,0)->GetIsEnabled());
+	UI->ResourceScreen->FindAction(EDYKResourceAction::Back)->OnClicked.Broadcast();
+	TestFalse(TEXT("Circle back returns to building card"),UI->ResourceScreen->IsInterior());
+	UI->CloseClicked(); TestFalse(TEXT("Closed"),UI->GetWindowState().IsModal());
+	UI->ReleaseSlateResources(true); return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKBakeryGeometryTest,"DYK.BakeryHUD.ContentAndAnchoring",BakeryTestFlags)
+bool FDYKBakeryGeometryTest::RunTest(const FString& Parameters)
+{
+	const auto* Def=UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-MILL")); if(!TestNotNull(TEXT("Bakery content asset"),Def)) return false;
+	TestTrue(TEXT("Other resource content not silently converted"),UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-SAWMILL"))==nullptr);
+	TSet<FName> Keys;
+	for(const auto& Part:Def->Parts)
+	{
+		TestNotNull(TEXT("Every part is a real extracted texture"),Part.Texture.Get());
+		TestFalse(TEXT("No duplicate layers or duplicate clickable buttons"),Keys.Contains(Part.Key)); Keys.Add(Part.Key);
+	}
+	const FVector2D Viewport(1920,1080),Size(440,550),Anchor(700,400);
+	TestTrue(TEXT("First window centered on building"),UDYKResourceBuildingWidget::PopupPosition(Anchor,Viewport,Size)+Size*.5==Anchor);
+	TestTrue(TEXT("Screen edge clamped"),UDYKResourceBuildingWidget::PopupPosition({0,0},Viewport,Size)==FVector2D(8,8));
+	return true;
+}
+
+#if WITH_EDITOR
+#include "Slate/WidgetRenderer.h"
+#include "Engine/TextureRenderTarget2D.h"
+#include "ImageUtils.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "AssetCompilingManager.h"
+#include "RenderingThread.h"
+#include "RHI.h"
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKBakeryRenderTest,"DYK.BakeryHUD.RenderReferenceWindows",BakeryTestFlags)
+bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
+{
+	if(GUsingNullRHI) {AddInfo(TEXT("NOT_RENDERED: run this test with -d3d11 for the author-requested images.")); return true;}
+	auto* Definition=UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-MILL")); if(!TestNotNull(TEXT("Content"),Definition)) return false;
+	FAssetCompilingManager::Get().FinishAllCompilation();
+	const FString Folder=FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("BakeryHUDReview")); IFileManager::Get().MakeDirectory(*Folder,true);
+	FWidgetRenderer* Renderer=new FWidgetRenderer(false);
+	for(const bool Interior:{false,true})
+	{
+		TStrongObjectPtr<UDYKResourceBuildingWidget> UI(NewObject<UDYKResourceBuildingWidget>()); UI->Initialize(); UI->Configure(Definition,Interior);
+		const auto Slate=UI->TakeWidget(); FDYKResourceBuildingView View; View.Stored=2150; View.Capacity=2160; View.Orders=1; View.Seconds=3204; View.bWorking=true; View.bCanCollect=true; View.bCanUpgrade=true; View.bCanCancel=true; UI->UpdateView(View);
+		const FIntPoint Pixels=Interior ? FIntPoint(960,720) : FIntPoint(440,550);
+		auto* Target=Renderer->DrawWidget(Slate,FVector2D(Pixels)); FlushRenderingCommands();
+		TArray<FColor> Buffer; FReadSurfaceDataFlags ReadFlags; ReadFlags.SetLinearToGamma(true);
+		if(!TestTrue(TEXT("Actual UMG render readback"),Target->GameThread_GetRenderTargetResource()->ReadPixels(Buffer,ReadFlags))) {BeginCleanup(Renderer); return false;}
+		// D3D11 8-bit readback returns this linear render target verbatim. PNG stores sRGB.
+		// Encode once here; ReadPixels' conversion flag does not convert this surface format.
+		for(auto& Pixel:Buffer) Pixel=FLinearColor(Pixel.R/255.f,Pixel.G/255.f,Pixel.B/255.f,Pixel.A/255.f).ToFColorSRGB();
+		TestEqual(TEXT("Transparent exterior, no opaque matte"),Buffer[0].A,uint8(0));
+		if(!Interior)
+		{
+			// Unmodified parchment in the author reference is sRGB (243,192,139).
+			// Catch both missing and duplicated output gamma, with room for bilinear filtering.
+			const auto Paper=Buffer[471*Pixels.X+373];
+			TestTrue(TEXT("Rendered source colors preserved"),FMath::Abs(int32(Paper.R)-243)<16 && FMath::Abs(int32(Paper.G)-192)<16 && FMath::Abs(int32(Paper.B)-139)<16);
+		}
+		TArray64<uint8> PNG; FImageUtils::PNGCompressImageArray(Pixels.X,Pixels.Y,Buffer,PNG);
+		TestTrue(TEXT("Saved actual UE widget PNG"),FFileHelper::SaveArrayToFile(PNG,*FPaths::Combine(Folder,Interior ? TEXT("interior.png") : TEXT("first.png"))));
+		UI->ReleaseSlateResources(true);
+	}
+	BeginCleanup(Renderer); return true;
+}
+#endif
+#endif

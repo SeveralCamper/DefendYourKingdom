@@ -2,9 +2,11 @@
 #include "../UI/DYKScreenWidget.h"
 #include "Components/Button.h"
 #include "DYKCityBuildingUI.h"
+#include "../UI/DYKResourceBuildingWidget.h"
 #include "DYKCityWorkWidget.generated.h"
 class UCanvasPanel;
 class UTextBlock;
+class USizeBox;
 class ADYKCityBuildingPreviewActor;
 class UDYKCityWorkWidget;
 UENUM()
@@ -41,6 +43,7 @@ public:
 	UPROPERTY() TObjectPtr<UWidget> ModalRoot;
 	UPROPERTY() TObjectPtr<UButton> ModalBlocker;
 	UPROPERTY() TArray<TObjectPtr<UDYKCityActionButton>> Actions;
+	UPROPERTY() TObjectPtr<UDYKResourceBuildingWidget> ResourceScreen;
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
@@ -53,6 +56,9 @@ private:
 	void BuildInterior(const FDYKPlayerProfileSaveData& P);
 	void BuildDetail(const FDYKPlayerProfileSaveData& P);
 	void BuildProduction(const FDYKPlayerProfileSaveData& P);
+	UFUNCTION() void ResourceAction(EDYKResourceAction Action,int32 Index);
+	FDYKResourceBuildingView ResourceView(const FDYKPlayerProfileSaveData& P) const;
+	void PositionResourceWindow();
 	TArray<FName> ResearchOptions(const FDYKPlayerProfileSaveData& P,const FDYKCityInteriorItem& Item) const;
 	UDYKCityActionButton* ActionButton(EDYKCityUIAction Action,int32 Index,const FText& Label,FVector2D Position,FVector2D Size,FName Key=NAME_None,bool Enabled=true,bool Transparent=false);
 	FDYKCityWindowState State;
@@ -64,5 +70,6 @@ private:
 	FName LiveResearch;
 	UPROPERTY() TObjectPtr<UTextBlock> LiveStatus;
 	UPROPERTY() TObjectPtr<ADYKCityBuildingPreviewActor> SitePreview;
+	UPROPERTY() TObjectPtr<USizeBox> DesignSize;
 	FName SitePreviewType;
 };

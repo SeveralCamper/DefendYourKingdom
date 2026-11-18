@@ -27,7 +27,7 @@ FString DYKCityBuildingUI::Description(FName Type)
 {
 	if(Type==TEXT("CITY-SAWMILL")) return TEXT("Производит древесину по вашим заказам. Готовая древесина хранится здесь до сбора.");
 	if(Type==TEXT("CITY-QUARRY")) return TEXT("Выполняет заказы на добычу камня. Собирайте готовые ресурсы, когда в складе есть место.");
-	if(Type==TEXT("CITY-MILL")) return TEXT("Производит еду по очереди заказов. Заказы продолжаются, пока вы отсутствуете.");
+	if(Type==TEXT("CITY-MILL")) return TEXT("Производит хлеб по очереди заказов. Заказы продолжаются, пока вы отсутствуете.");
 	if(Type==TEXT("CITY-HOUSE")) return TEXT("Жители накапливают золото. Соберите монеты после завершения цикла.");
 	if(Type==TEXT("CITY-WORKSHOP")) return TEXT("Изучение новых ловушек и улучшение уже открытых типов обороны.");
 	if(Type==TEXT("CITY-BARRACKS")) return TEXT("Открытие обычных бойцов, их рангов и персональных улучшений.");

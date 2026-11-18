@@ -1,0 +1,254 @@
+[
+  {
+    "name": "Header",
+    "rect": [
+      0,
+      0,
+      966,
+      275
+    ],
+    "inside": false,
+    "action": "None",
+    "index": 0
+  },
+  {
+    "name": "BuildingPicture",
+    "rect": [
+      220,
+      275,
+      680,
+      280
+    ],
+    "inside": false,
+    "action": "None",
+    "index": 0
+  },
+  {
+    "name": "Description",
+    "rect": [
+      174,
+      555,
+      780,
+      100
+    ],
+    "inside": false,
+    "action": "None",
+    "index": 0
+  },
+  {
+    "name": "Statistics",
+    "rect": [
+      154,
+      669,
+      822,
+      101
+    ],
+    "inside": false,
+    "action": "None",
+    "index": 0
+  },
+  {
+    "name": "Collect",
+    "rect": [
+      284,
+      780,
+      558,
+      111
+    ],
+    "inside": false,
+    "action": "Collect",
+    "index": 0
+  },
+  {
+    "name": "Upgrade",
+    "rect": [
+      187,
+      894,
+      366,
+      84
+    ],
+    "inside": false,
+    "action": "Upgrade",
+    "index": 0
+  },
+  {
+    "name": "CancelWork",
+    "rect": [
+      575,
+      894,
+      366,
+      84
+    ],
+    "inside": false,
+    "action": "CancelWork",
+    "index": 0
+  },
+  {
+    "name": "Visit",
+    "rect": [
+      205,
+      988,
+      722,
+      127
+    ],
+    "inside": false,
+    "action": "Visit",
+    "index": 0
+  },
+  {
+    "name": "Rotate",
+    "rect": [
+      188,
+      1123,
+      366,
+      89
+    ],
+    "inside": false,
+    "action": "Rotate",
+    "index": 0
+  },
+  {
+    "name": "Move",
+    "rect": [
+      574,
+      1123,
+      367,
+      89
+    ],
+    "inside": false,
+    "action": "Move",
+    "index": 0
+  },
+  {
+    "name": "CloseFirst",
+    "rect": [
+      966,
+      84,
+      143,
+      145
+    ],
+    "inside": false,
+    "action": "Close",
+    "index": 0
+  },
+  {
+    "name": "Offer0",
+    "rect": [
+      215,
+      246,
+      268,
+      494
+    ],
+    "inside": true,
+    "action": "None",
+    "index": 0
+  },
+  {
+    "name": "Order0",
+    "rect": [
+      242,
+      638,
+      225,
+      77
+    ],
+    "inside": true,
+    "action": "Order",
+    "index": 0
+  },
+  {
+    "name": "Offer1",
+    "rect": [
+      487,
+      246,
+      248,
+      494
+    ],
+    "inside": true,
+    "action": "None",
+    "index": 0
+  },
+  {
+    "name": "Order1",
+    "rect": [
+      496,
+      638,
+      225,
+      77
+    ],
+    "inside": true,
+    "action": "Order",
+    "index": 1
+  },
+  {
+    "name": "Offer2",
+    "rect": [
+      741,
+      246,
+      248,
+      494
+    ],
+    "inside": true,
+    "action": "None",
+    "index": 0
+  },
+  {
+    "name": "Order2",
+    "rect": [
+      750,
+      638,
+      225,
+      77
+    ],
+    "inside": true,
+    "action": "Order",
+    "index": 2
+  },
+  {
+    "name": "Offer3",
+    "rect": [
+      995,
+      246,
+      251,
+      494
+    ],
+    "inside": true,
+    "action": "None",
+    "index": 0
+  },
+  {
+    "name": "Order3",
+    "rect": [
+      1004,
+      638,
+      225,
+      77
+    ],
+    "inside": true,
+    "action": "Order",
+    "index": 3
+  },
+  {
+    "name": "CloseInterior",
+    "rect": [
+      1245,
+      78,
+      104,
+      105
+    ],
+    "inside": true,
+    "action": "Close",
+    "index": 0
+  },
+  {
+    "name": "BackInterior",
+    "rect": [
+      1254,
+      185,
+      93,
+      91
+    ],
+    "inside": true,
+    "action": "Back",
+    "index": 0
+  }
+]
