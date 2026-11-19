@@ -9,13 +9,19 @@ public:
  FLinearColor HighlightColor=FLinearColor(1,.65f,.06f,1);
  FVector2D CircleCenter{.5,.48};
  double CircleRadius=.41;
+ TArray<FVector2D> HoverOutline;
  virtual int32 OnPaint(const FPaintArgs& Args,const FGeometry& Geometry,const FSlateRect& Culling,FSlateWindowElementList& Elements,int32 Layer,const FWidgetStyle& WidgetTint,bool ParentEnabled) const override
  {
   const int32 Top=SButton::OnPaint(Args,Geometry,Culling,Elements,Layer,WidgetTint,ParentEnabled);
   if(!ParentEnabled || !IsEnabled() || !(IsHovered() || HasKeyboardFocus())) return Top;
   const FVector2D Size=Geometry.GetLocalSize();
   TArray<FVector2D> Points;
-  if(bRound)
+  if(!HoverOutline.IsEmpty())
+  {
+   Points.Reserve(HoverOutline.Num());
+   for(const FVector2D Point:HoverOutline) Points.Add(Point*Size);
+  }
+  else if(bRound)
   {
    const FVector2D Center=Size*CircleCenter;
    for(int32 I=0;I<=48;++I) {const double A=2*PI*I/48.; Points.Add(Center+FVector2D(FMath::Cos(A)*Size.X*CircleRadius,FMath::Sin(A)*Size.Y*CircleRadius));}

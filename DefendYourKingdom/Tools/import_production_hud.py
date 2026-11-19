@@ -1,11 +1,12 @@
 """One immutable two-window production template, with transparent controls and data slots."""
 from pathlib import Path
+from math import cos, pi, sin
 import unreal as u
 root=Path(u.Paths.convert_relative_path_to_full(u.Paths.project_dir()))
 source=root/'SourceArt/CityHUD/ProductionTemplate'
 dest='/Game/DefendYourKingdom/Art/ResourceHUD/Shared'
 textures={}
-for name in ('FirstBase','InteriorBase'):
+for name in ('FirstBase','InteriorBase','CollectDisabled','UpgradeDisabled','CancelWorkDisabled'):
  task=u.AssetImportTask();task.filename=str(source/(name+'.png'));task.destination_path=dest;task.destination_name=name;task.automated=True;task.replace_existing=True;task.save=False
  u.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
  texture=u.load_asset(dest+'/'+name)
@@ -21,20 +22,45 @@ if not asset:
 asset.set_editor_property('building_id','None');asset.set_editor_property('production_template',True);asset.set_editor_property('first_only',False)
 asset.set_editor_property('first_size',u.Vector2D(1122,1402));asset.set_editor_property('interior_size',u.Vector2D(1448,1086));asset.set_editor_property('resource_icon',None)
 parts=[]
-def part(key,rect,inside=False,action=u.DYKResourceAction.NONE,index=0,texture=None):
- row=u.DYKResourceHUDPart();row.set_editor_property('key',key);row.set_editor_property('texture',texture);row.set_editor_property('position',u.Vector2D(*rect[:2]));row.set_editor_property('size',u.Vector2D(*rect[2:]));row.set_editor_property('interior',inside);row.set_editor_property('action',action);row.set_editor_property('index',index);parts.append(row)
+def part(key,rect,inside=False,action=u.DYKResourceAction.NONE,index=0,texture=None,outline=(),disabled=None):
+ x,y,w,h=rect
+ row=u.DYKResourceHUDPart()
+ row.set_editor_property('key',key)
+ row.set_editor_property('texture',texture)
+ row.set_editor_property('unavailable_texture',disabled)
+ row.set_editor_property('position',u.Vector2D(x,y))
+ row.set_editor_property('size',u.Vector2D(w,h))
+ row.set_editor_property('interior',inside)
+ row.set_editor_property('action',action)
+ row.set_editor_property('index',index)
+ if outline:
+  row.set_editor_property('hover_outline',[u.Vector2D((px-x)/w,(py-y)/h) for px,py in outline])
+ parts.append(row)
+
+def bevel(left,top,right,bottom,cut_x,cut_y):
+ return [(left+cut_x,top),(right-cut_x,top),(right,top+cut_y),(right,bottom-cut_y),
+         (right-cut_x,bottom),(left+cut_x,bottom),(left,bottom-cut_y),(left,top+cut_y),(left+cut_x,top)]
+
+def ellipse(cx,cy,rx,ry):
+ # Overlap the two antialiased path caps on the frame side of the circle.
+ angles=[2*pi*i/64 for i in range(24,91)]
+ return [(cx+rx*cos(angle),cy+ry*sin(angle)) for angle in angles]
+
 part('FirstBase',(0,0,1122,1402),texture=textures['FirstBase']);part('InteriorBase',(0,0,1448,1086),True,texture=textures['InteriorBase'])
-for key,rect,action in [
- ('CloseFirst',(966,84,143,145),u.DYKResourceAction.CLOSE),
- ('Collect',(220,780,684,120),u.DYKResourceAction.COLLECT),
- ('Visit',(205,913,714,124),u.DYKResourceAction.VISIT),
- ('Upgrade',(167,1051,386,91),u.DYKResourceAction.UPGRADE),
- ('CancelWork',(567,1051,391,91),u.DYKResourceAction.CANCEL_WORK),
- ('Rotate',(179,1152,376,88),u.DYKResourceAction.ROTATE),
- ('Move',(567,1152,391,88),u.DYKResourceAction.MOVE)]:part(key,rect,action=action)
-part('CloseInterior',(1256,78,108,100),True,u.DYKResourceAction.CLOSE)
-part('Back',(1265,180,96,88),True,u.DYKResourceAction.BACK)
-for i in range(4):part('Order'+str(i),(236+260*i,648,223,78),True,u.DYKResourceAction.ORDER,i)
+for key,rect,action,outline in [
+ ('CloseFirst',(966,84,143,145),u.DYKResourceAction.CLOSE,ellipse(1035,155,59,59)),
+ ('Collect',(210,770,705,141),u.DYKResourceAction.COLLECT,bevel(225,782,898,892,32,27)),
+ ('Visit',(205,913,714,124),u.DYKResourceAction.VISIT,bevel(211,918,909,1028,35,27)),
+ ('Upgrade',(157,1043,404,107),u.DYKResourceAction.UPGRADE,bevel(173,1055,550,1132,18,17)),
+ ('CancelWork',(562,1043,403,107),u.DYKResourceAction.CANCEL_WORK,bevel(575,1055,951,1132,18,17)),
+ ('Rotate',(179,1152,376,88),u.DYKResourceAction.ROTATE,bevel(185,1156,545,1232,18,17)),
+ ('Move',(567,1152,391,88),u.DYKResourceAction.MOVE,bevel(575,1156,941,1232,18,17))]:
+ part(key,rect,action=action,outline=outline,disabled=textures.get(key+'Disabled'))
+part('CloseInterior',(1256,78,108,100),True,u.DYKResourceAction.CLOSE,outline=ellipse(1307,128,47,47))
+part('Back',(1265,180,96,91),True,u.DYKResourceAction.BACK,outline=ellipse(1309,224,43,42))
+for i,x in enumerate((236,498,757,1016)):
+ part('Order'+str(i),(x,646,224,77),True,u.DYKResourceAction.ORDER,i,
+      outline=bevel(x+4,650,x+218,713,17,16))
 asset.set_editor_property('parts',parts)
 slots=[]
 cream=(1,.91,.70,1);yellow=(1,.82,.04,1);ink=(.18,.085,.025,1);green=(.4,.8,.025,1)
@@ -54,4 +80,4 @@ label('SPEED',(460,815,96,62),34,True,color=green)
 label('QUEUE',(938,820,85,55),32,True,color=yellow)
 for i in range(3):label('QUEUE_SLOT',(1036+66*i,823,50,48),27,True,i,yellow)
 asset.set_editor_property('text_slots',slots);u.EditorAssetLibrary.save_loaded_asset(asset)
-print('PRODUCTION_TEMPLATE_IMPORTED: one template, two base textures, no building/resource illustrations')
+print('PRODUCTION_TEMPLATE_IMPORTED: one shared template with three authored disabled states')

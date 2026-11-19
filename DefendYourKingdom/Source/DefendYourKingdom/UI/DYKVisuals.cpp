@@ -13,6 +13,7 @@ float DYKVisuals::Building(AActor* Owner, UStaticMeshComponent* Body, FName Type
 	const bool bQuarry = Type == FName(TEXT("CITY-QUARRY"));
 	const bool bMill = Type == FName(TEXT("CITY-MILL"));
 	const bool bSawmill = Type == FName(TEXT("CITY-SAWMILL"));
+	const bool bForge = Type == FName(TEXT("CITY-FORGE"));
 	const auto Piece = [Owner](const TCHAR* Group, const TCHAR* Name, FVector Position, FVector Scale)
 	{
 		auto* Part = NewObject<UStaticMeshComponent>(Owner); Owner->AddInstanceComponent(Part);
@@ -21,7 +22,7 @@ float DYKVisuals::Building(AActor* Owner, UStaticMeshComponent* Body, FName Type
 		Part->SetRelativeLocation(Position); Part->SetRelativeScale3D(Scale);
 		Part->SetCollisionEnabled(ECollisionEnabled::NoCollision); Part->RegisterComponent();
 	};
-	Body->SetStaticMesh(Mesh(bSawmill ? TEXT("Dungeon") : TEXT("Town"), bSawmill ? TEXT("wood_structure") : bCastle || bQuarry ? TEXT("wall_block") : TEXT("wall_wood_block")));
+	Body->SetStaticMesh(Mesh(bSawmill ? TEXT("Dungeon") : TEXT("Town"), bSawmill ? TEXT("wood_structure") : bCastle || bQuarry || bForge ? TEXT("wall_block") : TEXT("wall_wood_block")));
 	Body->SetRelativeScale3D(bCastle ? FVector(4,4,3) : bQuarry ? FVector(2,2,1) : bMill ? FVector(2.8,2.8,4) : FVector(3,3,2.5));
 	if (bCastle)
 	{
@@ -39,6 +40,7 @@ float DYKVisuals::Building(AActor* Owner, UStaticMeshComponent* Body, FName Type
 	}
 	else Piece(TEXT("Town"),TEXT("roof_high_point"),FVector(0,0,bMill ? 400 : 250),FVector(3,3,1.2));
 	if (bMill) Piece(TEXT("Town"),TEXT("windmill"),FVector(160,0,340),FVector(1.1));
+	if (bForge) Piece(TEXT("Town"),TEXT("wall_block"),FVector(90,45,240),FVector(.6,.6,1.9));
 	if (bSawmill || bQuarry) Piece(TEXT("Town"),TEXT("cart"),FVector(160,100,0),FVector(1.8));
 	return bMill ? 520 : bQuarry ? 150 : 370;
 }

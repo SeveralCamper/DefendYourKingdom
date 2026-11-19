@@ -15,6 +15,7 @@
 #include "../Meta/DYKCityWidgets.h"
 #include "../Meta/DYKCityWorkWidget.h"
 #include "Components/Button.h"
+#include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -338,6 +339,17 @@ bool FDYKCityRuntimeInputTest::RunTest(const FString& Parameters)
 	auto* Save = World->GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
 	if (!TestNotNull(TEXT("Runtime has profile service"), Save)) return false;
 	if (!TestNotNull(TEXT("Runtime has profile snapshot"), Save->GetProfileSnapshot())) return false;
+	const auto ForgeId = Instance(*Save->GetProfileSnapshot(), TEXT("CITY-FORGE"));
+	TestTrue(TEXT("City startup grants one placed forge"), ForgeId.IsValid());
+	int32 ForgeActors = 0;
+	for (TObjectIterator<ADYKCityBuildingActor> It; It; ++It)
+		if (It->GetWorld() == World && It->BuildingId.Name == TEXT("CITY-FORGE"))
+		{
+			++ForgeActors;
+			TestEqual(TEXT("Forge actor uses persisted instance"), It->InstanceId, ForgeId);
+			TestTrue(TEXT("Forge has a map mesh"), It->Body->GetStaticMesh() != nullptr);
+		}
+	TestEqual(TEXT("Exactly one forge actor on map"), ForgeActors, 1);
 	const int64 Now = FDateTime::UtcNow().ToUnixTimestamp();
 	TestTrue(TEXT("Prepare accrued production without collecting"), Save->ApplyProfileCommand(FGuid::NewGuid(), [Now](auto& P)
 	{

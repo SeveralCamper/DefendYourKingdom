@@ -85,11 +85,10 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
   const auto& View=UI->ResourceScreen->GetView();
   TestEqual(TEXT("Title is building data"),View.BuildingName.ToString(),FString(Def.DisplayName));
   TestEqual(TEXT("Product is building data"),View.ResourceName.ToString(),FString(Def.ProductName));
-  TestTrue(TEXT("Empty cancel unavailable"),!UI->ResourceScreen->FindAction(EDYKResourceAction::CancelWork)->bActionAvailable);
-  const auto Disabled=StaticCastSharedRef<SDYKHUDButton>(UI->ResourceScreen->FindAction(EDYKResourceAction::CancelWork)->TakeWidget());
-  TestTrue(TEXT("Unavailable contour is gray"),FMath::Abs(Disabled->HighlightColor.R-Disabled->HighlightColor.B)<.1f);
-  const auto Visit=StaticCastSharedRef<SDYKHUDButton>(UI->ResourceScreen->FindAction(EDYKResourceAction::Visit)->TakeWidget());
-  TestTrue(TEXT("Visit remains actionable with gold contour"),Visit->HighlightColor.R>Visit->HighlightColor.B+.5f);
+  const auto* Cancel=UI->ResourceScreen->FindAction(EDYKResourceAction::CancelWork);
+  TestFalse(TEXT("Empty cancel does not accept input"),Cancel->GetIsEnabled());
+  TestNotNull(TEXT("Empty cancel has authored gray artwork"),Cancel->GetStyle().Disabled.GetResourceObject());
+  TestTrue(TEXT("Visit remains actionable"),UI->ResourceScreen->FindAction(EDYKResourceAction::Visit)->GetIsEnabled());
   Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Visit));
   TestTrue(TEXT("Visit opens shared interior"),UI->ResourceScreen && UI->ResourceScreen->IsInterior());
   TestEqual(TEXT("Live product label"),UI->ResourceScreen->FindField(EDYKProductionField::ProductName)->GetText().ToString(),FString(Def.ProductName));
@@ -162,6 +161,8 @@ bool FDYKProductionRenderTest::RunTest(const FString& Parameters)
     {
      auto* Button=UI->FindAction(Action);if(!TestNotNull(TEXT("Hover action"),Button))continue;
      const auto Native=Button->TakeWidget();
+     const auto Highlight=StaticCastSharedRef<SDYKHUDButton>(Native)->HighlightColor;
+     TestTrue(TEXT("Enabled button retains a gold contour after view update"),Highlight.R>Highlight.B+.5f);
      const FPointerEvent Pointer(0,FVector2D(10),FVector2D(10),TSet<FKey>(),EKeys::Invalid,0,FModifierKeysState());
      Native->OnMouseEnter(FGeometry::MakeRoot(FVector2D(300,90),FSlateLayoutTransform()),Pointer);
      const auto Hover=Draw(Slate,Pixels,Prefix+FString::Printf(TEXT("-hover-%d"),Pass++));
@@ -172,10 +173,12 @@ bool FDYKProductionRenderTest::RunTest(const FString& Parameters)
      TestTrue(TEXT("Mouse leave restores source pixels"),Normal==Left);
      if(Action==EDYKResourceAction::Collect || Action==EDYKResourceAction::CancelWork || Action==EDYKResourceAction::Upgrade || Action==EDYKResourceAction::Order)
      {
-      Button->SetAvailability(false,TEXT("Недоступно"));
-      Native->OnMouseEnter(FGeometry::MakeRoot(FVector2D(300,90),FSlateLayoutTransform()),Pointer);
+      Button->SetAvailability(false,FString());
       const auto Gray=Draw(Slate,Pixels,Prefix+FString::Printf(TEXT("-disabled-%d"),Pass-1));
-      TestTrue(TEXT("Gray unavailable hover differs from both gold and normal"),Gray!=Hover && Gray!=Normal);
+      TestEqual(TEXT("Only the three primary actions change artwork while unavailable"),Gray!=Normal,Action!=EDYKResourceAction::Order);
+      UI->SetFeedback(TEXT("This must not appear in the shared production template."));
+      Native->OnMouseEnter(FGeometry::MakeRoot(FVector2D(300,90),FSlateLayoutTransform()),Pointer);
+      TestTrue(TEXT("Disabled hover and feedback leave idle pixels unchanged"),Gray==Draw(Slate,Pixels,FString()));
       Native->OnMouseLeave(Pointer);Button->SetAvailability(true,FString());
      }
     }

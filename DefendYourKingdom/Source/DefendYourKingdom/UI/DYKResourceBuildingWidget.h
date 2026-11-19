@@ -16,6 +16,9 @@ struct FDYKResourceHUDPart
 	GENERATED_BODY()
 	UPROPERTY(EditAnywhere) FName Key;
 	UPROPERTY(EditAnywhere) TObjectPtr<UTexture2D> Texture;
+	UPROPERTY(EditAnywhere) TObjectPtr<UTexture2D> UnavailableTexture;
+	// Closed contour in normalized coordinates within the button's hit area.
+	UPROPERTY(EditAnywhere) TArray<FVector2D> HoverOutline;
 	UPROPERTY(EditAnywhere) FVector2D Position=FVector2D::ZeroVector;
 	UPROPERTY(EditAnywhere) FVector2D Size=FVector2D::ZeroVector;
 	UPROPERTY(EditAnywhere) bool bInterior=false;
@@ -96,6 +99,7 @@ public:
 	EDYKResourceAction Action=EDYKResourceAction::None;
 	int32 Index=0;
 	int32 Generation=0;
+	TArray<FVector2D> HoverOutline;
  bool bActionAvailable=true;
  FString UnavailableReason;
 	void SetAvailability(bool Available,const FString& Reason);

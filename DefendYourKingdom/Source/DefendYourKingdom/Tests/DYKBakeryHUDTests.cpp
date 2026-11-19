@@ -126,7 +126,7 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 	{
 		const bool Interior=(Pass%2)==1, Hover=Pass>=2;
 		TStrongObjectPtr<UDYKResourceBuildingWidget> UI(NewObject<UDYKResourceBuildingWidget>()); UI->Initialize(); UI->Configure(Definition,Interior);
-		const auto Slate=UI->TakeWidget(); FDYKResourceBuildingView View; View.BuildingName=FText::FromString(TEXT("Пекарня")); View.ResourceName=FText::FromString(TEXT("Хлеб")); View.Description=FText::FromString(TEXT("Производство: Хлеб.\nЗаказы выполняются по очереди.")); for(const auto& Recipe:DYKCityOrders::DEV_PLACEHOLDER()) View.Recipes.Add({Recipe.Amount,Recipe.Seconds}); View.Stored=2150; View.Capacity=2160; View.Orders=1; View.Seconds=3204; View.bWorking=true; View.bCanCollect=Pass!=4; View.bCanUpgrade=Pass!=6; View.bCanCancel=Pass!=8; if(Pass==3) View.Orders=3; UI->UpdateView(View);
+		const auto Slate=UI->TakeWidget(); FDYKResourceBuildingView View; View.BuildingName=FText::FromString(TEXT("Пекарня")); View.ResourceName=FText::FromString(TEXT("Хлеб")); View.Description=FText::FromString(TEXT("Производство: Хлеб.\nЗаказы выполняются по очереди.")); for(const auto& Recipe:DYKCityOrders::DEV_PLACEHOLDER()) View.Recipes.Add({Recipe.Amount,Recipe.Seconds}); View.Stored=2150; View.Capacity=2160; View.Orders=1; View.Seconds=3204; View.bWorking=true; View.bCanCollect=Pass!=4; View.bCanUpgrade=Pass!=6; View.bCanCancel=Pass!=8; if(Pass==3) View.bCanOrder=false; UI->UpdateView(View);
 		const FIntPoint Pixels=Interior ? FIntPoint(960,720) : FIntPoint(506,633);
 		if(Hover)
 		{
@@ -153,7 +153,7 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 		}
 		auto& Normal=Interior ? NormalInterior : NormalFirst;
         if(!Hover) Normal=Buffer;
-        else {int32 Changed=0; for(int32 I=0;I<Buffer.Num();++I) if(Buffer[I]!=Normal[I]) ++Changed; TestTrue(TEXT("Hover visibly changes rendered contour"),Changed>30);}
+        else {int32 Changed=0; for(int32 I=0;I<Buffer.Num();++I) if(Buffer[I]!=Normal[I]) ++Changed; TestEqual(TEXT("Disabled order keeps its original pixels; other cases show the selected state"),Changed>30,Pass!=3);}
         TArray64<uint8> PNG; FImageUtils::PNGCompressImageArray(Pixels.X,Pixels.Y,Buffer,PNG);
 		TestTrue(TEXT("Saved actual UE widget PNG"),FFileHelper::SaveArrayToFile(PNG,*FPaths::Combine(Folder,Pass>=4 ? *FString::Printf(TEXT("hover-%d.png"),Pass) : Hover ? (Interior ? TEXT("interior-hover.png") : TEXT("first-hover.png")) : (Interior ? TEXT("interior.png") : TEXT("first.png")))));
 		UI->ReleaseSlateResources(true);

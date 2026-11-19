@@ -38,8 +38,9 @@ TSharedRef<SWidget> UDYKResourceHUDButton::RebuildWidget()
   .ButtonStyle(&GetStyle()).ClickMethod(GetClickMethod()).TouchMethod(GetTouchMethod()).PressMethod(GetPressMethod()).IsFocusable(GetIsFocusable());
  Native->bRound=Action==EDYKResourceAction::Close || Action==EDYKResourceAction::Back;
  if(Action==EDYKResourceAction::Back) Native->CircleCenter={.5,37./91.};
- if(Screen && Screen->Definition && Screen->Definition->bProductionTemplate) {Native->CircleCenter={.5,.5};Native->CircleRadius=.47;}
- Native->HighlightColor=bActionAvailable ? FLinearColor(1,.65f,.06f,1) : FLinearColor(.65f,.68f,.72f,1);
+ Native->HoverOutline=HoverOutline;
+ if(!bActionAvailable && (!Screen || !Screen->Definition || !Screen->Definition->bProductionTemplate))
+  Native->HighlightColor=FLinearColor(.65f,.68f,.72f,1);
  MyButton=Native;
  if(GetChildrenCount()>0) CastChecked<UButtonSlot>(GetContentSlot())->BuildSlot(MyButton.ToSharedRef());
  return Native;
@@ -67,7 +68,7 @@ TSharedRef<SWidget> UDYKResourceBuildingWidget::RebuildWidget()
 }
 void UDYKResourceBuildingWidget::Build()
 {
-	++Generation; Buttons.Reset(); QueueIcons.Reset(); Canvas->ClearChildren(); StoredText=nullptr; OrderText=nullptr; TimerText=nullptr; ProcessText=nullptr; WorkText=nullptr;
+	++Generation; Buttons.Reset(); QueueIcons.Reset(); Canvas->ClearChildren(); StoredText=nullptr; OrderText=nullptr; TimerText=nullptr; ProcessText=nullptr; WorkText=nullptr; Feedback=nullptr;
  ProductionLabels.Reset(); ProductionSlots.Reset();
 	if(!Definition) return;
 	for(const auto& Part:Definition->Parts)
@@ -78,9 +79,17 @@ void UDYKResourceBuildingWidget::Build()
 		else
 		{
 			auto* Button=WidgetTree->ConstructWidget<UDYKResourceHUDButton>(); Button->Screen=this; Button->Action=Part.Action; Button->Index=Part.Index; Button->Generation=Generation;
+			Button->HoverOutline=Part.HoverOutline;
 			auto Brush=DYKCityHUDArt::TextureBrush(Part.Texture);
             if(!Part.Texture) Brush.DrawAs=ESlateBrushDrawType::NoDrawType;
 			FButtonStyle Style; Style.SetNormal(Brush); Style.SetHovered(Brush); Style.SetPressed(Brush); Style.SetDisabled(Brush);
+			if(Definition->bProductionTemplate)
+			{
+				auto Disabled=DYKCityHUDArt::TextureBrush(Part.UnavailableTexture);
+				// A transparent disabled brush preserves baked artwork on controls such as Order.
+				if(!Part.UnavailableTexture) Disabled.TintColor=FLinearColor::Transparent;
+				Style.SetDisabled(Disabled);
+			}
 			// Source pixels stay unchanged; SResourceButton adds hover/focus contour feedback.
 			Style.SetNormalPadding(FMargin(0)); Style.SetPressedPadding(FMargin(0));
 			Button->SetStyle(Style); Button->OnClicked.AddDynamic(Button,&UDYKResourceHUDButton::Invoke);
@@ -90,7 +99,6 @@ void UDYKResourceBuildingWidget::Build()
 	if(Definition->bProductionTemplate)
     {
      BuildProductionLabels();
-     Feedback=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),bInterior ? FVector2D(240,930) : FVector2D(195,1250),bInterior ? FVector2D(1000,35) : FVector2D(730,30),22,false);
      UpdateView(View);
      return;
     }
@@ -160,6 +168,11 @@ void UDYKResourceBuildingWidget::UpdateButtons()
 		default: break;
 		}
 
+        if(Definition->bProductionTemplate)
+        {
+            Button->SetAvailability(Enabled,FString());
+            continue;
+        }
         FString Reason;
         if(!Enabled) switch(Button->Action)
         {
@@ -197,6 +210,11 @@ void UDYKResourceBuildingWidget::SetFeedback(const FString& Text)
 void UDYKResourceHUDButton::SetAvailability(bool Available,const FString& Reason)
 {
  bActionAvailable=Available;
+ if(Screen && Screen->Definition && Screen->Definition->bProductionTemplate)
+ {
+  SetIsEnabled(Available);
+  return;
+ }
  UnavailableReason=Reason;
  SetToolTipText(FText::FromString(Reason));
  if(MyButton.IsValid())

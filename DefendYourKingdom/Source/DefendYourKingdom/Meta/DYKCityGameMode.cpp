@@ -20,6 +20,52 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 
+namespace
+{
+	void PlaceInitialForge(UDYKSaveSubsystem& Save)
+	{
+		const FDYKContentId ForgeId = FDYKBuildingId(TEXT("CITY-FORGE")).ToContentId();
+		const auto* Profile = Save.GetProfileSnapshot();
+		if (Profile->Buildings.ContainsByPredicate([&](const auto& Building) { return Building.BuildingId == ForgeId; })) return;
+
+		const auto& Territory = DYKCityTerritory::DEV_PLACEHOLDER();
+		const FIntPoint Preferred(32, 22);
+		TArray<FDYKBuildingSaveData> Layout = Profile->Buildings;
+		auto& Forge = Layout.AddDefaulted_GetRef();
+		Forge.BuildingId = ForgeId;
+		TOptional<FIntPoint> Chosen;
+		int32 BestDistance = MAX_int32;
+		for (int32 Y = 1; Y < DYKCityTerritory::CellsPerSide - 1 && BestDistance > 0; ++Y)
+		{
+			for (int32 X = 1; X < DYKCityTerritory::CellsPerSide - 1 && BestDistance > 0; ++X)
+			{
+				const int32 Distance = FMath::Abs(X - Preferred.X) + FMath::Abs(Y - Preferred.Y);
+				if (Distance >= BestDistance || !DYKCityTerritory::IsUnlocked(*Profile, {X / 10, Y / 10})) continue;
+				Forge.CellOrigin = {X, Y};
+				if (!DYKCityTerritory::ValidateLayout(*Profile, Layout, Territory)) continue;
+				BestDistance = Distance;
+				Chosen = Forge.CellOrigin;
+			}
+		}
+		// Keep a full city loadable without moving any player-owned building.
+		if (!Chosen.IsSet()) return;
+		Forge.CellOrigin = Chosen.GetValue();
+		if (!Save.ApplyProfileCommand(FGuid::NewGuid(), [&Forge](FDYKPlayerProfileSaveData& Candidate)
+		{
+			const int64 Now = FDateTime::UtcNow().ToUnixTimestamp();
+			auto& Instance = Candidate.CityEconomy.Instances.AddDefaulted_GetRef();
+			Instance.InstanceId = FGuid::NewGuid();
+			Instance.BuildingIndex = Candidate.Buildings.Add(Forge);
+			Instance.UpdatedAtUnix = Instance.CollectionStartedAtUnix = Instance.OrdersUpdatedAtUnix = Now;
+			Instance.OrdersVersion = 1;
+			return DYKCityOrders::Validate(Candidate) && DYKCityTerritory::Validate(Candidate, DYKCityTerritory::DEV_PLACEHOLDER());
+		}))
+		{
+			UE_LOG(LogDYK, Warning, TEXT("Could not save the initial forge placement."));
+		}
+	}
+}
+
 void ADYKCityGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
@@ -45,6 +91,7 @@ void ADYKCityGameMode::InitGame(const FString& MapName, const FString& Options, 
 			{return S.OrdersVersion==0 && DYKCityCatalog::Find(Current->Buildings[S.BuildingIndex].BuildingId)->Category==EDYKCityBuildingCategory::Production;});
 		if(LegacyProducer) Ready=Save->ApplyProfileCommand(FGuid::NewGuid(),[](auto& State){return DYKCityOrders::Migrate(State,FDateTime::UtcNow().ToUnixTimestamp());});
 	}
+	if (Ready) PlaceInitialForge(*Save);
 	if (!Ready)
 	{
 		StartupError = ErrorMessage = TEXT("City state initialization failed; existing profile was preserved.");
