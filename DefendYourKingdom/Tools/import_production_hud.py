@@ -19,10 +19,18 @@ def import_ui_texture(name, folder, destination):
 
 textures={name:import_ui_texture(name,source,dest) for name in
           ('FirstBase','InteriorBase','CollectDisabled','UpgradeDisabled','CancelWorkDisabled','OrderNormal','OrderDisabled')}
-illustrations={building:import_ui_texture(name,source/'Illustrations',dest+'/Illustrations')
-               for building,name in (
-                ('CITY-MILL','BakeryIcon'),('CITY-SAWMILL','SawmillIcon'),
-                ('CITY-QUARRY','QuarryIcon'),('CITY-FORGE','ForgeIcon'))}
+producers={'CITY-MILL':'Bakery','CITY-SAWMILL':'Sawmill','CITY-QUARRY':'Quarry','CITY-FORGE':'Forge'}
+recipe_positions=(235,497,757,1017)
+illustrations={}
+recipe_illustrations={}
+for building,name in producers.items():
+ illustrations[building]=import_ui_texture(name+'Icon',source/'Illustrations',dest+'/Illustrations')
+ recipe_images=u.DYKProductionRecipeImages()
+ recipe_images.set_editor_property('images',[
+  import_ui_texture(f'{name}_{index:02}',source/'RecipeArt',dest+'/RecipeArt')
+  for index in range(1,len(recipe_positions)+1)
+ ])
+ recipe_illustrations[building]=recipe_images
 path='/Game/DefendYourKingdom/Art/ResourceHUD/ProductionTemplate'
 asset=u.load_asset(path) if u.EditorAssetLibrary.does_asset_exist(path) else None
 if not asset:
@@ -34,6 +42,14 @@ asset.set_editor_property('primary_illustrations',illustrations)
 # Leave clearance above the stats frame and below the title banner.
 asset.set_editor_property('primary_illustration_position',u.Vector2D(277,257))
 asset.set_editor_property('primary_illustration_size',u.Vector2D(568,405))
+recipe_slots=[]
+for x in recipe_positions:
+ slot=u.DYKProductionIllustrationSlot()
+ slot.set_editor_property('position',u.Vector2D(x,268))
+ slot.set_editor_property('size',u.Vector2D(218,170))
+ recipe_slots.append(slot)
+asset.set_editor_property('interior_illustration_slots',recipe_slots)
+asset.set_editor_property('interior_illustrations',recipe_illustrations)
 parts=[]
 def part(key,rect,inside=False,action=u.DYKResourceAction.NONE,index=0,texture=None,outline=(),disabled=None):
  x,y,w,h=rect

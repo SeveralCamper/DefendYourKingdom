@@ -41,6 +41,19 @@ struct FDYKProductionTextSlot
  UPROPERTY(EditAnywhere) int32 FontSize=28;
  UPROPERTY(EditAnywhere) FLinearColor Color=FLinearColor::White;
 };
+USTRUCT(BlueprintType)
+struct FDYKProductionIllustrationSlot
+{
+	GENERATED_BODY()
+	UPROPERTY(EditAnywhere) FVector2D Position=FVector2D::ZeroVector;
+	UPROPERTY(EditAnywhere) FVector2D Size=FVector2D::ZeroVector;
+};
+USTRUCT(BlueprintType)
+struct FDYKProductionRecipeImages
+{
+	GENERATED_BODY()
+	UPROPERTY(EditAnywhere) TArray<TObjectPtr<UTexture2D>> Images;
+};
 UCLASS(BlueprintType)
 class DEFENDYOURKINGDOM_API UDYKResourceHUDDefinition:public UDataAsset
 {
@@ -53,6 +66,8 @@ public:
 	UPROPERTY(EditAnywhere) TMap<FName, TObjectPtr<UTexture2D>> PrimaryIllustrations;
 	UPROPERTY(EditAnywhere) FVector2D PrimaryIllustrationPosition{272, 262};
 	UPROPERTY(EditAnywhere) FVector2D PrimaryIllustrationSize{578, 294};
+	UPROPERTY(EditAnywhere) TArray<FDYKProductionIllustrationSlot> InteriorIllustrationSlots;
+	UPROPERTY(EditAnywhere) TMap<FName, FDYKProductionRecipeImages> InteriorIllustrations;
  UPROPERTY(EditAnywhere) FText DisplayName;
  UPROPERTY(EditAnywhere) FText Description;
  UPROPERTY(EditAnywhere) bool bFirstOnly=false;
@@ -68,7 +83,12 @@ class DEFENDYOURKINGDOM_API UDYKResourceHUDCatalog:public UDataAsset
 public:
 	UPROPERTY(EditAnywhere) TArray<TSoftObjectPtr<UDYKResourceHUDDefinition>> Definitions;
 };
-struct FDYKProductionRecipeView {int64 Amount=0;int64 Seconds=0;};
+struct FDYKProductionRecipeView
+{
+	int64 Amount=0;
+	int64 Seconds=0;
+	TWeakObjectPtr<UTexture2D> Illustration{};
+};
 struct FDYKResourceBuildingView
 {
 	FGuid Instance;
@@ -146,6 +166,7 @@ private:
 	int32 Generation=0;
 	UPROPERTY() TObjectPtr<UCanvasPanel> Canvas;
 	UPROPERTY() TObjectPtr<UImage> PrimaryIllustration;
+	UPROPERTY() TArray<TObjectPtr<UImage>> RecipeIllustrations;
 	UPROPERTY() TObjectPtr<UTextBlock> Feedback;
  UPROPERTY() TObjectPtr<UTextBlock> ProcessText;
  UPROPERTY() TObjectPtr<UTextBlock> WorkText;

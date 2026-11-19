@@ -69,6 +69,8 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
  const auto* Shared=UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-MILL"));
  if(!TestNotNull(TEXT("Single production definition"),Shared))return false;
  TestTrue(TEXT("Production template flag"),Shared->bProductionTemplate);
+ TestEqual(TEXT("Four shared artwork slots"),Shared->InteriorIllustrationSlots.Num(),4);
+ TSet<const UTexture2D*> RecipeArtwork;
  int32 Count=0;
  auto Press=[&](UDYKResourceHUDButton* Button)
  {
@@ -102,6 +104,26 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
   Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Visit));
   TestTrue(TEXT("Visit opens shared interior"),UI->ResourceScreen && UI->ResourceScreen->IsInterior());
   TestNull(TEXT("Interior has no primary illustration"),UI->ResourceScreen->WidgetTree->FindWidget(TEXT("PrimaryIllustration")));
+  const auto* Images=Shared->InteriorIllustrations.Find(Def.Id.GetName());
+  if(TestNotNull(TEXT("Producer has a configured recipe artwork set"),Images))
+  {
+   const auto& InteriorView=UI->ResourceScreen->GetView();
+   TestEqual(TEXT("Producer artwork covers every recipe"),Images->Images.Num(),InteriorView.Recipes.Num());
+   for(int32 Index=0;Index<InteriorView.Recipes.Num();++Index)
+   {
+    const auto* Expected=Images->Images.IsValidIndex(Index) ? Images->Images[Index].Get() : nullptr;
+    const FName Name(*FString::Printf(TEXT("RecipeIllustration%d"),Index));
+    const auto* RecipePicture=Cast<UImage>(UI->ResourceScreen->WidgetTree->FindWidget(Name));
+    if(TestNotNull(TEXT("Selected recipe has artwork"),Expected) &&
+       TestNotNull(TEXT("Recipe card has an artwork widget"),RecipePicture))
+    {
+     RecipeArtwork.Add(Expected);
+     TestTrue(TEXT("Recipe model passes the configured texture"),InteriorView.Recipes[Index].Illustration.Get()==Expected);
+     TestTrue(TEXT("Card shows the passed texture"),RecipePicture->GetBrush().GetResourceObject()==Expected);
+     TestEqual(TEXT("Artwork cannot intercept input"),RecipePicture->GetVisibility(),ESlateVisibility::HitTestInvisible);
+    }
+   }
+  }
   TestEqual(TEXT("Live product label"),UI->ResourceScreen->FindField(EDYKProductionField::ProductName)->GetText().ToString(),FString(Def.ProductName));
   for(int32 I=0;I<3;++I)
   {
@@ -126,6 +148,7 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
   TestTrue(TEXT("Freeing an order slot restores interactivity"),UI->ResourceScreen->FindAction(EDYKResourceAction::Order,3)->GetIsEnabled());
  }
  TestEqual(TEXT("Four production types including forge"),Count,4);
+ TestEqual(TEXT("Every recipe has its own material illustration"),RecipeArtwork.Num(),16);
  UI->ReleaseSlateResources(true);return true;
 }
 #if WITH_EDITOR
@@ -171,7 +194,14 @@ bool FDYKProductionRenderTest::RunTest(const FString& Parameters)
    View.Illustration=Definition->PrimaryIllustrations.FindRef(Def.Id.GetName()).Get();
    View.BuildingName=FText::FromString(Def.DisplayName);View.ResourceName=FText::FromString(Def.ProductName);
    View.Description=FText::FromString(TEXT("Производство: ")+View.ResourceName.ToString()+TEXT(".\nЗаказы выполняются по очереди."));
-   for(const auto& Recipe:DYKCityOrders::DEV_PLACEHOLDER())View.Recipes.Add({Recipe.Amount,Recipe.Seconds});
+   const auto* Images=Definition->InteriorIllustrations.Find(Def.Id.GetName());
+   for(const auto& Recipe:DYKCityOrders::DEV_PLACEHOLDER())
+   {
+    const int32 Index=View.Recipes.Num();
+    auto& Entry=View.Recipes.Add_GetRef({Recipe.Amount,Recipe.Seconds});
+    if(Images && Images->Images.IsValidIndex(Index))
+     Entry.Illustration=Images->Images[Index].Get();
+   }
    View.Stored=15;View.Orders=1;View.Seconds=3204;View.bWorking=true;
    View.bCanCollect=View.bCanCancel=View.bCanUpgrade=true;
    UI->UpdateView(View);

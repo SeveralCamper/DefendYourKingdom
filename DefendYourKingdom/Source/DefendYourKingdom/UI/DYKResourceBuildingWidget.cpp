@@ -17,6 +17,13 @@
 
 namespace
 {
+ void SetIllustration(UImage& Image,UTexture2D* Picture)
+ {
+  if(Image.GetBrush().GetResourceObject()!=Picture)
+   Image.SetBrush(DYKCityHUDArt::TextureBrush(Picture));
+  Image.SetVisibility(Picture ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+ }
+
  FString RecipeDuration(int64 Seconds)
  {
   if(Seconds<3600) return FString::Printf(TEXT("%lld минут"),FMath::Max<int64>(0,Seconds)/60);
@@ -70,6 +77,7 @@ void UDYKResourceBuildingWidget::Build()
 {
 	++Generation; Buttons.Reset(); Canvas->ClearChildren(); ProcessText=nullptr; WorkText=nullptr; Feedback=nullptr;
 	PrimaryIllustration=nullptr;
+	RecipeIllustrations.Reset();
  ProductionLabels.Reset(); ProductionSlots.Reset();
 	if(!Definition) return;
 	for(const auto& Part:Definition->Parts)
@@ -99,7 +107,17 @@ void UDYKResourceBuildingWidget::Build()
 	}
 	if(Definition->bProductionTemplate)
     {
-     if(!bInterior)
+     if(bInterior)
+     {
+      for(const auto& ArtworkSlot:Definition->InteriorIllustrationSlots)
+      {
+       const FName Name(*FString::Printf(TEXT("RecipeIllustration%d"),RecipeIllustrations.Num()));
+       auto* Image=WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(),Name);
+       DYKCityHUDArt::Place(Canvas,Image,ArtworkSlot.Position,ArtworkSlot.Size);
+       RecipeIllustrations.Add(Image);
+      }
+     }
+     else
      {
       auto* Fit=WidgetTree->ConstructWidget<UScaleBox>();
       Fit->SetStretch(EStretch::ScaleToFit);
@@ -129,11 +147,11 @@ void UDYKResourceBuildingWidget::UpdateView(const FDYKResourceBuildingView& Valu
     if(Definition && Definition->bProductionTemplate)
     {
      if(PrimaryIllustration)
+      SetIllustration(*PrimaryIllustration,View.Illustration.Get());
+     for(int32 Index=0;Index<RecipeIllustrations.Num();++Index)
      {
-      UTexture2D* Picture=View.Illustration.Get();
-      if(PrimaryIllustration->GetBrush().GetResourceObject()!=Picture)
-       PrimaryIllustration->SetBrush(DYKCityHUDArt::TextureBrush(Picture));
-      PrimaryIllustration->SetVisibility(Picture ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+      const auto* Recipe=View.Recipes.IsValidIndex(Index) ? &View.Recipes[Index] : nullptr;
+      SetIllustration(*RecipeIllustrations[Index],Recipe ? Recipe->Illustration.Get() : nullptr);
      }
      for(int32 I=0;I<ProductionLabels.Num();++I)
      {

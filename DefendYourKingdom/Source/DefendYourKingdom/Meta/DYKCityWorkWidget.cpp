@@ -475,7 +475,16 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
      if(BuildingData->Category==EDYKCityBuildingCategory::Production)
      {
       V.Description=CityText(TEXT("Производство: ")+V.ResourceName.ToString()+TEXT(".\nЗаказы выполняются по очереди."));
-      for(const auto& Recipe:DYKCityOrders::DEV_PLACEHOLDER()) V.Recipes.Add({Recipe.Amount,Recipe.Seconds});
+      const auto* Art=ResourceScreen && ResourceScreen->Definition && ResourceScreen->IsInterior()
+       ? ResourceScreen->Definition->InteriorIllustrations.Find(OwnedBuilding.BuildingId.Name)
+       : nullptr;
+      for(const auto& Recipe:DYKCityOrders::DEV_PLACEHOLDER())
+      {
+       const int32 Index=V.Recipes.Num();
+       auto& Entry=V.Recipes.Add_GetRef({Recipe.Amount,Recipe.Seconds});
+       if(Art && Art->Images.IsValidIndex(Index))
+        Entry.Illustration=Art->Images[Index].Get();
+      }
      }
     }
     V.QueueCapacity=DYKCityOrders::QueueCapacity;
