@@ -92,7 +92,18 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
   Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Visit));
   TestTrue(TEXT("Visit opens shared interior"),UI->ResourceScreen && UI->ResourceScreen->IsInterior());
   TestEqual(TEXT("Live product label"),UI->ResourceScreen->FindField(EDYKProductionField::ProductName)->GetText().ToString(),FString(Def.ProductName));
-  for(int32 I=0;I<3;++I)Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Order,I));
+  for(int32 I=0;I<3;++I)
+  {
+   const auto* Repeat=UI->ResourceScreen->FindAction(EDYKResourceAction::Order,0);
+   TestTrue(TEXT("The same recipe can be queued again while there is room"),Repeat->GetIsEnabled());
+   Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Order,0));
+  }
+  for(int32 I=0;I<4;++I)
+  {
+   const auto* Order=UI->ResourceScreen->FindAction(EDYKResourceAction::Order,I);
+   TestFalse(TEXT("Full queue disables every recipe"),Order->GetIsEnabled());
+   TestNotNull(TEXT("Full queue selects the authored gray order brush"),Order->GetStyle().Disabled.GetResourceObject());
+  }
   const auto Revision=Save->GetRevision();
   Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Order,3));
   TestEqual(TEXT("Full queue click cannot mutate profile"),Save->GetRevision(),Revision);
@@ -100,6 +111,8 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
   Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Back));
   Press(UI->ResourceScreen->FindAction(EDYKResourceAction::CancelWork));
   TestEqual(TEXT("Cancel works for every producer"),UI->ResourceScreen->GetView().Orders,2);
+  Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Visit));
+  TestTrue(TEXT("Freeing an order slot restores interactivity"),UI->ResourceScreen->FindAction(EDYKResourceAction::Order,3)->GetIsEnabled());
  }
  TestEqual(TEXT("Four production types including forge"),Count,4);
  UI->ReleaseSlateResources(true);return true;
@@ -153,13 +166,26 @@ bool FDYKProductionRenderTest::RunTest(const FString& Parameters)
    const FIntPoint Pixels=Interior?FIntPoint(960,720):FIntPoint(506,633);
    const FString Prefix=Def.Id.GetName().ToString()+(Interior?TEXT("-interior"):TEXT("-first"));
    const auto Normal=Draw(Slate,Pixels,Prefix);
-   if(Def.Id.GetName()==TEXT("CITY-MILL"))
+   if(Interior)
    {
-    const TArray<EDYKResourceAction> Actions=Interior?TArray<EDYKResourceAction>{EDYKResourceAction::Order,EDYKResourceAction::Back,EDYKResourceAction::Close}:TArray<EDYKResourceAction>{EDYKResourceAction::Collect,EDYKResourceAction::Visit,EDYKResourceAction::Upgrade,EDYKResourceAction::CancelWork,EDYKResourceAction::Rotate,EDYKResourceAction::Move,EDYKResourceAction::Close};
+    View.Orders=View.QueueCapacity;
+    UI->UpdateView(View);
+    const auto FullQueue=Draw(Slate,Pixels,Prefix+TEXT("-full-queue"));
+    TestTrue(TEXT("Full queue changes all four order buttons"),FullQueue!=Normal);
+    for(int32 Index=0;Index<4;++Index)
+     TestFalse(TEXT("Full queue disables every order in the rendered window"),UI->FindAction(EDYKResourceAction::Order,Index)->GetIsEnabled());
+    View.Orders=1;
+    UI->UpdateView(View);
+    TestTrue(TEXT("Free space restores the original order visuals"),Normal==Draw(Slate,Pixels,FString()));
+   }
+   if(Interior || Def.Id.GetName()==TEXT("CITY-MILL"))
+   {
     int32 Pass=0;
-    for(const auto Action:Actions)
+    for(const auto& Part:Definition->Parts)
     {
-     auto* Button=UI->FindAction(Action);if(!TestNotNull(TEXT("Hover action"),Button))continue;
+     const auto Action=Part.Action;
+     if(Part.bInterior!=Interior || Action==EDYKResourceAction::None)continue;
+     auto* Button=UI->FindAction(Action,Part.Index);if(!TestNotNull(TEXT("Hover action"),Button))continue;
      const auto Native=Button->TakeWidget();
      const auto Highlight=StaticCastSharedRef<SDYKHUDButton>(Native)->HighlightColor;
      TestTrue(TEXT("Enabled button retains a gold contour after view update"),Highlight.R>Highlight.B+.5f);
@@ -171,11 +197,11 @@ bool FDYKProductionRenderTest::RunTest(const FString& Parameters)
      Native->OnMouseLeave(Pointer);
      const auto Left=Draw(Slate,Pixels,FString());
      TestTrue(TEXT("Mouse leave restores source pixels"),Normal==Left);
-     if(Action==EDYKResourceAction::Collect || Action==EDYKResourceAction::CancelWork || Action==EDYKResourceAction::Upgrade || Action==EDYKResourceAction::Order)
+     if(Action==EDYKResourceAction::Collect || Action==EDYKResourceAction::CancelWork || Action==EDYKResourceAction::Upgrade)
      {
       Button->SetAvailability(false,FString());
       const auto Gray=Draw(Slate,Pixels,Prefix+FString::Printf(TEXT("-disabled-%d"),Pass-1));
-      TestEqual(TEXT("Only the three primary actions change artwork while unavailable"),Gray!=Normal,Action!=EDYKResourceAction::Order);
+      TestTrue(TEXT("Unavailable button changes its artwork before hover"),Gray!=Normal);
       UI->SetFeedback(TEXT("This must not appear in the shared production template."));
       Native->OnMouseEnter(FGeometry::MakeRoot(FVector2D(300,90),FSlateLayoutTransform()),Pointer);
       TestTrue(TEXT("Disabled hover and feedback leave idle pixels unchanged"),Gray==Draw(Slate,Pixels,FString()));

@@ -14,7 +14,6 @@
 #include "Components/TextBlock.h"
 #include "Components/SizeBox.h"
 #include "Components/VerticalBox.h"
-#include "Components/WidgetComponent.h"
 #include "Components/PanelWidget.h"
 #include "Engine/GameInstance.h"
 #include "EngineUtils.h"
@@ -44,25 +43,10 @@ namespace
 		// Use the same viewport pointer as world hover, then map it into widget geometry.
 		const double Scale=FMath::Max(.01,double(UWidgetLayoutLibrary::GetViewportScale(Territory)));
 		const auto Pointer=Territory->GetCachedGeometry().LocalToAbsolute(FVector2D(MouseX,MouseY)/Scale);
-		TSet<UUserWidget*> AttachedWidgets;
-		for (TObjectIterator<UWidgetComponent> It; It; ++It)
-			if (It->GetWorld()==Territory->GetWorld() && It->IsRegistered() && It->IsVisible()
-				&& It->IsWidgetVisible() && It->GetWidgetSpace()==EWidgetSpace::Screen
-				&& It->GetOwner() && !It->GetOwner()->IsHidden())
-			{
-				FVector2D Screen;
-				if (auto* PC=Territory->GetOwningPlayer(); PC && PC->ProjectWorldLocationToScreen(It->GetComponentLocation(),Screen))
-				{
-					int32 Width=0,Height=0; PC->GetViewportSize(Width,Height);
-					const auto Margin=It->GetDrawSize();
-					if (Screen.X>=-Margin.X && Screen.X<=Width+Margin.X && Screen.Y>=-Margin.Y && Screen.Y<=Height+Margin.Y)
-						AttachedWidgets.Add(It->GetUserWidgetObject());
-				}
-			}
 		for (TObjectIterator<UUserWidget> It; It; ++It)
 		{
 			if (*It==Exclude || It->GetWorld()!=Territory->GetWorld() || !It->WidgetTree
-				|| (!It->IsInViewport() && !AttachedWidgets.Contains(*It))) continue;
+				|| !It->IsInViewport()) continue;
 			const auto Visibility=It->GetVisibility();
 			if (Visibility==ESlateVisibility::Hidden || Visibility==ESlateVisibility::Collapsed
 				|| Visibility==ESlateVisibility::HitTestInvisible) continue;

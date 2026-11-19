@@ -175,7 +175,6 @@ void UDYKCityWorkWidget::RebuildModal()
 		ResourceScreen->TakeWidget(); ResourceScreen->UpdateView(ResourceView(*P));
 		ModalBlocker->SetVisibility(Inside ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 		PositionResourceWindow();
-		for(TActorIterator<ADYKCityBuildingActor> It(GetWorld());It;++It) It->SetHovered(false);
 		return;
 	}
 	DesignSize->SetWidthOverride(1448); DesignSize->SetHeightOverride(1086);
@@ -194,7 +193,6 @@ void UDYKCityWorkWidget::RebuildModal()
 		if(DYKCityBuildingUI::Interior(State.Building)!=EDYKCityInterior::Barracks) Art=TEXT("AllTrapHUD");
 	}
 	DYKCityHUDArt::Frame(WidgetTree,DesignCanvas,Art,Title,CityText(Message.IsEmpty() ? TEXT("Выберите действие") : Message),!Detail,true);
-	for(TActorIterator<ADYKCityBuildingActor> It(GetWorld());It;++It) It->SetHovered(false);
 	ActionButton(EDYKCityUIAction::Close,0,FText::GetEmpty(),{1240,76},{110,110},NAME_None,true,true)->SetToolTipText(NSLOCTEXT("DYKCity","Close","Закрыть"));
 	if(State.Window!=EDYKCityWindow::Construction && State.Window!=EDYKCityWindow::Building)
 		ActionButton(EDYKCityUIAction::Back,0,NSLOCTEXT("DYKCity","Back","Назад"),{235,215},{180,48});
@@ -271,7 +269,7 @@ void UDYKCityWorkWidget::BuildBuilding(const FDYKPlayerProfileSaveData& P)
 void UDYKCityWorkWidget::BuildInterior(const FDYKPlayerProfileSaveData& P)
 {
 	const auto Kind=DYKCityBuildingUI::Interior(State.Building);
-	if(Kind==EDYKCityInterior::Production || Kind==EDYKCityInterior::Warehouse)
+	if(State.Building==TEXT("CITY-HOUSE") || Kind==EDYKCityInterior::Warehouse)
 	{
 		if(Kind==EDYKCityInterior::Warehouse)
 		{

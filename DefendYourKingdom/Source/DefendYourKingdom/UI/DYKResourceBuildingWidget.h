@@ -6,7 +6,6 @@
 class UCanvasPanel;
 class UTextBlock;
 class UTexture2D;
-class UImage;
 
 UENUM(BlueprintType)
 enum class EDYKResourceAction:uint8 {None,Close,Back,Collect,Upgrade,CancelWork,Visit,Rotate,Move,Order};
@@ -144,8 +143,4 @@ private:
 	UPROPERTY() TObjectPtr<UTextBlock> Feedback;
  UPROPERTY() TObjectPtr<UTextBlock> ProcessText;
  UPROPERTY() TObjectPtr<UTextBlock> WorkText;
-	UPROPERTY() TObjectPtr<UTextBlock> StoredText;
-	UPROPERTY() TObjectPtr<UTextBlock> OrderText;
-	UPROPERTY() TObjectPtr<UTextBlock> TimerText;
-	UPROPERTY() TArray<TObjectPtr<UImage>> QueueIcons;
 };

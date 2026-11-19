@@ -12,7 +12,6 @@
 #include "../Core/Interaction/DYKSelectionPlayerController.h"
 #include "DYKCityDecorationActor.h"
 #include "EngineUtils.h"
-#include "Components/WidgetComponent.h"
 #include "../UI/DYKStartWidget.h"
 #include "../Core/DYKGameInstance.h"
 #include "../Saving/DYKSaveSubsystem.h"
@@ -254,8 +253,6 @@ void ADYKCityGameMode::SyncLayoutVisuals()
 		const auto* Entry = LayoutEditor.Entries().FindByPredicate([&](const auto& E) { return E.InstanceId == It->InstanceId; });
 		const bool Hidden = Entry && !Entry->bPlaced;
 		It->SetActorHiddenInGame(Hidden); It->SetActorEnableCollision(!Hidden);
-		// Collection is available again after exit. Production remains clock-driven in the profile.
-		It->CollectionWidget->SetVisibility(It->IsHovered() && !LayoutEditor.IsActive());
 		if (Entry) { B.CellOrigin=Entry->Origin; B.RotationQuarterTurns=Entry->QuarterTurns; }
 		if (!Hidden) It->SetActorLocationAndRotation(DYKCityTerritory::BuildingLocation(B,DYKCityTerritory::DEV_PLACEHOLDER()),FRotator(0,B.RotationQuarterTurns*90.,0));
 	}

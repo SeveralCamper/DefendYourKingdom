@@ -28,7 +28,6 @@
 #include "Components/TextBlock.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
-#include "Components/WidgetComponent.h"
 #include "Input/Events.h"
 #include "Widgets/SWidget.h"
 #include "Kismet/GameplayStatics.h"
@@ -128,7 +127,6 @@ namespace
 				Test->TestTrue(TEXT("Move opens transaction without saving"),City->GetLayoutEditor().IsActive() && Save->GetRevision()==Revision);
 				LayoutPress(Test,UI->StoreButton);
 				Test->TestTrue(TEXT("Buffer hides actor and collision"),Building(W,Saw)->IsHidden() && !Building(W,Saw)->GetActorEnableCollision());
-				Test->TestFalse(TEXT("Buffered actor collection UI hidden"),Building(W,Saw)->CollectionWidget->IsVisible());
 				Test->TestTrue(TEXT("Buffer is visible while it contains one building"),UI->BufferPanel->IsVisible() && UI->BufferedCardCount()==1);
 				Test->TestNull(TEXT("No next-building button in new editor"),UI->NextButton.Get());
 				Test->TestNull(TEXT("No cancel button in new editor"),UI->CancelButton.Get());

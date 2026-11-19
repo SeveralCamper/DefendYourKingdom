@@ -66,7 +66,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKBakeryGeometryTest,"DYK.BakeryHUD.ContentAn
 bool FDYKBakeryGeometryTest::RunTest(const FString& Parameters)
 {
 	const auto* Def=UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-MILL")); if(!TestNotNull(TEXT("Bakery content asset"),Def)) return false;
-	TestTrue(TEXT("Sawmill now has its own definition"),UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-SAWMILL"))!=nullptr);
+	TestTrue(TEXT("Sawmill uses the same definition"),UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-SAWMILL"))==Def);
 	TSet<FName> Keys;
 	for(const auto& Part:Def->Parts)
 	{
@@ -153,7 +153,7 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 		}
 		auto& Normal=Interior ? NormalInterior : NormalFirst;
         if(!Hover) Normal=Buffer;
-        else {int32 Changed=0; for(int32 I=0;I<Buffer.Num();++I) if(Buffer[I]!=Normal[I]) ++Changed; TestEqual(TEXT("Disabled order keeps its original pixels; other cases show the selected state"),Changed>30,Pass!=3);}
+        else {int32 Changed=0; for(int32 I=0;I<Buffer.Num();++I) if(Buffer[I]!=Normal[I]) ++Changed; TestTrue(TEXT("Rendered button shows the hover or unavailable state"),Changed>30);}
         TArray64<uint8> PNG; FImageUtils::PNGCompressImageArray(Pixels.X,Pixels.Y,Buffer,PNG);
 		TestTrue(TEXT("Saved actual UE widget PNG"),FFileHelper::SaveArrayToFile(PNG,*FPaths::Combine(Folder,Pass>=4 ? *FString::Printf(TEXT("hover-%d.png"),Pass) : Hover ? (Interior ? TEXT("interior-hover.png") : TEXT("first-hover.png")) : (Interior ? TEXT("interior.png") : TEXT("first.png")))));
 		UI->ReleaseSlateResources(true);

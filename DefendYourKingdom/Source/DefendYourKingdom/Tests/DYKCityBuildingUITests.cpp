@@ -158,7 +158,7 @@ bool FDYKCityNativeWindowsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKCityHoverTest,"DYK.CityHUD.NativeWidgets.BuildingLabelsOnlyOnHover",CityBuildingUITestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKCityHoverTest,"DYK.CityHUD.NativeWidgets.BuildingDoesNotCreateHoverPopup",CityBuildingUITestFlags)
 bool FDYKCityHoverTest::RunTest(const FString& Parameters)
 {
 	TStrongObjectPtr<UGameInstance> GI(NewObject<UGameInstance>(GEngine)); GI->Init();
@@ -167,11 +167,9 @@ bool FDYKCityHoverTest::RunTest(const FString& Parameters)
 	auto* Save=GI->GetSubsystem<UDYKSaveSubsystem>();
 	TestTrue(TEXT("Seed"),Save->ApplyProfileCommand(FGuid::NewGuid(),[](auto& P){return DYKCityHUDTest::Seed(P,FDateTime::UtcNow().ToUnixTimestamp());}));
 	auto* Actor=World->SpawnActor<ADYKCityBuildingActor>(); Actor->InstanceId=DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-SAWMILL")); Actor->BuildingId=FDYKBuildingId(TEXT("CITY-SAWMILL")).ToContentId();
-	TestFalse(TEXT("No persistent label even before BeginPlay"),Actor->CollectionWidget->IsVisible());
 	Actor->DispatchBeginPlay();
-	TestFalse(TEXT("Still hidden after initialization"),Actor->CollectionWidget->IsVisible());
-	Actor->HoverBegin(Actor->Body); TestTrue(TEXT("Native hover event reveals text"),Actor->CollectionWidget->IsVisible());
-	Actor->HoverEnd(Actor->Body); TestFalse(TEXT("Leaving building hides text"),Actor->CollectionWidget->IsVisible());
+	Actor->Body->OnBeginCursorOver.Broadcast(Actor->Body);
+	TestNull(TEXT("A city building has no screen-space hover widget"),Actor->FindComponentByClass<UWidgetComponent>());
 	return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKCityNewBadgeTest,"DYK.CityHUD.Cards.NewBadgeDurableAndLocked",CityBuildingUITestFlags)

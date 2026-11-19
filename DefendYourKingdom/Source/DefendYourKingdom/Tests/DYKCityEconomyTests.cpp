@@ -16,7 +16,6 @@
 #include "../Meta/DYKCityWorkWidget.h"
 #include "Components/Button.h"
 #include "Components/StaticMeshComponent.h"
-#include "Components/WidgetComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Input/Events.h"

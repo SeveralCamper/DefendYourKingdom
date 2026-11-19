@@ -14,7 +14,6 @@ void ADYKSelectionPlayerController::BeginPlay()
 
 	bShowMouseCursor = true;
 	bEnableClickEvents = true;
-	bEnableMouseOverEvents = true;
 
 	FInputModeGameAndUI InputMode;
 	InputMode.SetHideCursorDuringCapture(false);

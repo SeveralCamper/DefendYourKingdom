@@ -27,7 +27,6 @@
 #include "UObject/UObjectIterator.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
-#include "Components/WidgetComponent.h"
 #include "Components/Button.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Blueprint/SlateBlueprintLibrary.h"
@@ -112,19 +111,6 @@ namespace
 			if (Stage==21)
 			{
 				Test->TestFalse(TEXT("Resource HUD does not hover through to land"),UI->IsPopupVisible());
-				UDYKCityCollectWidget* Collect=nullptr;
-				for (TActorIterator<ADYKCityBuildingActor> It(W); It; ++It)
-				{
-					auto* Candidate=Cast<UDYKCityCollectWidget>(It->CollectionWidget->GetUserWidgetObject());
-					if (Candidate && Candidate->CollectButton && Candidate->CollectButton->GetVisibility()==ESlateVisibility::Visible)
-					{ Collect=Candidate; break; }
-				}
-				if (!Test->TestNotNull(TEXT("Actual building collection HUD exists"),Collect)) return true;
-				HoverHUD(W,Collect->CollectButton); Stage=22; WaitHover(); return false;
-			}
-			if (Stage==22)
-			{
-				Test->TestFalse(TEXT("Screen-space building collection HUD suppresses land popup even disabled"),UI->IsPopupVisible());
 				Hover(W,{0,1}); Stage=23; WaitHover(); return false;
 			}
 			if (Stage==23)

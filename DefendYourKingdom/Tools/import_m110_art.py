@@ -71,7 +71,7 @@ for path in sorted((SOURCE / 'UI').glob('*.png')):
     tex.set_editor_property('lod_group', u.TextureGroup.TEXTUREGROUP_UI)
     u.EditorAssetLibrary.save_loaded_asset(tex)
 
-for name, parent in [('WBP_Start', u.DYKStartWidget), ('WBP_City', u.DYKCityResourceWidget), ('WBP_Battle', u.DYKPlacementWidget), ('WBP_Collect', u.DYKCityCollectWidget)]:
+for name, parent in [('WBP_Start', u.DYKStartWidget), ('WBP_City', u.DYKCityResourceWidget), ('WBP_Battle', u.DYKPlacementWidget)]:
     asset = u.load_asset('/Game/DefendYourKingdom/UI/' + name)
     if not asset:
         factory = u.WidgetBlueprintFactory()

@@ -46,5 +46,12 @@ try {
    } finally {$crop.Dispose()}
   }
  } finally {$disabled.Dispose()}
+ $order=[Drawing.Bitmap]::new((Join-Path $folder 'ReferenceOrderDisabled.png'))
+ try {
+  # Remove the transparent export margin so the button fills its original HUD slot.
+  $crop=$order.Clone([Drawing.Rectangle]::new(194,124,1786,486),[Drawing.Imaging.PixelFormat]::Format32bppArgb)
+  try {$crop.Save((Join-Path $folder 'OrderDisabled.png'),[Drawing.Imaging.ImageFormat]::Png)}
+  finally {$crop.Dispose()}
+ } finally {$order.Dispose()}
  Get-ChildItem $folder -Filter '*.png' | ForEach-Object{[pscustomobject]@{file=$_.Name;sha256=(Get-FileHash $_.FullName).Hash}} | ConvertTo-Json | Set-Content (Join-Path $folder 'manifest.json') -Encoding utf8
 } finally {$first.Dispose();$inside.Dispose()}

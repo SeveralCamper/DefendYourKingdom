@@ -51,7 +51,7 @@ UDYKResourceHUDDefinition* UDYKResourceBuildingWidget::FindDefinition(FName Buil
     BuildingData && BuildingData->Category==EDYKCityBuildingCategory::Production)
   return LoadObject<UDYKResourceHUDDefinition>(nullptr,TEXT("/Game/DefendYourKingdom/Art/ResourceHUD/ProductionTemplate.ProductionTemplate"));
  const auto* Catalog=LoadObject<UDYKResourceHUDCatalog>(nullptr,TEXT("/Game/DefendYourKingdom/Art/ResourceHUD/Catalog.Catalog"));
-	if(Catalog) for(const auto& Soft:Catalog->Definitions) if(auto* Content=Soft.LoadSynchronous();Content && Content->BuildingId==Building) return Content;
+	if(Catalog) for(const auto& Soft:Catalog->Definitions) if(auto* Content=Soft.LoadSynchronous();Content && Content->bFirstOnly && !Content->bProductionTemplate && Content->BuildingId==Building) return Content;
 	return nullptr;
 }
 void UDYKResourceHUDButton::Invoke() {if(Screen) Screen->Activate(Action,Index,Generation);}
@@ -68,7 +68,7 @@ TSharedRef<SWidget> UDYKResourceBuildingWidget::RebuildWidget()
 }
 void UDYKResourceBuildingWidget::Build()
 {
-	++Generation; Buttons.Reset(); QueueIcons.Reset(); Canvas->ClearChildren(); StoredText=nullptr; OrderText=nullptr; TimerText=nullptr; ProcessText=nullptr; WorkText=nullptr; Feedback=nullptr;
+	++Generation; Buttons.Reset(); Canvas->ClearChildren(); ProcessText=nullptr; WorkText=nullptr; Feedback=nullptr;
  ProductionLabels.Reset(); ProductionSlots.Reset();
 	if(!Definition) return;
 	for(const auto& Part:Definition->Parts)
@@ -86,7 +86,7 @@ void UDYKResourceBuildingWidget::Build()
 			if(Definition->bProductionTemplate)
 			{
 				auto Disabled=DYKCityHUDArt::TextureBrush(Part.UnavailableTexture);
-				// A transparent disabled brush preserves baked artwork on controls such as Order.
+				// Controls without a disabled variant keep their original artwork.
 				if(!Part.UnavailableTexture) Disabled.TintColor=FLinearColor::Transparent;
 				Style.SetDisabled(Disabled);
 			}
@@ -108,27 +108,9 @@ void UDYKResourceBuildingWidget::Build()
      DYKCityHUDArt::Label(WidgetTree,Canvas,Definition->DisplayName,{335,140},{480,94},68,true);
      DYKCityHUDArt::Label(WidgetTree,Canvas,Definition->Description,{220,565},{680,76},30,false)->SetWrapTextAt(0);
     }
-    const FLinearColor Yellow(1,.82f,.04f,1);
-	if(bInterior)
-	{
-		OrderText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{970,798},{80,48},27,true);
-		for(int32 I=0;I<3;++I) QueueIcons.Add(DYKCityHUDArt::Texture(WidgetTree,Canvas,Definition->ResourceIcon,{1062.+I*56,808},{36,27}));
-	}
-	else if(Definition->bFirstOnly)
-    {
-     ProcessText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{190,685},{750,72},27,true);
-     WorkText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{314,800},{500,72},26,true);
-     WorkText->SetWrapTextAt(0);
-    }
-    else
-    {
-        DYKCityHUDArt::Texture(WidgetTree,Canvas,Definition->ResourceIcon,{393,795},{108,78});
-		DYKCityHUDArt::Texture(WidgetTree,Canvas,Definition->ResourceIcon,{174,689},{73,55});
-		StoredText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{367,694},{75,43},27,true);
-		OrderText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{644,694},{72,43},27,true);
-		TimerText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{800,694},{159,43},26,true);
-	}
-	for(auto* Text:{StoredText.Get(),OrderText.Get(),TimerText.Get()}) if(Text) Text->SetColorAndOpacity(Yellow);
+    ProcessText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{190,685},{750,72},27,true);
+    WorkText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{314,800},{500,72},26,true);
+    WorkText->SetWrapTextAt(0);
 	UpdateView(View);
 }
 void UDYKResourceBuildingWidget::UpdateView(const FDYKResourceBuildingView& Value)
@@ -147,10 +129,6 @@ void UDYKResourceBuildingWidget::UpdateView(const FDYKResourceBuildingView& Valu
     }
     if(ProcessText) ProcessText->SetText(FText::FromString(FString::Printf(TEXT("Уровень %d  ·  Исследований: %d"),View.Level,View.Orders)));
     if(WorkText) WorkText->SetText(FText::FromString(View.Process));
-	if(StoredText) StoredText->SetText(FText::AsNumber(View.Stored,&FNumberFormattingOptions::DefaultNoGrouping()));
-	if(OrderText) OrderText->SetText(FText::FromString(FString::Printf(TEXT("%d / 3"),View.Orders)));
-	for(int32 I=0;I<QueueIcons.Num();++I) QueueIcons[I]->SetVisibility(I<View.Orders ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-	if(TimerText) TimerText->SetText(FText::FromString(View.bWorking ? FString::Printf(TEXT("%lld мин %02lld с"),FMath::Max<int64>(0,View.Seconds)/60,FMath::Max<int64>(0,View.Seconds)%60) : TEXT("—")));
  UpdateButtons();
 }
 void UDYKResourceBuildingWidget::UpdateButtons()
