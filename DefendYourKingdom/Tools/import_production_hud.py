@@ -5,18 +5,24 @@ import unreal as u
 root=Path(u.Paths.convert_relative_path_to_full(u.Paths.project_dir()))
 source=root/'SourceArt/CityHUD/ProductionTemplate'
 dest='/Game/DefendYourKingdom/Art/ResourceHUD/Shared'
-textures={}
-for name in ('FirstBase','InteriorBase','CollectDisabled','UpgradeDisabled','CancelWorkDisabled','OrderNormal','OrderDisabled'):
- task=u.AssetImportTask();task.filename=str(source/(name+'.png'));task.destination_path=dest;task.destination_name=name;task.automated=True;task.replace_existing=True;task.save=False
+def import_ui_texture(name, folder, destination):
+ task=u.AssetImportTask();task.filename=str(folder/(name+'.png'));task.destination_path=destination;task.destination_name=name;task.automated=True;task.replace_existing=True;task.save=False
  u.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
- texture=u.load_asset(dest+'/'+name)
+ texture=u.load_asset(destination+'/'+name)
  texture.set_editor_property('compression_settings',u.TextureCompressionSettings.TC_EDITOR_ICON)
  texture.set_editor_property('lod_group',u.TextureGroup.TEXTUREGROUP_UI)
  texture.set_editor_property('mip_gen_settings',u.TextureMipGenSettings.TMGS_NO_MIPMAPS)
  texture.set_editor_property('srgb',True)
  if not u.EditorAssetLibrary.save_loaded_asset(texture):
   raise RuntimeError(f'Could not save {name}')
- textures[name]=texture
+ return texture
+
+textures={name:import_ui_texture(name,source,dest) for name in
+          ('FirstBase','InteriorBase','CollectDisabled','UpgradeDisabled','CancelWorkDisabled','OrderNormal','OrderDisabled')}
+illustrations={building:import_ui_texture(name,source/'Illustrations',dest+'/Illustrations')
+               for building,name in (
+                ('CITY-MILL','BakeryIcon'),('CITY-SAWMILL','SawmillIcon'),
+                ('CITY-QUARRY','QuarryIcon'),('CITY-FORGE','ForgeIcon'))}
 path='/Game/DefendYourKingdom/Art/ResourceHUD/ProductionTemplate'
 asset=u.load_asset(path) if u.EditorAssetLibrary.does_asset_exist(path) else None
 if not asset:
@@ -24,6 +30,7 @@ if not asset:
  asset=u.AssetToolsHelpers.get_asset_tools().create_asset('ProductionTemplate','/Game/DefendYourKingdom/Art/ResourceHUD',None,factory)
 asset.set_editor_property('building_id','None');asset.set_editor_property('production_template',True);asset.set_editor_property('first_only',False)
 asset.set_editor_property('first_size',u.Vector2D(1122,1402));asset.set_editor_property('interior_size',u.Vector2D(1448,1086));asset.set_editor_property('resource_icon',None)
+asset.set_editor_property('primary_illustrations',illustrations)
 parts=[]
 def part(key,rect,inside=False,action=u.DYKResourceAction.NONE,index=0,texture=None,outline=(),disabled=None):
  x,y,w,h=rect

@@ -9,6 +9,9 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Components/TextBlock.h"
+#include "Components/Image.h"
+#include "Blueprint/WidgetTree.h"
+#include "Engine/Texture2D.h"
 #include "UObject/StrongObjectPtr.h"
 #include "Input/Events.h"
 #include "InputCoreTypes.h"
@@ -83,6 +86,13 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
   UI->CloseClicked();UI->OpenBuilding(Instance,Def.Id.GetName());
   if(!TestNotNull(TEXT("Shared widget"),UI->ResourceScreen.Get()))continue;
   const auto& View=UI->ResourceScreen->GetView();
+  const auto* Picture=Cast<UImage>(UI->ResourceScreen->WidgetTree->FindWidget(TEXT("PrimaryIllustration")));
+  const auto& Illustration=Shared->PrimaryIllustrations.FindRef(Def.Id.GetName());
+  if(TestNotNull(TEXT("Producer has a configured illustration"),Illustration.Get()) &&
+     TestNotNull(TEXT("Primary window shows its illustration"),Picture))
+  {
+   TestTrue(TEXT("Primary window uses the selected producer's artwork"),Picture->GetBrush().GetResourceObject()==Illustration.Get());
+  }
   TestEqual(TEXT("Title is building data"),View.BuildingName.ToString(),FString(Def.DisplayName));
   TestEqual(TEXT("Product is building data"),View.ResourceName.ToString(),FString(Def.ProductName));
   const auto* Cancel=UI->ResourceScreen->FindAction(EDYKResourceAction::CancelWork);
@@ -91,6 +101,7 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
   TestTrue(TEXT("Visit remains actionable"),UI->ResourceScreen->FindAction(EDYKResourceAction::Visit)->GetIsEnabled());
   Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Visit));
   TestTrue(TEXT("Visit opens shared interior"),UI->ResourceScreen && UI->ResourceScreen->IsInterior());
+  TestNull(TEXT("Interior has no primary illustration"),UI->ResourceScreen->WidgetTree->FindWidget(TEXT("PrimaryIllustration")));
   TestEqual(TEXT("Live product label"),UI->ResourceScreen->FindField(EDYKProductionField::ProductName)->GetText().ToString(),FString(Def.ProductName));
   for(int32 I=0;I<3;++I)
   {
@@ -157,6 +168,7 @@ bool FDYKProductionRenderTest::RunTest(const FString& Parameters)
   {
    TStrongObjectPtr<UDYKResourceBuildingWidget> UI(NewObject<UDYKResourceBuildingWidget>());UI->Initialize();UI->Configure(Definition,Interior);
    const auto Slate=UI->TakeWidget();FDYKResourceBuildingView View;
+   View.Illustration=Definition->PrimaryIllustrations.FindRef(Def.Id.GetName()).Get();
    View.BuildingName=FText::FromString(Def.DisplayName);View.ResourceName=FText::FromString(Def.ProductName);
    View.Description=FText::FromString(TEXT("Производство: ")+View.ResourceName.ToString()+TEXT(".\nЗаказы выполняются по очереди."));
    for(const auto& Recipe:DYKCityOrders::DEV_PLACEHOLDER())View.Recipes.Add({Recipe.Amount,Recipe.Seconds});

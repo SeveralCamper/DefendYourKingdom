@@ -4,6 +4,7 @@
 #include "Components/Button.h"
 #include "DYKResourceBuildingWidget.generated.h"
 class UCanvasPanel;
+class UImage;
 class UTextBlock;
 class UTexture2D;
 
@@ -49,6 +50,9 @@ public:
  // A single immutable template serves every Production entry in the city catalogue.
  UPROPERTY(EditAnywhere) bool bProductionTemplate=false;
  UPROPERTY(EditAnywhere) TArray<FDYKProductionTextSlot> TextSlots;
+	UPROPERTY(EditAnywhere) TMap<FName, TObjectPtr<UTexture2D>> PrimaryIllustrations;
+	UPROPERTY(EditAnywhere) FVector2D PrimaryIllustrationPosition{272, 262};
+	UPROPERTY(EditAnywhere) FVector2D PrimaryIllustrationSize{578, 294};
  UPROPERTY(EditAnywhere) FText DisplayName;
  UPROPERTY(EditAnywhere) FText Description;
  UPROPERTY(EditAnywhere) bool bFirstOnly=false;
@@ -68,6 +72,7 @@ struct FDYKProductionRecipeView {int64 Amount=0;int64 Seconds=0;};
 struct FDYKResourceBuildingView
 {
 	FGuid Instance;
+	TWeakObjectPtr<UTexture2D> Illustration;
  FText BuildingName;
  FText ResourceName;
  FText Description;
@@ -140,6 +145,7 @@ private:
 	bool bInterior=false;
 	int32 Generation=0;
 	UPROPERTY() TObjectPtr<UCanvasPanel> Canvas;
+	UPROPERTY() TObjectPtr<UImage> PrimaryIllustration;
 	UPROPERTY() TObjectPtr<UTextBlock> Feedback;
  UPROPERTY() TObjectPtr<UTextBlock> ProcessText;
  UPROPERTY() TObjectPtr<UTextBlock> WorkText;

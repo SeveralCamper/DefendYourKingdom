@@ -69,6 +69,7 @@ TSharedRef<SWidget> UDYKResourceBuildingWidget::RebuildWidget()
 void UDYKResourceBuildingWidget::Build()
 {
 	++Generation; Buttons.Reset(); Canvas->ClearChildren(); ProcessText=nullptr; WorkText=nullptr; Feedback=nullptr;
+	PrimaryIllustration=nullptr;
  ProductionLabels.Reset(); ProductionSlots.Reset();
 	if(!Definition) return;
 	for(const auto& Part:Definition->Parts)
@@ -98,6 +99,15 @@ void UDYKResourceBuildingWidget::Build()
 	}
 	if(Definition->bProductionTemplate)
     {
+     if(!bInterior)
+     {
+      auto* Fit=WidgetTree->ConstructWidget<UScaleBox>();
+      Fit->SetStretch(EStretch::ScaleToFit);
+      Fit->SetVisibility(ESlateVisibility::HitTestInvisible);
+      PrimaryIllustration=WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(),TEXT("PrimaryIllustration"));
+      Fit->AddChild(PrimaryIllustration);
+      DYKCityHUDArt::Place(Canvas,Fit,Definition->PrimaryIllustrationPosition,Definition->PrimaryIllustrationSize);
+     }
      BuildProductionLabels();
      UpdateView(View);
      return;
@@ -118,6 +128,13 @@ void UDYKResourceBuildingWidget::UpdateView(const FDYKResourceBuildingView& Valu
 	View=Value;
     if(Definition && Definition->bProductionTemplate)
     {
+     if(PrimaryIllustration)
+     {
+      UTexture2D* Picture=View.Illustration.Get();
+      if(PrimaryIllustration->GetBrush().GetResourceObject()!=Picture)
+       PrimaryIllustration->SetBrush(DYKCityHUDArt::TextureBrush(Picture));
+      PrimaryIllustration->SetVisibility(Picture ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+     }
      for(int32 I=0;I<ProductionLabels.Num();++I)
      {
       const auto& TextSlot=Definition->TextSlots[ProductionSlots[I]];

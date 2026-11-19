@@ -18,6 +18,7 @@
 #include "Components/SizeBox.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "Engine/Texture2D.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -464,6 +465,8 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
 	FDYKResourceBuildingView V; V.Instance=State.Instance;
 	const auto* S=ScreenInstance(P,State.Instance); if(!S) return V;
 	const auto& OwnedBuilding=P.Buildings[S->BuildingIndex];
+	if(ResourceScreen && ResourceScreen->Definition && !ResourceScreen->IsInterior())
+		V.Illustration=ResourceScreen->Definition->PrimaryIllustrations.FindRef(OwnedBuilding.BuildingId.Name).Get();
     const auto* BuildingData=DYKCityCatalog::Find(OwnedBuilding.BuildingId);
     if(BuildingData)
     {
