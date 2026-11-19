@@ -8,6 +8,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Engine/EngineBaseTypes.h"
+#include "Engine/Texture2D.h"
 #include "Components/CanvasPanelSlot.h"
 #include "UObject/StrongObjectPtr.h"
 #include "Input/Events.h"
@@ -71,6 +72,15 @@ bool FDYKBakeryGeometryTest::RunTest(const FString& Parameters)
 	for(const auto& Part:Def->Parts)
 	{
 		if(Part.Action==EDYKResourceAction::None) TestNotNull(TEXT("Whole-window author artwork"),Part.Texture.Get());
+		else if(Part.Action==EDYKResourceAction::Order)
+		{
+			if(TestNotNull(TEXT("Normal order brush"),Part.Texture.Get()) &&
+				TestNotNull(TEXT("Unavailable order brush"),Part.UnavailableTexture.Get()))
+			{
+				TestEqual(TEXT("Order art states have the same width"),Part.Texture->GetSizeX(),Part.UnavailableTexture->GetSizeX());
+				TestEqual(TEXT("Order art states have the same height"),Part.Texture->GetSizeY(),Part.UnavailableTexture->GetSizeY());
+			}
+		}
 		else TestNull(TEXT("Buttons use transparent hit areas over the intact base"),Part.Texture.Get());
 		TestFalse(TEXT("No duplicate layers or duplicate clickable buttons"),Keys.Contains(Part.Key)); Keys.Add(Part.Key);
 	}

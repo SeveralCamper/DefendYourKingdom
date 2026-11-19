@@ -6,14 +6,17 @@ root=Path(u.Paths.convert_relative_path_to_full(u.Paths.project_dir()))
 source=root/'SourceArt/CityHUD/ProductionTemplate'
 dest='/Game/DefendYourKingdom/Art/ResourceHUD/Shared'
 textures={}
-for name in ('FirstBase','InteriorBase','CollectDisabled','UpgradeDisabled','CancelWorkDisabled','OrderDisabled'):
+for name in ('FirstBase','InteriorBase','CollectDisabled','UpgradeDisabled','CancelWorkDisabled','OrderNormal','OrderDisabled'):
  task=u.AssetImportTask();task.filename=str(source/(name+'.png'));task.destination_path=dest;task.destination_name=name;task.automated=True;task.replace_existing=True;task.save=False
  u.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
  texture=u.load_asset(dest+'/'+name)
  texture.set_editor_property('compression_settings',u.TextureCompressionSettings.TC_EDITOR_ICON)
  texture.set_editor_property('lod_group',u.TextureGroup.TEXTUREGROUP_UI)
  texture.set_editor_property('mip_gen_settings',u.TextureMipGenSettings.TMGS_NO_MIPMAPS)
- texture.set_editor_property('srgb',True);u.EditorAssetLibrary.save_loaded_asset(texture);textures[name]=texture
+ texture.set_editor_property('srgb',True)
+ if not u.EditorAssetLibrary.save_loaded_asset(texture):
+  raise RuntimeError(f'Could not save {name}')
+ textures[name]=texture
 path='/Game/DefendYourKingdom/Art/ResourceHUD/ProductionTemplate'
 asset=u.load_asset(path) if u.EditorAssetLibrary.does_asset_exist(path) else None
 if not asset:
@@ -59,8 +62,8 @@ for key,rect,action,outline in [
 part('CloseInterior',(1256,78,108,100),True,u.DYKResourceAction.CLOSE,outline=ellipse(1307,128,47,47))
 part('Back',(1265,180,96,91),True,u.DYKResourceAction.BACK,outline=ellipse(1309,224,43,42))
 for i,x in enumerate((236,498,757,1016)):
- part('Order'+str(i),(x,646,224,72),True,u.DYKResourceAction.ORDER,i,
-      outline=bevel(x+4,650,x+218,713,17,16),disabled=textures['OrderDisabled'])
+ part('Order'+str(i),(x,646,224,69),True,u.DYKResourceAction.ORDER,i,
+      texture=textures['OrderNormal'],outline=bevel(x+4,650,x+218,711,16,16),disabled=textures['OrderDisabled'])
 asset.set_editor_property('parts',parts)
 slots=[]
 cream=(1,.91,.70,1);yellow=(1,.82,.04,1);ink=(.18,.085,.025,1);green=(.4,.8,.025,1)
@@ -79,5 +82,7 @@ for i in range(4):
 label('SPEED',(460,815,96,62),34,True,color=green)
 label('QUEUE',(938,820,85,55),32,True,color=yellow)
 for i in range(3):label('QUEUE_SLOT',(1036+66*i,823,50,48),27,True,i,yellow)
-asset.set_editor_property('text_slots',slots);u.EditorAssetLibrary.save_loaded_asset(asset)
+asset.set_editor_property('text_slots',slots)
+if not u.EditorAssetLibrary.save_loaded_asset(asset):
+ raise RuntimeError('Could not save ProductionTemplate')
 print('PRODUCTION_TEMPLATE_IMPORTED: one shared template with authored disabled states')
