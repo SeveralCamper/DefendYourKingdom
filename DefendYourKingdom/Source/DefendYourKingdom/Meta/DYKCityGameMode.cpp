@@ -27,7 +27,7 @@ void ADYKCityGameMode::InitGame(const FString& MapName, const FString& Options, 
 	auto* Save = GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>();
 	const auto* P = Save->GetProfileSnapshot();
 	bool Ready = false;
-	if (P && (P->CityEconomy.Version == 0 || P->CityEconomy.TerritoryVersion < 2))
+	if (P && (P->CityEconomy.Version == 0 || P->CityEconomy.TerritoryVersion < 2 || !P->Resources.ContainsByPredicate([](const auto& R){return R.ResourceId==FDYKResourceId(TEXT("RES-IRON")).ToContentId();})))
 	{
 		const int64 Now = FDateTime::UtcNow().ToUnixTimestamp();
 		Ready = Save->ApplyProfileCommand(FGuid::NewGuid(), [Now](FDYKPlayerProfileSaveData& Candidate)

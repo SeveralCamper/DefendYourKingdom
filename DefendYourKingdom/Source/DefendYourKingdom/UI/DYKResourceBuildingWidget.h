@@ -22,12 +22,34 @@ struct FDYKResourceHUDPart
 	UPROPERTY(EditAnywhere) EDYKResourceAction Action=EDYKResourceAction::None;
 	UPROPERTY(EditAnywhere) int32 Index=0;
 };
+// Shared layout fields; the values come from a building view, never from an ID branch.
+UENUM(BlueprintType)
+enum class EDYKProductionField:uint8
+{BuildingName,Description,Stored,Queue,WorkTime,ProductName,RecipeAmount,RecipeDuration,Speed,QueueSlot};
+USTRUCT(BlueprintType)
+struct FDYKProductionTextSlot
+{
+ GENERATED_BODY()
+ UPROPERTY(EditAnywhere) EDYKProductionField Field=EDYKProductionField::Stored;
+ UPROPERTY(EditAnywhere) int32 Index=0;
+ UPROPERTY(EditAnywhere) bool bInterior=false;
+ UPROPERTY(EditAnywhere) FVector2D Position=FVector2D::ZeroVector;
+ UPROPERTY(EditAnywhere) FVector2D Size=FVector2D::ZeroVector;
+ UPROPERTY(EditAnywhere) int32 FontSize=28;
+ UPROPERTY(EditAnywhere) FLinearColor Color=FLinearColor::White;
+};
 UCLASS(BlueprintType)
 class DEFENDYOURKINGDOM_API UDYKResourceHUDDefinition:public UDataAsset
 {
 	GENERATED_BODY()
 public:
 	UPROPERTY(EditAnywhere) FName BuildingId;
+ // A single immutable template serves every Production entry in the city catalogue.
+ UPROPERTY(EditAnywhere) bool bProductionTemplate=false;
+ UPROPERTY(EditAnywhere) TArray<FDYKProductionTextSlot> TextSlots;
+ UPROPERTY(EditAnywhere) FText DisplayName;
+ UPROPERTY(EditAnywhere) FText Description;
+ UPROPERTY(EditAnywhere) bool bFirstOnly=false;
 	UPROPERTY(EditAnywhere) TArray<FDYKResourceHUDPart> Parts;
 	UPROPERTY(EditAnywhere) FVector2D FirstSize=FVector2D(1122,1402);
 	UPROPERTY(EditAnywhere) FVector2D InteriorSize=FVector2D(1448,1086);
@@ -40,9 +62,19 @@ class DEFENDYOURKINGDOM_API UDYKResourceHUDCatalog:public UDataAsset
 public:
 	UPROPERTY(EditAnywhere) TArray<TSoftObjectPtr<UDYKResourceHUDDefinition>> Definitions;
 };
+struct FDYKProductionRecipeView {int64 Amount=0;int64 Seconds=0;};
 struct FDYKResourceBuildingView
 {
 	FGuid Instance;
+ FText BuildingName;
+ FText ResourceName;
+ FText Description;
+ TArray<FDYKProductionRecipeView> Recipes;
+ int32 QueueCapacity=3;
+ int32 SpeedPercent=0;
+ bool bCanOrder=true;
+ int32 Level=1;
+ FString Process;
 	int64 Stored=0;
 	int64 Capacity=0;
 	int32 Orders=0;
@@ -66,7 +98,8 @@ public:
 	int32 Generation=0;
  bool bActionAvailable=true;
  FString UnavailableReason;
-	UFUNCTION() void Invoke();
+	void SetAvailability(bool Available,const FString& Reason);
+ UFUNCTION() void Invoke();
 protected:
  virtual TSharedRef<SWidget> RebuildWidget() override;
 };
@@ -76,6 +109,8 @@ class DEFENDYOURKINGDOM_API UDYKResourceBuildingWidget:public UUserWidget
 	GENERATED_BODY()
 public:
 	static UDYKResourceHUDDefinition* FindDefinition(FName Building);
+ static FString FormatWorkTime(int64 Seconds);
+ const UTextBlock* FindField(EDYKProductionField Field,int32 Index=0) const;
 	void Configure(UDYKResourceHUDDefinition* Content,bool Interior);
 	void UpdateView(const FDYKResourceBuildingView& Value);
  void SetFeedback(const FString& Text);
@@ -93,11 +128,18 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 private:
 	void Build();
+ void BuildProductionLabels();
+ FText ProductionText(const FDYKProductionTextSlot& Slot) const;
+ void UpdateButtons();
+ UPROPERTY() TArray<TObjectPtr<UTextBlock>> ProductionLabels;
+ TArray<int32> ProductionSlots;
 	FDYKResourceBuildingView View;
 	bool bInterior=false;
 	int32 Generation=0;
 	UPROPERTY() TObjectPtr<UCanvasPanel> Canvas;
 	UPROPERTY() TObjectPtr<UTextBlock> Feedback;
+ UPROPERTY() TObjectPtr<UTextBlock> ProcessText;
+ UPROPERTY() TObjectPtr<UTextBlock> WorkText;
 	UPROPERTY() TObjectPtr<UTextBlock> StoredText;
 	UPROPERTY() TObjectPtr<UTextBlock> OrderText;
 	UPROPERTY() TObjectPtr<UTextBlock> TimerText;

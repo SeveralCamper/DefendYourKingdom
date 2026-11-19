@@ -55,7 +55,6 @@ private:
 	void BuildBuilding(const FDYKPlayerProfileSaveData& P);
 	void BuildInterior(const FDYKPlayerProfileSaveData& P);
 	void BuildDetail(const FDYKPlayerProfileSaveData& P);
-	void BuildProduction(const FDYKPlayerProfileSaveData& P);
 	UFUNCTION() void ResourceAction(EDYKResourceAction Action,int32 Index);
 	FDYKResourceBuildingView ResourceView(const FDYKPlayerProfileSaveData& P) const;
 	void PositionResourceWindow();

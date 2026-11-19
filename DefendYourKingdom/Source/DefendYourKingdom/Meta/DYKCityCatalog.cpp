@@ -4,15 +4,17 @@ namespace
 {
 	const FDYKResourceId ResourceIds[] = {
 		FDYKResourceId(TEXT("RES-FOOD")), FDYKResourceId(TEXT("RES-WOOD")),
-		FDYKResourceId(TEXT("RES-STONE")), FDYKResourceId(TEXT("RES-GOLD"))};
+		FDYKResourceId(TEXT("RES-STONE")), FDYKResourceId(TEXT("RES-GOLD")), FDYKResourceId(TEXT("RES-IRON"))};
 	const FDYKCityBuildingDefinition CityBuildingDefinitions[] = {
 		{FDYKBuildingId(TEXT("CITY-CASTLE")), TEXT("Замок"), {}, 0, 0, 0, {0, 0}, EDYKCityBuildingCategory::Castle, true, {10,10}},
 		// Level 1 basic storage = 12 hours, house = one cycle (approved rules).
-		{FDYKBuildingId(TEXT("CITY-SAWMILL")), TEXT("Лесопилка"), ResourceIds[1], 2, 60, 720, {-2, 0}, EDYKCityBuildingCategory::Production, true, {3,2}},
-		{FDYKBuildingId(TEXT("CITY-QUARRY")), TEXT("Каменоломня"), ResourceIds[2], 1, 60, 720, {2, 0}, EDYKCityBuildingCategory::Production, true, {3,3}},
+		{FDYKBuildingId(TEXT("CITY-SAWMILL")), TEXT("Лесопилка"), ResourceIds[1], 2, 60, 720, {-2, 0}, EDYKCityBuildingCategory::Production, true, {3,2}, TEXT("Древесина")},
+		{FDYKBuildingId(TEXT("CITY-QUARRY")), TEXT("Каменоломня"), ResourceIds[2], 1, 60, 720, {2, 0}, EDYKCityBuildingCategory::Production, true, {3,3}, TEXT("Камень")},
 		// Stable save ID retained: former mill becomes the bakery, still producing food.
-		{FDYKBuildingId(TEXT("CITY-MILL")), TEXT("Пекарня"), ResourceIds[0], 3, 60, 720, {0, -2}, EDYKCityBuildingCategory::Production, true, {3,2}},
-		// One gold per cycle at level 1 is approved; 300 seconds is DEV_PLACEHOLDER.
+		{FDYKBuildingId(TEXT("CITY-MILL")), TEXT("Пекарня"), ResourceIds[0], 3, 60, 720, {0, -2}, EDYKCityBuildingCategory::Production, true, {3,2}, TEXT("Хлеб")},
+		// Author-requested iron producer; numbers/footprint remain DEV_PLACEHOLDER.
+        {FDYKBuildingId(TEXT("CITY-FORGE")), TEXT("Кузница"), ResourceIds[4], 1, 60, 720, {}, EDYKCityBuildingCategory::Production, false, {3,2}, TEXT("Железо")},
+        // One gold per cycle at level 1 is approved; 300 seconds is DEV_PLACEHOLDER.
 		{FDYKBuildingId(TEXT("CITY-HOUSE")), TEXT("Жилой дом"), ResourceIds[3], 1, 300, 1, {0, 2}, EDYKCityBuildingCategory::House, true, {2,2}},
 		{FDYKBuildingId(TEXT("CITY-WAREHOUSE")), TEXT("Склад"), {}, 0, 0, 0, {}, EDYKCityBuildingCategory::Unique, false, {3,3}},
 		{FDYKBuildingId(TEXT("CITY-BARRACKS")), TEXT("Казармы"), {}, 0, 0, 0, {}, EDYKCityBuildingCategory::Unique, false, {3,3}},
@@ -43,7 +45,7 @@ int64 DYKCityCatalog::ResourceCapacity(FDYKResourceId Id)
 const TCHAR* DYKCityCatalog::ResourceName(FDYKResourceId Id)
 {
 	if (Id.GetName()==TEXT("RES-MEDALS")) return TEXT("Медали");
-	const TCHAR* Names[] = {TEXT("Еда"), TEXT("Древесина"), TEXT("Камень"), TEXT("Золото")};
+	const TCHAR* Names[] = {TEXT("Еда"), TEXT("Древесина"), TEXT("Камень"), TEXT("Золото"), TEXT("Железо")};
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ResourceIds); ++Index)
 	{
 		if (Id == ResourceIds[Index]) { return Names[Index]; }
@@ -57,25 +59,12 @@ FDYKCityProductionLevel DYKCityCatalog::Production(FDYKBuildingId Id, int32 Leve
 	if (!Def || Level < 1 || Level > 3 || !Def->Resource.IsValid()) return {};
 	// Replaceable per-type/per-level rates and house cycle duration. Only the
 	// 12/16/24-hour basic storage and one-cycle house storage are author rules.
-	const int32 SawmillRates[] = {2,4,6};
-	const int32 QuarryRates[] = {1,2,3};
-	const int32 MillRates[] = {3,6,9};
-	const int32 HouseRates[] = {1,2,3};
-	const int32 StorageHours[] = {12,16,24};
-	FDYKCityProductionLevel Result;
-	if (Def->Category == EDYKCityBuildingCategory::House)
-	{
-		Result.UnitsPerCycle = HouseRates[Level-1];
-		Result.CycleSeconds = 300;
-		Result.Capacity = Result.UnitsPerCycle;
-	}
-	else
-	{
-		Result.UnitsPerCycle = Id.GetName() == TEXT("CITY-SAWMILL") ? SawmillRates[Level-1]
-			: Id.GetName() == TEXT("CITY-QUARRY") ? QuarryRates[Level-1] : MillRates[Level-1];
-		Result.CycleSeconds = 60;
-		Result.Capacity = int64(StorageHours[Level-1]) * 3600 / Result.CycleSeconds * Result.UnitsPerCycle;
-	}
+ const int32 StorageHours[] = {12,16,24};
+ FDYKCityProductionLevel Result;
+ Result.UnitsPerCycle=Def->UnitsPerCycle*Level;
+ Result.CycleSeconds=Def->CycleSeconds;
+ Result.Capacity=Def->Category==EDYKCityBuildingCategory::House ? Result.UnitsPerCycle
+  : int64(StorageHours[Level-1])*3600/Result.CycleSeconds*Result.UnitsPerCycle;
 	return Result;
 }
 

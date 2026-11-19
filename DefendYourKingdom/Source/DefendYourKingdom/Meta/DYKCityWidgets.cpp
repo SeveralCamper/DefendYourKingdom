@@ -155,6 +155,8 @@ void UDYKCityResourceWidget::Refresh()
 	FString Text;
 	for (auto Id : DYKCityCatalog::Resources())
 	{
+		// The permanent top bar retains its four approved resources.
+		if (Id.GetName()==TEXT("RES-IRON")) continue;
 		if (!Text.IsEmpty()) { Text += TEXT("     "); }
 		Text += FString::Printf(TEXT("%s: %lld"), DYKCityCatalog::ResourceName(Id), DYKCityEconomy::Balance(*P, Id));
 		if (DYKCityEconomy::Capacity(*P,Id) != MAX_uint32)

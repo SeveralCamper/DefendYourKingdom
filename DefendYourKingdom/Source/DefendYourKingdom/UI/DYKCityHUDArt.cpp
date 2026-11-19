@@ -34,7 +34,16 @@ FSlateBrush DYKCityHUDArt::PlateBrush()
 FSlateBrush DYKCityHUDArt::TextureBrush(UTexture2D* Texture,FBox2D UV)
 {
 	FSlateBrush Result; Result.SetResourceObject(Texture); Result.DrawAs=ESlateBrushDrawType::Image;
-	if(Texture) Result.ImageSize=FVector2D(Texture->GetSizeX(),Texture->GetSizeY())*UV.GetSize();
+	if(Texture)
+    {
+     FVector2D Pixels(Texture->GetSizeX(),Texture->GetSizeY());
+#if WITH_EDITOR
+     // Async texture compilation may temporarily expose the 64x64 placeholder resource.
+     // Authoring geometry must use immutable source dimensions, just like cooked runtime.
+     if(Texture->Source.IsValid()) Pixels=FVector2D(Texture->Source.GetSizeX(),Texture->Source.GetSizeY());
+#endif
+     Result.ImageSize=Pixels*UV.GetSize();
+    }
 	Result.SetUVRegion(UV); return Result;
 }
 FSlateBrush DYKCityHUDArt::Brush(FName Asset,FBox2D Region)
@@ -69,7 +78,7 @@ bool DYKCityHUDArt::Illustration(UWidgetTree* Tree,UCanvasPanel* Canvas,FName Ke
 	if(!Row) return false;
 	auto* Source=Row->Illustration.LoadSynchronous(); if(!Source) return false;
 	auto* Art=Tree->ConstructWidget<UImage>(); Art->SetBrush(TextureBrush(Source,FBox2D(Row->UVMin,Row->UVMax)));
-	auto* Fit=Tree->ConstructWidget<UScaleBox>(); Fit->SetStretch(EStretch::ScaleToFill); Fit->SetClipping(EWidgetClipping::ClipToBounds);
+	auto* Fit=Tree->ConstructWidget<UScaleBox>(); Fit->SetStretch(EStretch::ScaleToFit); Fit->SetClipping(EWidgetClipping::ClipToBounds);
 	Fit->SetVisibility(ESlateVisibility::HitTestInvisible); Fit->AddChild(Art); Place(Canvas,Fit,Position,Size); return true;
 }
 UTextBlock* DYKCityHUDArt::Label(UWidgetTree* Tree,UCanvasPanel* Canvas,const FText& Text,FVector2D Position,FVector2D Size,int32 Font,bool Light)

@@ -88,7 +88,7 @@ bool FDYKCityStarterTest::RunTest(const FString& Parameters)
 	if (!TestTrue(TEXT("New city initialized"), DYKCityEconomy::Initialize(P, Started))) return false;
 	TestEqual(TEXT("Exactly five starter buildings"), P.Buildings.Num(), 5);
 	TestEqual(TEXT("One independent state for each starter"), P.CityEconomy.Instances.Num(), 5);
-	TestEqual(TEXT("Four HUD resource balances"), P.Resources.Num(), 4);
+	TestEqual(TEXT("Five balances including forge iron"), P.Resources.Num(), 5);
 	for (const auto& Def : DYKCityCatalog::Buildings())
 	{
 		if (!Def.bInitiallyOwned) continue;
@@ -123,7 +123,7 @@ bool FDYKCityAccrualTest::RunTest(const FString& Parameters)
 	const auto Before = P;
 	for (const auto& Def : DYKCityCatalog::Buildings())
 	{
-		if (!Def.Resource.IsValid()) continue;
+		if (!Def.Resource.IsValid() || !Def.bInitiallyOwned) continue;
 		const auto Id = Instance(P, *Def.Id.GetName().ToString());
 		const auto Early = DYKCityEconomy::View(P, Id, Started + 59);
 		TestEqual(TEXT("No collection before 60 seconds"), Early.Collectable, int64(0));
@@ -354,7 +354,7 @@ bool FDYKCityRuntimeInputTest::RunTest(const FString& Parameters)
 	for(TObjectIterator<UDYKCityWorkWidget> It;It;++It) if(It->GetWorld()==World && It->IsInViewport()) {Widget=*It; break;}
 	if(!TestNotNull(TEXT("Actual building window"),Widget)) return false;
 	Widget->CloseClicked(); Widget->OpenBuilding(Instance(*Save->GetProfileSnapshot(),TEXT("CITY-SAWMILL")),TEXT("CITY-SAWMILL"));
-	auto* Button=Widget->FindAction(EDYKCityUIAction::Collect);
+	auto* Button=Widget->ResourceScreen->FindAction(EDYKResourceAction::Collect);
 	if(!TestNotNull(TEXT("Native card collect button"),Button) || !TestTrue(TEXT("Completed output enables collection"),Button->GetIsEnabled())) return false;
 	const auto SlateButton = Button->TakeWidget();
 	const FGeometry Geometry = FGeometry::MakeRoot(FVector2D(240.f, 40.f), FSlateLayoutTransform());
@@ -363,7 +363,7 @@ bool FDYKCityRuntimeInputTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Slate key-up executes UButton delegate"), SlateButton->OnKeyUp(Geometry, Accept).IsEventHandled());
 	const int64 Collected = DYKCityEconomy::Balance(*Save->GetProfileSnapshot(), Wood);
 	TestTrue(TEXT("Native Slate input collected actual resource"), Collected > 0);
-	TestFalse(TEXT("Emptied producer disables the current card button"), Widget->FindAction(EDYKCityUIAction::Collect)->GetIsEnabled());
+	TestFalse(TEXT("Emptied producer disables the current card button"), Widget->ResourceScreen->FindAction(EDYKResourceAction::Collect)->bActionAvailable);
 	SlateButton->OnKeyDown(Geometry, Accept);
 	SlateButton->OnKeyUp(Geometry, Accept);
 	TestEqual(TEXT("Repeated disabled input cannot collect twice"), DYKCityEconomy::Balance(*Save->GetProfileSnapshot(), Wood), Collected);

@@ -12,40 +12,24 @@
 #include "Rendering/DrawElements.h"
 #include "Components/ButtonSlot.h"
 
+#include "DYKHUDButtonSlate.h"
+#include "../Meta/DYKCityCatalog.h"
+
 namespace
 {
-// Paint-only feedback: preserve source artwork, layout and hit area.
-class SResourceButton final: public SButton
-{
-public:
- bool bRound=false;
- FVector2D CircleCenter{.5,.48};
- virtual int32 OnPaint(const FPaintArgs& Args,const FGeometry& Geometry,const FSlateRect& Culling,FSlateWindowElementList& Elements,int32 Layer,const FWidgetStyle& WidgetTint,bool ParentEnabled) const override
+ FString RecipeDuration(int64 Seconds)
  {
-  const int32 Top=SButton::OnPaint(Args,Geometry,Culling,Elements,Layer,WidgetTint,ParentEnabled);
-  if(!ParentEnabled || !IsEnabled() || !(IsHovered() || HasKeyboardFocus())) return Top;
-  const FVector2D Size=Geometry.GetLocalSize();
-  TArray<FVector2D> Points;
-  if(bRound)
-  {
-   const FVector2D Center=Size*CircleCenter;
-   for(int32 I=0;I<=48;++I) {const double A=2*PI*I/48.; Points.Add(Center+FVector2D(FMath::Cos(A)*Size.X*.41,FMath::Sin(A)*Size.Y*.41));}
-  }
-  else
-  {
-   const double Inset=7, Cut=FMath::Min(19.,Size.Y*.22);
-   Points={{Inset+Cut,Inset},{Size.X-Inset-Cut,Inset},{Size.X-Inset,Inset+Cut},{Size.X-Inset,Size.Y-Inset-Cut},{Size.X-Inset-Cut,Size.Y-Inset},{Inset+Cut,Size.Y-Inset},{Inset,Size.Y-Inset-Cut},{Inset,Inset+Cut},{Inset+Cut,Inset}};
-  }
-  const float Opacity=WidgetTint.GetColorAndOpacityTint().A;
-  for(int32 Band=0;Band<3;++Band)
-   FSlateDrawElement::MakeLines(Elements,Top+1,Geometry.ToPaintGeometry(),Points,ESlateDrawEffect::None,FLinearColor(1,.65f,.06f,Opacity*(Band==0?.10f:Band==1?.22f:.8f)),true,Band==0?12.f:Band==1?7.f:2.f);
-  return Top+1;
+  if(Seconds<3600) return FString::Printf(TEXT("%lld минут"),FMath::Max<int64>(0,Seconds)/60);
+  if(Seconds%3600!=0) return UDYKResourceBuildingWidget::FormatWorkTime(Seconds);
+  const int64 Hours=Seconds/3600;
+  const int64 Last=Hours%10, LastTwo=Hours%100;
+  const TCHAR* Unit=LastTwo>=11 && LastTwo<=14 ? TEXT("часов") : Last==1 ? TEXT("час") : Last>=2 && Last<=4 ? TEXT("часа") : TEXT("часов");
+  return FString::Printf(TEXT("%lld %s"),Hours,Unit);
  }
-};
 }
 TSharedRef<SWidget> UDYKResourceHUDButton::RebuildWidget()
 {
- auto Native=SNew(SResourceButton)
+ auto Native=SNew(SDYKHUDButton)
   .OnClicked(BIND_UOBJECT_DELEGATE(FOnClicked,SlateHandleClicked))
   .OnPressed(BIND_UOBJECT_DELEGATE(FSimpleDelegate,SlateHandlePressed))
   .OnReleased(BIND_UOBJECT_DELEGATE(FSimpleDelegate,SlateHandleReleased))
@@ -54,13 +38,18 @@ TSharedRef<SWidget> UDYKResourceHUDButton::RebuildWidget()
   .ButtonStyle(&GetStyle()).ClickMethod(GetClickMethod()).TouchMethod(GetTouchMethod()).PressMethod(GetPressMethod()).IsFocusable(GetIsFocusable());
  Native->bRound=Action==EDYKResourceAction::Close || Action==EDYKResourceAction::Back;
  if(Action==EDYKResourceAction::Back) Native->CircleCenter={.5,37./91.};
+ if(Screen && Screen->Definition && Screen->Definition->bProductionTemplate) {Native->CircleCenter={.5,.5};Native->CircleRadius=.47;}
+ Native->HighlightColor=bActionAvailable ? FLinearColor(1,.65f,.06f,1) : FLinearColor(.65f,.68f,.72f,1);
  MyButton=Native;
  if(GetChildrenCount()>0) CastChecked<UButtonSlot>(GetContentSlot())->BuildSlot(MyButton.ToSharedRef());
  return Native;
 }
 UDYKResourceHUDDefinition* UDYKResourceBuildingWidget::FindDefinition(FName Building)
 {
-	const auto* Catalog=LoadObject<UDYKResourceHUDCatalog>(nullptr,TEXT("/Game/DefendYourKingdom/Art/ResourceHUD/Catalog.Catalog"));
+	if(const auto* BuildingData=DYKCityCatalog::Find(FDYKBuildingId(Building).ToContentId());
+    BuildingData && BuildingData->Category==EDYKCityBuildingCategory::Production)
+  return LoadObject<UDYKResourceHUDDefinition>(nullptr,TEXT("/Game/DefendYourKingdom/Art/ResourceHUD/ProductionTemplate.ProductionTemplate"));
+ const auto* Catalog=LoadObject<UDYKResourceHUDCatalog>(nullptr,TEXT("/Game/DefendYourKingdom/Art/ResourceHUD/Catalog.Catalog"));
 	if(Catalog) for(const auto& Soft:Catalog->Definitions) if(auto* Content=Soft.LoadSynchronous();Content && Content->BuildingId==Building) return Content;
 	return nullptr;
 }
@@ -78,17 +67,19 @@ TSharedRef<SWidget> UDYKResourceBuildingWidget::RebuildWidget()
 }
 void UDYKResourceBuildingWidget::Build()
 {
-	++Generation; Buttons.Reset(); QueueIcons.Reset(); Canvas->ClearChildren(); StoredText=nullptr; OrderText=nullptr; TimerText=nullptr;
+	++Generation; Buttons.Reset(); QueueIcons.Reset(); Canvas->ClearChildren(); StoredText=nullptr; OrderText=nullptr; TimerText=nullptr; ProcessText=nullptr; WorkText=nullptr;
+ ProductionLabels.Reset(); ProductionSlots.Reset();
 	if(!Definition) return;
 	for(const auto& Part:Definition->Parts)
 	{
 		if(Part.bInterior!=bInterior) continue;
 		if(Part.Action==EDYKResourceAction::None)
-			DYKCityHUDArt::Texture(WidgetTree,Canvas,Part.Texture,Part.Position,Part.Size);
+			{if(Part.Texture) DYKCityHUDArt::Texture(WidgetTree,Canvas,Part.Texture,Part.Position,Part.Size);}
 		else
 		{
 			auto* Button=WidgetTree->ConstructWidget<UDYKResourceHUDButton>(); Button->Screen=this; Button->Action=Part.Action; Button->Index=Part.Index; Button->Generation=Generation;
-			const auto Brush=DYKCityHUDArt::TextureBrush(Part.Texture);
+			auto Brush=DYKCityHUDArt::TextureBrush(Part.Texture);
+            if(!Part.Texture) Brush.DrawAs=ESlateBrushDrawType::NoDrawType;
 			FButtonStyle Style; Style.SetNormal(Brush); Style.SetHovered(Brush); Style.SetPressed(Brush); Style.SetDisabled(Brush);
 			// Source pixels stay unchanged; SResourceButton adds hover/focus contour feedback.
 			Style.SetNormalPadding(FMargin(0)); Style.SetPressedPadding(FMargin(0));
@@ -96,16 +87,34 @@ void UDYKResourceBuildingWidget::Build()
 			DYKCityHUDArt::Place(Canvas,Button,Part.Position,Part.Size); Buttons.Add(Button);
 		}
 	}
-	Feedback=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),bInterior ? FVector2D(245,738) : FVector2D(195,1230),bInterior ? FVector2D(950,30) : FVector2D(730,50),22,false);
-	const FLinearColor Yellow(1,.82f,.04f,1);
+	if(Definition->bProductionTemplate)
+    {
+     BuildProductionLabels();
+     Feedback=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),bInterior ? FVector2D(240,930) : FVector2D(195,1250),bInterior ? FVector2D(1000,35) : FVector2D(730,30),22,false);
+     UpdateView(View);
+     return;
+    }
+    Feedback=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),bInterior ? FVector2D(245,738) : FVector2D(195,1230),bInterior ? FVector2D(950,30) : FVector2D(730,50),22,false);
+	if(!bInterior && !Definition->DisplayName.IsEmpty())
+    {
+     DYKCityHUDArt::Label(WidgetTree,Canvas,Definition->DisplayName,{335,140},{480,94},68,true);
+     DYKCityHUDArt::Label(WidgetTree,Canvas,Definition->Description,{220,565},{680,76},30,false)->SetWrapTextAt(0);
+    }
+    const FLinearColor Yellow(1,.82f,.04f,1);
 	if(bInterior)
 	{
 		OrderText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{970,798},{80,48},27,true);
 		for(int32 I=0;I<3;++I) QueueIcons.Add(DYKCityHUDArt::Texture(WidgetTree,Canvas,Definition->ResourceIcon,{1062.+I*56,808},{36,27}));
 	}
-	else
-	{
-		DYKCityHUDArt::Texture(WidgetTree,Canvas,Definition->ResourceIcon,{393,795},{108,78});
+	else if(Definition->bFirstOnly)
+    {
+     ProcessText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{190,685},{750,72},27,true);
+     WorkText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{314,800},{500,72},26,true);
+     WorkText->SetWrapTextAt(0);
+    }
+    else
+    {
+        DYKCityHUDArt::Texture(WidgetTree,Canvas,Definition->ResourceIcon,{393,795},{108,78});
 		DYKCityHUDArt::Texture(WidgetTree,Canvas,Definition->ResourceIcon,{174,689},{73,55});
 		StoredText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{367,694},{75,43},27,true);
 		OrderText=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),{644,694},{72,43},27,true);
@@ -117,10 +126,27 @@ void UDYKResourceBuildingWidget::Build()
 void UDYKResourceBuildingWidget::UpdateView(const FDYKResourceBuildingView& Value)
 {
 	View=Value;
+    if(Definition && Definition->bProductionTemplate)
+    {
+     for(int32 I=0;I<ProductionLabels.Num();++I)
+     {
+      const auto& TextSlot=Definition->TextSlots[ProductionSlots[I]];
+      ProductionLabels[I]->SetText(ProductionText(TextSlot));
+      ProductionLabels[I]->GetParent()->SetVisibility(TextSlot.Field==EDYKProductionField::QueueSlot && TextSlot.Index>=View.Orders ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+     }
+     UpdateButtons();
+     return;
+    }
+    if(ProcessText) ProcessText->SetText(FText::FromString(FString::Printf(TEXT("Уровень %d  ·  Исследований: %d"),View.Level,View.Orders)));
+    if(WorkText) WorkText->SetText(FText::FromString(View.Process));
 	if(StoredText) StoredText->SetText(FText::AsNumber(View.Stored,&FNumberFormattingOptions::DefaultNoGrouping()));
 	if(OrderText) OrderText->SetText(FText::FromString(FString::Printf(TEXT("%d / 3"),View.Orders)));
 	for(int32 I=0;I<QueueIcons.Num();++I) QueueIcons[I]->SetVisibility(I<View.Orders ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	if(TimerText) TimerText->SetText(FText::FromString(View.bWorking ? FString::Printf(TEXT("%lld мин %02lld с"),FMath::Max<int64>(0,View.Seconds)/60,FMath::Max<int64>(0,View.Seconds)%60) : TEXT("—")));
+ UpdateButtons();
+}
+void UDYKResourceBuildingWidget::UpdateButtons()
+{
 	for(const auto& Button:Buttons)
 	{
 		bool Enabled=true;
@@ -129,22 +155,21 @@ void UDYKResourceBuildingWidget::UpdateView(const FDYKResourceBuildingView& Valu
 		case EDYKResourceAction::Collect: Enabled=View.bCanCollect; break;
 		case EDYKResourceAction::Upgrade: Enabled=View.bCanUpgrade; break;
 		case EDYKResourceAction::CancelWork: Enabled=View.bCanCancel; break;
-		case EDYKResourceAction::Order: Enabled=View.Orders<3; break;
-		case EDYKResourceAction::Visit: Enabled=View.bCanVisit; break;
+		case EDYKResourceAction::Order: Enabled=View.bCanOrder && View.Orders<View.QueueCapacity; break;
+		case EDYKResourceAction::Visit: Enabled=Definition && Definition->bProductionTemplate ? true : View.bCanVisit; break;
 		default: break;
 		}
-		Button->bActionAvailable=Enabled;
+
         FString Reason;
         if(!Enabled) switch(Button->Action)
         {
-        case EDYKResourceAction::Order: Reason=TEXT("Очередь заполнена: дождитесь завершения заказа."); break;
-        case EDYKResourceAction::Collect: Reason=TEXT("Сбор: нужен готовый хлеб, место на складе и минута накопления."); break;
+        case EDYKResourceAction::Order: Reason=View.bCanOrder ? TEXT("Очередь заполнена: дождитесь завершения заказа.") : TEXT("Здание ещё строится."); break;
+        case EDYKResourceAction::Collect: Reason=TEXT("Сбор: нужен готовый ресурс, место на складе и минута накопления."); break;
         case EDYKResourceAction::Upgrade: Reason=TEXT("Улучшение недоступно: проверьте уровень замка и текущие работы."); break;
         case EDYKResourceAction::CancelWork: Reason=TEXT("Нет работы для отмены."); break;
         default: Reason=TEXT("Здание ещё строится."); break;
         }
-        Button->UnavailableReason=Reason;
-        Button->SetToolTipText(FText::FromString(Reason));
+        Button->SetAvailability(Enabled,Reason);
         // Keep pointer feedback even when the game rules reject the command.
         Button->SetIsEnabled(true);
 	}
@@ -168,3 +193,59 @@ FVector2D UDYKResourceBuildingWidget::PopupSize(FVector2D Viewport)
 
 void UDYKResourceBuildingWidget::SetFeedback(const FString& Text)
 {if(Feedback) Feedback->SetText(FText::FromString(Text));}
+
+void UDYKResourceHUDButton::SetAvailability(bool Available,const FString& Reason)
+{
+ bActionAvailable=Available;
+ UnavailableReason=Reason;
+ SetToolTipText(FText::FromString(Reason));
+ if(MyButton.IsValid())
+ {
+  const auto Native=StaticCastSharedPtr<SDYKHUDButton>(MyButton);
+  Native->HighlightColor=Available ? FLinearColor(1,.65f,.06f,1) : FLinearColor(.65f,.68f,.72f,1);
+  Native->Invalidate(EInvalidateWidgetReason::Paint);
+ }
+}
+FString UDYKResourceBuildingWidget::FormatWorkTime(int64 Seconds)
+{
+ Seconds=FMath::Max<int64>(0,Seconds);
+ const int64 Minutes=Seconds/60+(Seconds%60>0 ? 1 : 0);
+ return FString::Printf(TEXT("%lld ч %02lld мин"),Minutes/60,Minutes%60);
+}
+void UDYKResourceBuildingWidget::BuildProductionLabels()
+{
+ for(int32 I=0;I<Definition->TextSlots.Num();++I)
+ {
+  const auto& TextSlot=Definition->TextSlots[I];
+  if(TextSlot.bInterior!=bInterior) continue;
+  auto* Label=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),TextSlot.Position,TextSlot.Size,TextSlot.FontSize,true);
+  Label->SetColorAndOpacity(TextSlot.Color);
+  Label->SetWrapTextAt(0);
+  ProductionLabels.Add(Label); ProductionSlots.Add(I);
+ }
+}
+FText UDYKResourceBuildingWidget::ProductionText(const FDYKProductionTextSlot& TextSlot) const
+{
+ const FDYKProductionRecipeView* Recipe=View.Recipes.IsValidIndex(TextSlot.Index) ? &View.Recipes[TextSlot.Index] : nullptr;
+ switch(TextSlot.Field)
+ {
+ case EDYKProductionField::BuildingName:return View.BuildingName;
+ case EDYKProductionField::Description:return View.Description;
+ case EDYKProductionField::ProductName:return View.ResourceName;
+ case EDYKProductionField::Stored:return FText::AsNumber(View.Stored,&FNumberFormattingOptions::DefaultNoGrouping());
+ case EDYKProductionField::Queue:return FText::FromString(FString::Printf(TEXT("%d / %d"),View.Orders,View.QueueCapacity));
+ case EDYKProductionField::WorkTime:return FText::FromString(FormatWorkTime(View.bWorking ? View.Seconds : 0));
+ case EDYKProductionField::RecipeAmount:return Recipe ? FText::AsNumber(Recipe->Amount,&FNumberFormattingOptions::DefaultNoGrouping()) : FText::GetEmpty();
+ case EDYKProductionField::RecipeDuration:return Recipe ? FText::FromString(RecipeDuration(Recipe->Seconds)) : FText::GetEmpty();
+ case EDYKProductionField::Speed:return FText::FromString(FString::Printf(TEXT("%+d%%"),View.SpeedPercent));
+ case EDYKProductionField::QueueSlot:return FText::AsNumber(TextSlot.Index+1);
+ default:return FText::GetEmpty();
+ }
+}
+const UTextBlock* UDYKResourceBuildingWidget::FindField(EDYKProductionField Field,int32 Index) const
+{
+ if(!Definition) return nullptr;
+ for(int32 I=0;I<ProductionSlots.Num();++I)
+ {const auto& TextSlot=Definition->TextSlots[ProductionSlots[I]];if(TextSlot.Field==Field && TextSlot.Index==Index)return ProductionLabels[I];}
+ return nullptr;
+}

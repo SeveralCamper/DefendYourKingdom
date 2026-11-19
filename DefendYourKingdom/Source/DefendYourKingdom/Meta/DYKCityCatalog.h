@@ -18,6 +18,7 @@ struct FDYKCityBuildingDefinition
 	bool bInitiallyOwned;
 	// Per type, never per level. Unspecified sizes are DEV_PLACEHOLDER.
 	FIntPoint Footprint;
+ const TCHAR* ProductName=nullptr;
 };
 
 struct FDYKCityProductionLevel

@@ -1,0 +1,27 @@
+$ErrorActionPreference='Stop'
+Add-Type -AssemblyName System.Drawing
+$root=Split-Path $PSScriptRoot -Parent
+$folder=Join-Path $root 'SourceArt/CityHUD/ProductionTemplate'
+function Clear-Value($dst,$src,$x,$y,$w,$h,$sampleX){
+ for($py=$y;$py -lt $y+$h;$py++){for($px=$x;$px -lt $x+$w;$px++){$dst.SetPixel($px,$py,$src.GetPixel($sampleX,$py))}}
+}
+$first=[Drawing.Bitmap]::new((Join-Path $folder 'ReferenceFirst.png'))
+$inside=[Drawing.Bitmap]::new((Join-Path $folder 'ReferenceInterior.png'))
+try {
+ $a=$first.Clone([Drawing.Rectangle]::new(0,0,1122,1402),[Drawing.Imaging.PixelFormat]::Format32bppArgb)
+ $b=$inside.Clone([Drawing.Rectangle]::new(0,0,1448,1086),[Drawing.Imaging.PixelFormat]::Format32bppArgb)
+ # Keep each window intact. Only example values are cleared; buttons are never cut out.
+ Clear-Value $a $first 342 690 90 55 435
+ Clear-Value $a $first 630 690 90 55 719
+ Clear-Value $a $first 759 693 188 40 750
+ for($i=0;$i -lt 4;$i++){
+  Clear-Value $b $inside (355+260*$i) 521 77 34 (295+260*$i)
+  Clear-Value $b $inside (260+260*$i) 588 174 36 (265+260*$i)
+ }
+ Clear-Value $b $inside 463 819 92 50 450
+ Clear-Value $b $inside 940 822 80 50 1024
+ $a.Save((Join-Path $folder 'FirstBase.png'),[Drawing.Imaging.ImageFormat]::Png)
+ $b.Save((Join-Path $folder 'InteriorBase.png'),[Drawing.Imaging.ImageFormat]::Png)
+ $a.Dispose();$b.Dispose()
+ Get-ChildItem $folder -Filter '*.png' | ForEach-Object{[pscustomobject]@{file=$_.Name;sha256=(Get-FileHash $_.FullName).Hash}} | ConvertTo-Json | Set-Content (Join-Path $folder 'manifest.json') -Encoding utf8
+} finally {$first.Dispose();$inside.Dispose()}

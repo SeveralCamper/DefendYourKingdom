@@ -66,11 +66,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKBakeryGeometryTest,"DYK.BakeryHUD.ContentAn
 bool FDYKBakeryGeometryTest::RunTest(const FString& Parameters)
 {
 	const auto* Def=UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-MILL")); if(!TestNotNull(TEXT("Bakery content asset"),Def)) return false;
-	TestTrue(TEXT("Other resource content not silently converted"),UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-SAWMILL"))==nullptr);
+	TestTrue(TEXT("Sawmill now has its own definition"),UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-SAWMILL"))!=nullptr);
 	TSet<FName> Keys;
 	for(const auto& Part:Def->Parts)
 	{
-		TestNotNull(TEXT("Every part is a real extracted texture"),Part.Texture.Get());
+		if(Part.Action==EDYKResourceAction::None) TestNotNull(TEXT("Whole-window author artwork"),Part.Texture.Get());
+		else TestNull(TEXT("Buttons use transparent hit areas over the intact base"),Part.Texture.Get());
 		TestFalse(TEXT("No duplicate layers or duplicate clickable buttons"),Keys.Contains(Part.Key)); Keys.Add(Part.Key);
 	}
 	const FVector2D Viewport(1920,1080),Size=UDYKResourceBuildingWidget::PopupSize(Viewport),Anchor(700,400);
@@ -125,7 +126,7 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 	{
 		const bool Interior=(Pass%2)==1, Hover=Pass>=2;
 		TStrongObjectPtr<UDYKResourceBuildingWidget> UI(NewObject<UDYKResourceBuildingWidget>()); UI->Initialize(); UI->Configure(Definition,Interior);
-		const auto Slate=UI->TakeWidget(); FDYKResourceBuildingView View; View.Stored=2150; View.Capacity=2160; View.Orders=1; View.Seconds=3204; View.bWorking=true; View.bCanCollect=Pass!=4; View.bCanUpgrade=Pass!=6; View.bCanCancel=Pass!=8; if(Pass==3) View.Orders=3; UI->UpdateView(View);
+		const auto Slate=UI->TakeWidget(); FDYKResourceBuildingView View; View.BuildingName=FText::FromString(TEXT("Пекарня")); View.ResourceName=FText::FromString(TEXT("Хлеб")); View.Description=FText::FromString(TEXT("Производство: Хлеб.\nЗаказы выполняются по очереди.")); for(const auto& Recipe:DYKCityOrders::DEV_PLACEHOLDER()) View.Recipes.Add({Recipe.Amount,Recipe.Seconds}); View.Stored=2150; View.Capacity=2160; View.Orders=1; View.Seconds=3204; View.bWorking=true; View.bCanCollect=Pass!=4; View.bCanUpgrade=Pass!=6; View.bCanCancel=Pass!=8; if(Pass==3) View.Orders=3; UI->UpdateView(View);
 		const FIntPoint Pixels=Interior ? FIntPoint(960,720) : FIntPoint(506,633);
 		if(Hover)
 		{
@@ -135,7 +136,8 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 		 Button->OnMouseEnter(FGeometry::MakeRoot(FVector2D(722,127),FSlateLayoutTransform()),Pointer);
 		 TestTrue(TEXT("Real Slate mouse enter reaches button"),Button->IsHovered());
 		}
-		auto* Target=Renderer->DrawWidget(Slate,FVector2D(Pixels)); FlushRenderingCommands();
+		UTextureRenderTarget2D* Target=nullptr;
+        for(int32 Frame=0;Frame<3;++Frame) {Target=Renderer->DrawWidget(Slate,FVector2D(Pixels)); FlushRenderingCommands();}
 		TArray<FColor> Buffer; FReadSurfaceDataFlags ReadFlags; ReadFlags.SetLinearToGamma(true);
 		if(!TestTrue(TEXT("Actual UMG render readback"),Target->GameThread_GetRenderTargetResource()->ReadPixels(Buffer,ReadFlags))) {BeginCleanup(Renderer); return false;}
 		// D3D11 8-bit readback returns this linear render target verbatim. PNG stores sRGB.
@@ -146,8 +148,8 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 		{
 			// Unmodified parchment in the author reference is sRGB (243,192,139).
 			// Catch both missing and duplicated output gamma, with room for bilinear filtering.
-			const auto Paper=Buffer[FMath::RoundToInt(471.*Pixels.Y/550)*Pixels.X+FMath::RoundToInt(373.*Pixels.X/440)];
-			TestTrue(TEXT("Rendered source colors preserved"),FMath::Abs(int32(Paper.R)-243)<16 && FMath::Abs(int32(Paper.G)-192)<16 && FMath::Abs(int32(Paper.B)-139)<16);
+			const auto Paper=Buffer[FMath::RoundToInt(350.*Pixels.Y/1402)*Pixels.X+FMath::RoundToInt(560.*Pixels.X/1122)];
+			TestTrue(TEXT("Rendered source colors preserved"),FMath::Abs(int32(Paper.R)-245)<16 && FMath::Abs(int32(Paper.G)-202)<16 && FMath::Abs(int32(Paper.B)-153)<16);
 		}
 		auto& Normal=Interior ? NormalInterior : NormalFirst;
         if(!Hover) Normal=Buffer;

@@ -110,7 +110,14 @@ bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P, const FDYKCity
 
 bool DYKCityEconomy::Initialize(FDYKPlayerProfileSaveData& P, int64 Now)
 {
-	if (P.CityEconomy.Version != 0) { return Validate(P); }
+	if(P.CityEconomy.Version==1)
+    {
+     // Additive content migration: preserve all existing balances, buildings and orders.
+     const auto Iron=FDYKResourceId(TEXT("RES-IRON")).ToContentId();
+     if(!P.Resources.ContainsByPredicate([Iron](const auto& R){return R.ResourceId==Iron;})) P.Resources.Add({Iron,0});
+     return Validate(P);
+    }
+    if(P.CityEconomy.Version!=0) return false;
 	if (Now <= 0 || !P.CityEconomy.Instances.IsEmpty()) { return false; }
 	for (const auto& Def : DYKCityCatalog::Buildings())
 	{
