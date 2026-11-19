@@ -19,6 +19,7 @@ class SResourceButton final: public SButton
 {
 public:
  bool bRound=false;
+ FVector2D CircleCenter{.5,.48};
  virtual int32 OnPaint(const FPaintArgs& Args,const FGeometry& Geometry,const FSlateRect& Culling,FSlateWindowElementList& Elements,int32 Layer,const FWidgetStyle& WidgetTint,bool ParentEnabled) const override
  {
   const int32 Top=SButton::OnPaint(Args,Geometry,Culling,Elements,Layer,WidgetTint,ParentEnabled);
@@ -27,8 +28,8 @@ public:
   TArray<FVector2D> Points;
   if(bRound)
   {
-   const FVector2D Center=Size*.5;
-   for(int32 I=0;I<=48;++I) {const double A=2*PI*I/48.; Points.Add(Center+FVector2D(FMath::Cos(A)*Size.X*.43,FMath::Sin(A)*Size.Y*.43));}
+   const FVector2D Center=Size*CircleCenter;
+   for(int32 I=0;I<=48;++I) {const double A=2*PI*I/48.; Points.Add(Center+FVector2D(FMath::Cos(A)*Size.X*.41,FMath::Sin(A)*Size.Y*.41));}
   }
   else
   {
@@ -52,6 +53,7 @@ TSharedRef<SWidget> UDYKResourceHUDButton::RebuildWidget()
   .OnUnhovered_UObject(this,&UDYKResourceHUDButton::SlateHandleUnhovered)
   .ButtonStyle(&GetStyle()).ClickMethod(GetClickMethod()).TouchMethod(GetTouchMethod()).PressMethod(GetPressMethod()).IsFocusable(GetIsFocusable());
  Native->bRound=Action==EDYKResourceAction::Close || Action==EDYKResourceAction::Back;
+ if(Action==EDYKResourceAction::Back) Native->CircleCenter={.5,37./91.};
  MyButton=Native;
  if(GetChildrenCount()>0) CastChecked<UButtonSlot>(GetContentSlot())->BuildSlot(MyButton.ToSharedRef());
  return Native;
@@ -94,6 +96,7 @@ void UDYKResourceBuildingWidget::Build()
 			DYKCityHUDArt::Place(Canvas,Button,Part.Position,Part.Size); Buttons.Add(Button);
 		}
 	}
+	Feedback=DYKCityHUDArt::Label(WidgetTree,Canvas,FText::GetEmpty(),bInterior ? FVector2D(245,738) : FVector2D(195,1230),bInterior ? FVector2D(950,30) : FVector2D(730,50),22,false);
 	const FLinearColor Yellow(1,.82f,.04f,1);
 	if(bInterior)
 	{
@@ -130,13 +133,27 @@ void UDYKResourceBuildingWidget::UpdateView(const FDYKResourceBuildingView& Valu
 		case EDYKResourceAction::Visit: Enabled=View.bCanVisit; break;
 		default: break;
 		}
-		Button->SetIsEnabled(Enabled);
+		Button->bActionAvailable=Enabled;
+        FString Reason;
+        if(!Enabled) switch(Button->Action)
+        {
+        case EDYKResourceAction::Order: Reason=TEXT("Очередь заполнена: дождитесь завершения заказа."); break;
+        case EDYKResourceAction::Collect: Reason=TEXT("Сбор: нужен готовый хлеб, место на складе и минута накопления."); break;
+        case EDYKResourceAction::Upgrade: Reason=TEXT("Улучшение недоступно: проверьте уровень замка и текущие работы."); break;
+        case EDYKResourceAction::CancelWork: Reason=TEXT("Нет работы для отмены."); break;
+        default: Reason=TEXT("Здание ещё строится."); break;
+        }
+        Button->UnavailableReason=Reason;
+        Button->SetToolTipText(FText::FromString(Reason));
+        // Keep pointer feedback even when the game rules reject the command.
+        Button->SetIsEnabled(true);
 	}
 }
 UDYKResourceHUDButton* UDYKResourceBuildingWidget::FindAction(EDYKResourceAction Action,int32 Index) const
 {for(const auto& Button:Buttons) if(Button->Action==Action && Button->Index==Index) return Button.Get(); return nullptr;}
 void UDYKResourceBuildingWidget::Activate(EDYKResourceAction Action,int32 Index,int32 ExpectedGeneration)
-{if(Generation==ExpectedGeneration) if(const auto* Button=FindAction(Action,Index);Button && Button->GetIsEnabled()) OnAction.Broadcast(Action,Index);}
+{if(Generation==ExpectedGeneration) if(const auto* Button=FindAction(Action,Index);Button && Button->GetIsEnabled())
+ {if(!Button->bActionAvailable) SetFeedback(Button->UnavailableReason); else {SetFeedback(FString()); OnAction.Broadcast(Action,Index);}}}
 FVector2D UDYKResourceBuildingWidget::PopupPosition(FVector2D Anchor,FVector2D Viewport,FVector2D Popup)
 {
 	return {FMath::Clamp(Anchor.X-Popup.X*.5,8.,FMath::Max(8.,Viewport.X-Popup.X-8)),FMath::Clamp(Anchor.Y-Popup.Y*.5,8.,FMath::Max(8.,Viewport.Y-Popup.Y-8))};
@@ -148,3 +165,6 @@ FVector2D UDYKResourceBuildingWidget::PopupSize(FVector2D Viewport)
  const double Scale=FMath::Clamp(FMath::Min((Viewport.X-16)/Preferred.X,(Viewport.Y-16)/Preferred.Y),0.,1.);
  return Preferred*Scale;
 }
+
+void UDYKResourceBuildingWidget::SetFeedback(const FString& Text)
+{if(Feedback) Feedback->SetText(FText::FromString(Text));}

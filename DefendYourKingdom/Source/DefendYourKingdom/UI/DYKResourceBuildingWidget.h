@@ -64,6 +64,8 @@ public:
 	EDYKResourceAction Action=EDYKResourceAction::None;
 	int32 Index=0;
 	int32 Generation=0;
+ bool bActionAvailable=true;
+ FString UnavailableReason;
 	UFUNCTION() void Invoke();
 protected:
  virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -76,6 +78,7 @@ public:
 	static UDYKResourceHUDDefinition* FindDefinition(FName Building);
 	void Configure(UDYKResourceHUDDefinition* Content,bool Interior);
 	void UpdateView(const FDYKResourceBuildingView& Value);
+ void SetFeedback(const FString& Text);
 	void Activate(EDYKResourceAction Action,int32 Index,int32 ExpectedGeneration);
 	void Deactivate() {++Generation; OnAction.Clear();}
 	UDYKResourceHUDButton* FindAction(EDYKResourceAction Action,int32 Index=0) const;
@@ -94,6 +97,7 @@ private:
 	bool bInterior=false;
 	int32 Generation=0;
 	UPROPERTY() TObjectPtr<UCanvasPanel> Canvas;
+	UPROPERTY() TObjectPtr<UTextBlock> Feedback;
 	UPROPERTY() TObjectPtr<UTextBlock> StoredText;
 	UPROPERTY() TObjectPtr<UTextBlock> OrderText;
 	UPROPERTY() TObjectPtr<UTextBlock> TimerText;

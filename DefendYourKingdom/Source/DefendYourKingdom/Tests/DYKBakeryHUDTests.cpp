@@ -42,10 +42,23 @@ bool FDYKBakeryBindingTest::RunTest(const FString& Parameters)
 	UI->ResourceScreen->FindAction(EDYKResourceAction::Visit)->OnClicked.Broadcast();
 	for(int32 I=0;I<3;++I) UI->ResourceScreen->FindAction(EDYKResourceAction::Order,I)->OnClicked.Broadcast();
 	TestEqual(TEXT("Orders affect only bakery instance"),UI->ResourceScreen->GetView().Orders,3);
-	TestFalse(TEXT("Fourth order disabled"),UI->ResourceScreen->FindAction(EDYKResourceAction::Order,0)->GetIsEnabled());
+	TestFalse(TEXT("Fourth order disabled"),UI->ResourceScreen->FindAction(EDYKResourceAction::Order,0)->bActionAvailable);
+    const auto FullRevision=Save->GetRevision();
+    UI->ResourceScreen->FindAction(EDYKResourceAction::Order,0)->OnClicked.Broadcast();
+    TestEqual(TEXT("Full queue click gives feedback without extra order"),Save->GetRevision(),FullRevision);
 	UI->ResourceScreen->FindAction(EDYKResourceAction::Back)->OnClicked.Broadcast();
 	TestFalse(TEXT("Circle back returns to building card"),UI->ResourceScreen->IsInterior());
-	UI->CloseClicked(); TestFalse(TEXT("Closed"),UI->GetWindowState().IsModal());
+	UI->ResourceScreen->FindAction(EDYKResourceAction::CancelWork)->OnClicked.Broadcast();
+    TestEqual(TEXT("Cancel active production starts next order"),UI->ResourceScreen->GetView().Orders,2);
+    UI->ResourceScreen->FindAction(EDYKResourceAction::Upgrade)->OnClicked.Broadcast();
+    TestTrue(TEXT("Upgrade button enqueues building work"),Save->GetProfileSnapshot()->CityEconomy.Work.ContainsByPredicate([Instance](const auto& W){return W.InstanceId==Instance;}));
+    UI->ResourceScreen->FindAction(EDYKResourceAction::CancelWork)->OnClicked.Broadcast();
+    TestFalse(TEXT("Cancel button cancels upgrade before production"),Save->GetProfileSnapshot()->CityEconomy.Work.ContainsByPredicate([Instance](const auto& W){return W.InstanceId==Instance;}));
+    TestTrue(TEXT("Prepare ready bread with free warehouse space"),Save->ApplyProfileCommand(FGuid::NewGuid(),[Instance,Now](auto& P){for(auto& R:P.Resources) R.Amount=0; for(auto& Row:P.CityEconomy.Instances) if(Row.InstanceId==Instance) {Row.Stored=15; Row.CollectionStartedAtUnix=Now-61;} return true;}));
+    UI->CloseClicked(); UI->OpenBuilding(Instance,TEXT("CITY-MILL"));
+    UI->ResourceScreen->FindAction(EDYKResourceAction::Collect)->OnClicked.Broadcast();
+    TestEqual(TEXT("Collect button really transfers ready bread"),UI->ResourceScreen->GetView().Stored,int64(0));
+    UI->CloseClicked(); TestFalse(TEXT("Closed"),UI->GetWindowState().IsModal());
 	UI->ReleaseSlateResources(true); return true;
 }
 
@@ -68,6 +81,28 @@ bool FDYKBakeryGeometryTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKBakeryCancelTest,"DYK.BakeryHUD.CancelProductionSafety",BakeryTestFlags)
+bool FDYKBakeryCancelTest::RunTest(const FString& Parameters)
+{
+ DYKCityHUDTest::Service Service;
+ const auto Instance=DYKCityHUDTest::Instance(Service.State,TEXT("CITY-MILL"));
+ const int64 Now=DYKCityHUDTest::Time;
+ const FGuid First=FGuid::NewGuid(),Next=FGuid::NewGuid(),Cancel=FGuid::NewGuid();
+ TestTrue(TEXT("Enqueue first"),DYKCityOrders::Enqueue(Service,First,Instance,0,Now));
+ TestTrue(TEXT("Enqueue successor"),DYKCityOrders::Enqueue(Service,Next,Instance,1,Now));
+ auto Find=[&]() -> const FDYKCityProductionSaveData& {return *Service.State.CityEconomy.Instances.FindByPredicate([&](const auto& S){return S.InstanceId==Instance;});};
+ const int64 Stored=Find().Stored;
+ Service.Fail=true;
+ TestFalse(TEXT("Failed save leaves active order intact"),DYKCityOrders::CancelCurrent(Service,Cancel,Instance,First,Now+1));
+ TestEqual(TEXT("No lost order on save failure"),Find().Orders.Num(),2);
+ Service.Fail=false;
+ TestTrue(TEXT("Cancel running order"),DYKCityOrders::CancelCurrent(Service,Cancel,Instance,First,Now+1));
+ TestTrue(TEXT("Successor starts, stored bread retained"),Find().Orders.Num()==1 && Find().Orders[0].OrderId==Next && Find().Orders[0].StartedAtUnix>0 && Find().Stored==Stored);
+ TestTrue(TEXT("Repeated command is idempotent"),DYKCityOrders::CancelCurrent(Service,Cancel,Instance,First,Now+2));
+ TestFalse(TEXT("Stale order id cannot cancel successor"),DYKCityOrders::CancelCurrent(Service,FGuid::NewGuid(),Instance,First,Now+2));
+ return true;
+}
+
 #if WITH_EDITOR
 #include "Slate/WidgetRenderer.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -86,15 +121,16 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 	const FString Folder=FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("BakeryHUDReview")); IFileManager::Get().MakeDirectory(*Folder,true);
 	FWidgetRenderer* Renderer=new FWidgetRenderer(false);
 	TArray<FColor> NormalFirst,NormalInterior;
-	for(int32 Pass=0;Pass<4;++Pass)
+	for(int32 Pass=0;Pass<10;++Pass)
 	{
 		const bool Interior=(Pass%2)==1, Hover=Pass>=2;
 		TStrongObjectPtr<UDYKResourceBuildingWidget> UI(NewObject<UDYKResourceBuildingWidget>()); UI->Initialize(); UI->Configure(Definition,Interior);
-		const auto Slate=UI->TakeWidget(); FDYKResourceBuildingView View; View.Stored=2150; View.Capacity=2160; View.Orders=1; View.Seconds=3204; View.bWorking=true; View.bCanCollect=true; View.bCanUpgrade=true; View.bCanCancel=true; UI->UpdateView(View);
+		const auto Slate=UI->TakeWidget(); FDYKResourceBuildingView View; View.Stored=2150; View.Capacity=2160; View.Orders=1; View.Seconds=3204; View.bWorking=true; View.bCanCollect=Pass!=4; View.bCanUpgrade=Pass!=6; View.bCanCancel=Pass!=8; if(Pass==3) View.Orders=3; UI->UpdateView(View);
 		const FIntPoint Pixels=Interior ? FIntPoint(960,720) : FIntPoint(506,633);
 		if(Hover)
 		{
-		 const auto Button=UI->FindAction(Interior ? EDYKResourceAction::Order : EDYKResourceAction::Visit)->TakeWidget();
+		 const EDYKResourceAction A=Pass==4 ? EDYKResourceAction::Collect : Pass==6 ? EDYKResourceAction::Upgrade : Pass==8 ? EDYKResourceAction::CancelWork : Pass==5 || Pass==7 || Pass==9 ? EDYKResourceAction::Back : Interior ? EDYKResourceAction::Order : EDYKResourceAction::Visit;
+         const auto Button=UI->FindAction(A)->TakeWidget();
 		 const FPointerEvent Pointer(0,FVector2D(10,10),FVector2D(10,10),TSet<FKey>(),EKeys::Invalid,0,FModifierKeysState());
 		 Button->OnMouseEnter(FGeometry::MakeRoot(FVector2D(722,127),FSlateLayoutTransform()),Pointer);
 		 TestTrue(TEXT("Real Slate mouse enter reaches button"),Button->IsHovered());
@@ -117,7 +153,7 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
         if(!Hover) Normal=Buffer;
         else {int32 Changed=0; for(int32 I=0;I<Buffer.Num();++I) if(Buffer[I]!=Normal[I]) ++Changed; TestTrue(TEXT("Hover visibly changes rendered contour"),Changed>30);}
         TArray64<uint8> PNG; FImageUtils::PNGCompressImageArray(Pixels.X,Pixels.Y,Buffer,PNG);
-		TestTrue(TEXT("Saved actual UE widget PNG"),FFileHelper::SaveArrayToFile(PNG,*FPaths::Combine(Folder,Hover ? (Interior ? TEXT("interior-hover.png") : TEXT("first-hover.png")) : (Interior ? TEXT("interior.png") : TEXT("first.png")))));
+		TestTrue(TEXT("Saved actual UE widget PNG"),FFileHelper::SaveArrayToFile(PNG,*FPaths::Combine(Folder,Pass>=4 ? *FString::Printf(TEXT("hover-%d.png"),Pass) : Hover ? (Interior ? TEXT("interior-hover.png") : TEXT("first-hover.png")) : (Interior ? TEXT("interior.png") : TEXT("first.png")))));
 		UI->ReleaseSlateResources(true);
 	}
 	BeginCleanup(Renderer); return true;

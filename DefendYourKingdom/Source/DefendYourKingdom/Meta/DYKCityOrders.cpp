@@ -111,3 +111,16 @@ bool DYKCityOrders::CancelWaiting(IDYKProfileService& Service,FGuid Command,FGui
 		S->Orders.RemoveAt(I); return Advance(P,Now);
 	});
 }
+
+bool DYKCityOrders::CancelCurrent(IDYKProfileService& Service,FGuid Command,FGuid Instance,FGuid Order,int64 Now)
+{
+ return Service.ApplyProfileCommand(Command,[=](auto& P)
+ {
+  if(!DYKCityResearch::Advance(P,Now)) return false;
+  auto* S=P.CityEconomy.Instances.FindByPredicate([Instance](const auto& Row){return Row.InstanceId==Instance;});
+  if(!S || S->Orders.IsEmpty() || S->Orders[0].OrderId!=Order) return false;
+  // Advance settles completed output first; a stale click cannot cancel its successor.
+  S->Orders.RemoveAt(0);
+  return Advance(P,Now);
+ });
+}

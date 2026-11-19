@@ -447,7 +447,8 @@ void UDYKCityWorkWidget::Dispatch(EDYKCityUIAction Action,int32 Index,FName Key)
 	case EDYKCityUIAction::Upgrade:
 		if(S) {const auto B=P->Buildings[S->BuildingIndex]; FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=State.Instance; R.BuildingId=FDYKBuildingId(State.Building); R.Kind=EDYKCityBuildingWorkKind::Upgrade; R.ExpectedLevel=B.Level; if(!DYKCityWork::Enqueue(*Save,R,Now)) Message=TEXT("Улучшение недоступно или не удалось сохранить.");} break;
 	case EDYKCityUIAction::CancelWork:
-		if(const auto* W=P->CityEconomy.Work.FindByPredicate([this](const auto& Work){return Work.InstanceId==State.Instance;})) {const auto WorkId=W->WorkId; if(!DYKCityWork::Cancel(*Save,FGuid::NewGuid(),WorkId,Now)) Message=TEXT("Не удалось отменить работу.");} break;
+		if(const auto* W=P->CityEconomy.Work.FindByPredicate([this](const auto& Work){return Work.InstanceId==State.Instance;})) {const auto WorkId=W->WorkId; if(!DYKCityWork::Cancel(*Save,FGuid::NewGuid(),WorkId,Now)) Message=TEXT("Не удалось отменить работу.");}
+        else if(ResourceScreen && S && !S->Orders.IsEmpty()) {const auto Order=S->Orders[0].OrderId; if(!DYKCityOrders::CancelCurrent(*Save,FGuid::NewGuid(),State.Instance,Order,Now)) Message=TEXT("Заказ уже завершён или не удалось сохранить отмену.");} break;
 	case EDYKCityUIAction::Collect:
 		if(!PendingCollect.IsValid()) PendingCollect=FGuid::NewGuid();
 		if(DYKCityEconomy::Collect(*Save,PendingCollect,State.Instance,Now)) PendingCollect.Invalidate(); else Message=TEXT("Сбор недоступен или не удалось сохранить."); break;
@@ -503,6 +504,7 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
 	V.Stored=Store.Stored; V.Capacity=Store.Capacity; V.Orders=S->Orders.Num(); V.bCanCollect=Store.Collectable>0;
 	if(!S->Orders.IsEmpty())
 	{
+        V.bCanCancel=true;
 		const auto& O=S->Orders[0]; V.bWorking=O.StartedAtUnix>0; V.Seconds=FMath::Max<int64>(0,O.CompletesAtUnix-Now);
 	}
 	if(const auto* W=P.CityEconomy.Work.FindByPredicate([this](const auto& Row){return Row.InstanceId==State.Instance;}))
@@ -510,7 +512,7 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
 	FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=State.Instance; R.Kind=EDYKCityBuildingWorkKind::Upgrade;
 	R.BuildingId=FDYKBuildingId(State.Building); R.ExpectedLevel=P.Buildings[S->BuildingIndex].Level;
 	FDYKCityBuildingWorkPlan Plan;
-	V.bCanUpgrade=!V.bCanCancel && DYKCityBuildingRules::Prepare(P,R,DYKCityTerritory::DEV_PLACEHOLDER(),DYKCityBuildingRules::DEV_PLACEHOLDER(),Plan);
+	V.bCanUpgrade= DYKCityBuildingRules::Prepare(P,R,DYKCityTerritory::DEV_PLACEHOLDER(),DYKCityBuildingRules::DEV_PLACEHOLDER(),Plan);
 	return V;
 }
 void UDYKCityWorkWidget::ResourceAction(EDYKResourceAction Action,int32 Index)
@@ -528,6 +530,7 @@ void UDYKCityWorkWidget::ResourceAction(EDYKResourceAction Action,int32 Index)
 	case EDYKResourceAction::Order: Dispatch(EDYKCityUIAction::Order,Index); break;
 	default: break;
 	}
+ if(ResourceScreen && !Message.IsEmpty()) ResourceScreen->SetFeedback(Message);
 }
 void UDYKCityWorkWidget::PositionResourceWindow()
 {

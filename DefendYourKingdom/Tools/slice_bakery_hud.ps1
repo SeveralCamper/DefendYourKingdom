@@ -88,6 +88,17 @@ try {
         Clear-Rect $card @(($bx-$x),392,225,77)
         $card.Save((Join-Path $taskParts "OfferLive$i.png"),[Drawing.Imaging.ImageFormat]::Png); $card.Dispose()
     }
+    # First recipe is not selected by default. Reuse an unselected author's frame.
+    $neutral=[Drawing.Bitmap]::new((Join-Path $taskParts 'OfferLive1.png'))
+    $g=[Drawing.Graphics]::FromImage($neutral)
+    $g.CompositingMode=[Drawing.Drawing2D.CompositingMode]::SourceCopy
+    $g.DrawImage($taskInterior,[Drawing.Rectangle]::new(11,20,222,165),240,266,222,165,[Drawing.GraphicsUnit]::Pixel)
+    $g.DrawImage($taskInterior,[Drawing.Rectangle]::new(18,259,210,121),247,505,210,121,[Drawing.GraphicsUnit]::Pixel)
+    $g.Dispose()
+    $neutral.Save((Join-Path $taskParts 'OfferLive0.png'),[Drawing.Imaging.ImageFormat]::Png); $neutral.Dispose()
+    # Remove the baked outer glow including the padding above the old selected frame.
+    for($y=232;$y -lt 747;$y++){for($x=210;$x -lt 483;$x++){$insideBase.SetPixel($x,$y,$taskInterior.GetPixel(484,$y))}}
+    ($taskRows | Where-Object name -eq 'Offer0').rect=@(229,246,248,494)
     Save-Part 'CloseInterior' $taskInterior @(1245,78,104,105) $true 'Close'
     Save-Part 'BackInterior' $taskInterior @(1254,185,93,91) $true 'Back'
     Clear-Rect $insideBase @(1245,78,104,105); Clear-Rect $insideBase @(1254,185,93,91)

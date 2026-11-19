@@ -11,5 +11,6 @@ namespace DYKCityOrders
 	DEFENDYOURKINGDOM_API bool Validate(const FDYKPlayerProfileSaveData& Profile);
 	DEFENDYOURKINGDOM_API bool Advance(FDYKPlayerProfileSaveData& Profile,int64 Now);
 	DEFENDYOURKINGDOM_API bool Enqueue(IDYKProfileService& Service,FGuid Command,FGuid Instance,int32 Recipe,int64 Now);
+	DEFENDYOURKINGDOM_API bool CancelCurrent(IDYKProfileService& Service,FGuid Command,FGuid Instance,FGuid Order,int64 Now);
 	DEFENDYOURKINGDOM_API bool CancelWaiting(IDYKProfileService& Service,FGuid Command,FGuid Instance,FGuid Order,int64 Now);
 }
