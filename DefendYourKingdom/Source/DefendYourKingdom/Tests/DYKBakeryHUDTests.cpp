@@ -60,7 +60,9 @@ bool FDYKBakeryGeometryTest::RunTest(const FString& Parameters)
 		TestNotNull(TEXT("Every part is a real extracted texture"),Part.Texture.Get());
 		TestFalse(TEXT("No duplicate layers or duplicate clickable buttons"),Keys.Contains(Part.Key)); Keys.Add(Part.Key);
 	}
-	const FVector2D Viewport(1920,1080),Size(440,550),Anchor(700,400);
+	const FVector2D Viewport(1920,1080),Size=UDYKResourceBuildingWidget::PopupSize(Viewport),Anchor(700,400);
+	TestTrue(TEXT("Popup is 15 percent larger"),Size.Equals(FVector2D(506,632.5)));
+	TestTrue(TEXT("Small viewport keeps popup inside"),UDYKResourceBuildingWidget::PopupSize({320,240}).Y<=224);
 	TestTrue(TEXT("First window centered on building"),UDYKResourceBuildingWidget::PopupPosition(Anchor,Viewport,Size)+Size*.5==Anchor);
 	TestTrue(TEXT("Screen edge clamped"),UDYKResourceBuildingWidget::PopupPosition({0,0},Viewport,Size)==FVector2D(8,8));
 	return true;
@@ -83,11 +85,20 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 	FAssetCompilingManager::Get().FinishAllCompilation();
 	const FString Folder=FPaths::Combine(FPaths::ProjectSavedDir(),TEXT("BakeryHUDReview")); IFileManager::Get().MakeDirectory(*Folder,true);
 	FWidgetRenderer* Renderer=new FWidgetRenderer(false);
-	for(const bool Interior:{false,true})
+	TArray<FColor> NormalFirst,NormalInterior;
+	for(int32 Pass=0;Pass<4;++Pass)
 	{
+		const bool Interior=(Pass%2)==1, Hover=Pass>=2;
 		TStrongObjectPtr<UDYKResourceBuildingWidget> UI(NewObject<UDYKResourceBuildingWidget>()); UI->Initialize(); UI->Configure(Definition,Interior);
 		const auto Slate=UI->TakeWidget(); FDYKResourceBuildingView View; View.Stored=2150; View.Capacity=2160; View.Orders=1; View.Seconds=3204; View.bWorking=true; View.bCanCollect=true; View.bCanUpgrade=true; View.bCanCancel=true; UI->UpdateView(View);
-		const FIntPoint Pixels=Interior ? FIntPoint(960,720) : FIntPoint(440,550);
+		const FIntPoint Pixels=Interior ? FIntPoint(960,720) : FIntPoint(506,633);
+		if(Hover)
+		{
+		 const auto Button=UI->FindAction(Interior ? EDYKResourceAction::Order : EDYKResourceAction::Visit)->TakeWidget();
+		 const FPointerEvent Pointer(0,FVector2D(10,10),FVector2D(10,10),TSet<FKey>(),EKeys::Invalid,0,FModifierKeysState());
+		 Button->OnMouseEnter(FGeometry::MakeRoot(FVector2D(722,127),FSlateLayoutTransform()),Pointer);
+		 TestTrue(TEXT("Real Slate mouse enter reaches button"),Button->IsHovered());
+		}
 		auto* Target=Renderer->DrawWidget(Slate,FVector2D(Pixels)); FlushRenderingCommands();
 		TArray<FColor> Buffer; FReadSurfaceDataFlags ReadFlags; ReadFlags.SetLinearToGamma(true);
 		if(!TestTrue(TEXT("Actual UMG render readback"),Target->GameThread_GetRenderTargetResource()->ReadPixels(Buffer,ReadFlags))) {BeginCleanup(Renderer); return false;}
@@ -99,11 +110,14 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 		{
 			// Unmodified parchment in the author reference is sRGB (243,192,139).
 			// Catch both missing and duplicated output gamma, with room for bilinear filtering.
-			const auto Paper=Buffer[471*Pixels.X+373];
+			const auto Paper=Buffer[FMath::RoundToInt(471.*Pixels.Y/550)*Pixels.X+FMath::RoundToInt(373.*Pixels.X/440)];
 			TestTrue(TEXT("Rendered source colors preserved"),FMath::Abs(int32(Paper.R)-243)<16 && FMath::Abs(int32(Paper.G)-192)<16 && FMath::Abs(int32(Paper.B)-139)<16);
 		}
-		TArray64<uint8> PNG; FImageUtils::PNGCompressImageArray(Pixels.X,Pixels.Y,Buffer,PNG);
-		TestTrue(TEXT("Saved actual UE widget PNG"),FFileHelper::SaveArrayToFile(PNG,*FPaths::Combine(Folder,Interior ? TEXT("interior.png") : TEXT("first.png"))));
+		auto& Normal=Interior ? NormalInterior : NormalFirst;
+        if(!Hover) Normal=Buffer;
+        else {int32 Changed=0; for(int32 I=0;I<Buffer.Num();++I) if(Buffer[I]!=Normal[I]) ++Changed; TestTrue(TEXT("Hover visibly changes rendered contour"),Changed>30);}
+        TArray64<uint8> PNG; FImageUtils::PNGCompressImageArray(Pixels.X,Pixels.Y,Buffer,PNG);
+		TestTrue(TEXT("Saved actual UE widget PNG"),FFileHelper::SaveArrayToFile(PNG,*FPaths::Combine(Folder,Hover ? (Interior ? TEXT("interior-hover.png") : TEXT("first-hover.png")) : (Interior ? TEXT("interior.png") : TEXT("first.png")))));
 		UI->ReleaseSlateResources(true);
 	}
 	BeginCleanup(Renderer); return true;

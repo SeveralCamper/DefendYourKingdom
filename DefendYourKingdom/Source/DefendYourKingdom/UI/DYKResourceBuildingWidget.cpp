@@ -8,6 +8,54 @@
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
 
+#include "Widgets/Input/SButton.h"
+#include "Rendering/DrawElements.h"
+#include "Components/ButtonSlot.h"
+
+namespace
+{
+// Paint-only feedback: preserve source artwork, layout and hit area.
+class SResourceButton final: public SButton
+{
+public:
+ bool bRound=false;
+ virtual int32 OnPaint(const FPaintArgs& Args,const FGeometry& Geometry,const FSlateRect& Culling,FSlateWindowElementList& Elements,int32 Layer,const FWidgetStyle& WidgetTint,bool ParentEnabled) const override
+ {
+  const int32 Top=SButton::OnPaint(Args,Geometry,Culling,Elements,Layer,WidgetTint,ParentEnabled);
+  if(!ParentEnabled || !IsEnabled() || !(IsHovered() || HasKeyboardFocus())) return Top;
+  const FVector2D Size=Geometry.GetLocalSize();
+  TArray<FVector2D> Points;
+  if(bRound)
+  {
+   const FVector2D Center=Size*.5;
+   for(int32 I=0;I<=48;++I) {const double A=2*PI*I/48.; Points.Add(Center+FVector2D(FMath::Cos(A)*Size.X*.43,FMath::Sin(A)*Size.Y*.43));}
+  }
+  else
+  {
+   const double Inset=7, Cut=FMath::Min(19.,Size.Y*.22);
+   Points={{Inset+Cut,Inset},{Size.X-Inset-Cut,Inset},{Size.X-Inset,Inset+Cut},{Size.X-Inset,Size.Y-Inset-Cut},{Size.X-Inset-Cut,Size.Y-Inset},{Inset+Cut,Size.Y-Inset},{Inset,Size.Y-Inset-Cut},{Inset,Inset+Cut},{Inset+Cut,Inset}};
+  }
+  const float Opacity=WidgetTint.GetColorAndOpacityTint().A;
+  for(int32 Band=0;Band<3;++Band)
+   FSlateDrawElement::MakeLines(Elements,Top+1,Geometry.ToPaintGeometry(),Points,ESlateDrawEffect::None,FLinearColor(1,.65f,.06f,Opacity*(Band==0?.10f:Band==1?.22f:.8f)),true,Band==0?12.f:Band==1?7.f:2.f);
+  return Top+1;
+ }
+};
+}
+TSharedRef<SWidget> UDYKResourceHUDButton::RebuildWidget()
+{
+ auto Native=SNew(SResourceButton)
+  .OnClicked(BIND_UOBJECT_DELEGATE(FOnClicked,SlateHandleClicked))
+  .OnPressed(BIND_UOBJECT_DELEGATE(FSimpleDelegate,SlateHandlePressed))
+  .OnReleased(BIND_UOBJECT_DELEGATE(FSimpleDelegate,SlateHandleReleased))
+  .OnHovered_UObject(this,&UDYKResourceHUDButton::SlateHandleHovered)
+  .OnUnhovered_UObject(this,&UDYKResourceHUDButton::SlateHandleUnhovered)
+  .ButtonStyle(&GetStyle()).ClickMethod(GetClickMethod()).TouchMethod(GetTouchMethod()).PressMethod(GetPressMethod()).IsFocusable(GetIsFocusable());
+ Native->bRound=Action==EDYKResourceAction::Close || Action==EDYKResourceAction::Back;
+ MyButton=Native;
+ if(GetChildrenCount()>0) CastChecked<UButtonSlot>(GetContentSlot())->BuildSlot(MyButton.ToSharedRef());
+ return Native;
+}
 UDYKResourceHUDDefinition* UDYKResourceBuildingWidget::FindDefinition(FName Building)
 {
 	const auto* Catalog=LoadObject<UDYKResourceHUDCatalog>(nullptr,TEXT("/Game/DefendYourKingdom/Art/ResourceHUD/Catalog.Catalog"));
@@ -40,7 +88,7 @@ void UDYKResourceBuildingWidget::Build()
 			auto* Button=WidgetTree->ConstructWidget<UDYKResourceHUDButton>(); Button->Screen=this; Button->Action=Part.Action; Button->Index=Part.Index; Button->Generation=Generation;
 			const auto Brush=DYKCityHUDArt::TextureBrush(Part.Texture);
 			FButtonStyle Style; Style.SetNormal(Brush); Style.SetHovered(Brush); Style.SetPressed(Brush); Style.SetDisabled(Brush);
-			// Preserve the author's button pixels in every state; enabled state governs input.
+			// Source pixels stay unchanged; SResourceButton adds hover/focus contour feedback.
 			Style.SetNormalPadding(FMargin(0)); Style.SetPressedPadding(FMargin(0));
 			Button->SetStyle(Style); Button->OnClicked.AddDynamic(Button,&UDYKResourceHUDButton::Invoke);
 			DYKCityHUDArt::Place(Canvas,Button,Part.Position,Part.Size); Buttons.Add(Button);
@@ -92,4 +140,11 @@ void UDYKResourceBuildingWidget::Activate(EDYKResourceAction Action,int32 Index,
 FVector2D UDYKResourceBuildingWidget::PopupPosition(FVector2D Anchor,FVector2D Viewport,FVector2D Popup)
 {
 	return {FMath::Clamp(Anchor.X-Popup.X*.5,8.,FMath::Max(8.,Viewport.X-Popup.X-8)),FMath::Clamp(Anchor.Y-Popup.Y*.5,8.,FMath::Max(8.,Viewport.Y-Popup.Y-8))};
+}
+
+FVector2D UDYKResourceBuildingWidget::PopupSize(FVector2D Viewport)
+{
+ const FVector2D Preferred(506,632.5); // 15% larger than 440 x 550; source aspect preserved.
+ const double Scale=FMath::Clamp(FMath::Min((Viewport.X-16)/Preferred.X,(Viewport.Y-16)/Preferred.Y),0.,1.);
+ return Preferred*Scale;
 }

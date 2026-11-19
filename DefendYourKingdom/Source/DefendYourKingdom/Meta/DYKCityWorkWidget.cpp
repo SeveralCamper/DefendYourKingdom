@@ -540,8 +540,7 @@ void UDYKCityWorkWidget::PositionResourceWindow()
 	}
 	FVector2D Viewport=UWidgetLayoutLibrary::GetViewportSize(this)/FMath::Max(.01f,UWidgetLayoutLibrary::GetViewportScale(this));
 	if(Viewport.X<=0 || Viewport.Y<=0) Viewport={1920,1080};
-	const double Scale=FMath::Min(1.,FMath::Min((Viewport.X-16)/440.,(Viewport.Y-16)/550.));
-	const FVector2D Popup=FVector2D(440,550)*Scale;
+	const FVector2D Popup=UDYKResourceBuildingWidget::PopupSize(Viewport);
 	FVector2D Anchor=Viewport*.5;
 	for(TActorIterator<ADYKCityBuildingActor> It(GetWorld());It;++It) if(It->InstanceId==State.Instance)
 	{
