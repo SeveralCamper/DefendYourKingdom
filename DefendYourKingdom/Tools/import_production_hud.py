@@ -31,6 +31,9 @@ if not asset:
 asset.set_editor_property('building_id','None');asset.set_editor_property('production_template',True);asset.set_editor_property('first_only',False)
 asset.set_editor_property('first_size',u.Vector2D(1122,1402));asset.set_editor_property('interior_size',u.Vector2D(1448,1086));asset.set_editor_property('resource_icon',None)
 asset.set_editor_property('primary_illustrations',illustrations)
+# Leave clearance above the stats frame and below the title banner.
+asset.set_editor_property('primary_illustration_position',u.Vector2D(277,257))
+asset.set_editor_property('primary_illustration_size',u.Vector2D(568,405))
 parts=[]
 def part(key,rect,inside=False,action=u.DYKResourceAction.NONE,index=0,texture=None,outline=(),disabled=None):
  x,y,w,h=rect
@@ -73,11 +76,10 @@ for i,x in enumerate((236,498,757,1016)):
       texture=textures['OrderNormal'],outline=bevel(x+4,650,x+218,711,16,16),disabled=textures['OrderDisabled'])
 asset.set_editor_property('parts',parts)
 slots=[]
-cream=(1,.91,.70,1);yellow=(1,.82,.04,1);ink=(.18,.085,.025,1);green=(.4,.8,.025,1)
+cream=(1,.91,.70,1);yellow=(1,.82,.04,1);green=(.4,.8,.025,1)
 def label(field,rect,font=28,inside=False,index=0,color=cream):
  slot=u.DYKProductionTextSlot();slot.set_editor_property('field',getattr(u.DYKProductionField,field));slot.set_editor_property('position',u.Vector2D(*rect[:2]));slot.set_editor_property('size',u.Vector2D(*rect[2:]));slot.set_editor_property('font_size',font);slot.set_editor_property('interior',inside);slot.set_editor_property('index',index);slot.set_editor_property('color',u.LinearColor(*color));slots.append(slot)
 label('BUILDING_NAME',(325,135,490,90),64)
-label('DESCRIPTION',(235,570,650,76),28,color=ink)
 label('STORED',(341,688,110,58),34,color=yellow)
 label('QUEUE',(629,688,90,58),32,color=yellow)
 label('WORK_TIME',(759,688,197,58),30,color=yellow)

@@ -46,3 +46,5 @@ Task-42: по запросу автора удалено постоянное с
 ## Иллюстрации ресурсных зданий — Task-48
 
 Файлы BakeryIcon.png, SawmillIcon.png, QuarryIcon.png и ForgeIcon.png взяты из авторской папки concept-arts/HUD. Копии исходников сохранены в SourceArt/CityHUD/ProductionTemplate/Illustrations. Изображения используются с исходной прозрачностью и пропорциями.
+
+Task-49: BakeryIcon.png и SawmillIcon.png заменены вложениями aa0ca723-ffda-461b-9160-e8574bde18d7 и ca8bfc22-4d9d-4264-bf61-4a2b60ceb63c с исходной прозрачностью.
