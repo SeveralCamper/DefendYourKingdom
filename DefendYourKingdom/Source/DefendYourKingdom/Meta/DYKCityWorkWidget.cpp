@@ -28,6 +28,18 @@ namespace
 	FText CityText(const FString& Value) {return FText::FromString(Value);}
 	const FDYKCityProductionSaveData* ScreenInstance(const FDYKPlayerProfileSaveData& P,FGuid Id)
 	{return P.CityEconomy.Instances.FindByPredicate([Id](const auto& S){return S.InstanceId==Id;});}
+	const FDYKCityResearchWorkSaveData* BuildingResearch(const FDYKPlayerProfileSaveData& P,FName Building)
+	{
+		const FDYKCityResearchWorkSaveData* Waiting=nullptr;
+		for(const auto& Work:P.CityEconomy.ResearchQueue)
+		{
+			const auto* Definition=DYKCityResearch::Find(Work.ResearchId);
+			if(!Definition || Definition->Building!=Building) continue;
+			if(Work.StartedAtUnix>0) return &Work;
+			if(!Waiting) Waiting=&Work;
+		}
+		return Waiting;
+	}
 	FString CityDuration(int64 Seconds)
 	{
 		Seconds=FMath::Max<int64>(0,Seconds);
@@ -134,7 +146,7 @@ void UDYKCityWorkWidget::Refresh()
 	if(Revision!=Save->GetRevision()) City->SyncLayoutVisuals();
 	DevelopmentButton->SetIsEnabled(!City->GetLayoutEditor().IsActive());
 	// Do not rebuild live buttons every second: retain pointer capture, focus and mouse-up.
-	if(Revision!=Save->GetRevision() && State.IsModal()) RebuildModal();
+	if(Revision!=Save->GetRevision() && State.IsModal() && !ResourceScreen) RebuildModal();
 	if(ResourceScreen) if(const auto* Current=Save->GetProfileSnapshot()) ResourceScreen->UpdateView(ResourceView(*Current));
 	if(LiveStatus)
 	{
@@ -165,7 +177,7 @@ void UDYKCityWorkWidget::RebuildModal()
 	if(!State.IsModal()) return;
 	const auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
 	const auto* P=Save ? Save->GetProfileSnapshot() : nullptr; if(!P) return;
-	if(auto* Content=UDYKResourceBuildingWidget::FindDefinition(State.Building); Content && (State.Window==EDYKCityWindow::Building || State.Window==EDYKCityWindow::Interior))
+	if(auto* Content=UDYKResourceBuildingWidget::FindDefinition(State.Building); Content && (State.Window==EDYKCityWindow::Building || (State.Window==EDYKCityWindow::Interior && !Content->bFirstOnly)))
 	{
 		const bool Inside=State.Window==EDYKCityWindow::Interior;
 		const FVector2D Pixels=Inside ? Content->InteriorSize : Content->FirstSize;
@@ -414,6 +426,14 @@ void UDYKCityWorkWidget::Dispatch(EDYKCityUIAction Action,int32 Index,FName Key)
 		if(S) {const auto B=P->Buildings[S->BuildingIndex]; FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=State.Instance; R.BuildingId=FDYKBuildingId(State.Building); R.Kind=EDYKCityBuildingWorkKind::Upgrade; R.ExpectedLevel=B.Level; if(!DYKCityWork::Enqueue(*Save,R,Now)) Message=TEXT("Улучшение недоступно или не удалось сохранить.");} break;
 	case EDYKCityUIAction::CancelWork:
 		if(const auto* W=P->CityEconomy.Work.FindByPredicate([this](const auto& Work){return Work.InstanceId==State.Instance;})) {const auto WorkId=W->WorkId; if(!DYKCityWork::Cancel(*Save,FGuid::NewGuid(),WorkId,Now)) Message=TEXT("Не удалось отменить работу.");}
+        else if(ResourceScreen && ResourceScreen->Definition && ResourceScreen->Definition->bFirstOnly)
+        {
+         if(const auto* Research=BuildingResearch(*P,State.Building))
+         {
+          const FGuid Id=Research->WorkId;
+          if(!DYKCityResearch::Cancel(*Save,FGuid::NewGuid(),Id,Now)) Message=TEXT("Не удалось отменить исследование.");
+         }
+        }
         else if(ResourceScreen && S && !S->Orders.IsEmpty()) {const auto Order=S->Orders[0].OrderId; if(!DYKCityOrders::CancelCurrent(*Save,FGuid::NewGuid(),State.Instance,Order,Now)) Message=TEXT("Заказ уже завершён или не удалось сохранить отмену.");} break;
 	case EDYKCityUIAction::Collect:
 		if(!PendingCollect.IsValid()) PendingCollect=FGuid::NewGuid();
@@ -465,8 +485,6 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
 	FDYKResourceBuildingView V; V.Instance=State.Instance;
 	const auto* S=ScreenInstance(P,State.Instance); if(!S) return V;
 	const auto& OwnedBuilding=P.Buildings[S->BuildingIndex];
-	if(ResourceScreen && ResourceScreen->Definition && !ResourceScreen->IsInterior())
-		V.Illustration=ResourceScreen->Definition->PrimaryIllustrations.FindRef(OwnedBuilding.BuildingId.Name).Get();
     const auto* BuildingData=DYKCityCatalog::Find(OwnedBuilding.BuildingId);
     if(BuildingData)
     {
@@ -500,9 +518,29 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
         V.bCanCancel=true;
 		const auto& O=S->Orders[0]; V.bWorking=O.StartedAtUnix>0; V.Seconds=FMath::Max<int64>(0,O.CompletesAtUnix-Now);
 	}
-	if(const auto* W=P.CityEconomy.Work.FindByPredicate([this](const auto& Row){return Row.InstanceId==State.Instance;}))
-	{V.bCanCancel=true; V.bWorking=W->StartedAtUnix>0; V.Seconds=FMath::Max<int64>(0,W->CompletesAtUnix-Now);}
-	FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=State.Instance; R.Kind=EDYKCityBuildingWorkKind::Upgrade;
+	const auto* BuildingWork=P.CityEconomy.Work.FindByPredicate([this](const auto& Row){return Row.InstanceId==State.Instance;});
+	if(BuildingWork)
+	{
+		V.bCanCancel=true;
+		V.bWorking=BuildingWork->StartedAtUnix>0;
+		V.Seconds=FMath::Max<int64>(0,BuildingWork->CompletesAtUnix-Now);
+		V.WorkName=CityText(BuildingWork->bUpgrade ? TEXT("Улучшение здания") : TEXT("Строительство"));
+		V.Process=V.WorkName.ToString()+TEXT("\n")+(V.bWorking ? CityDuration(V.Seconds) : TEXT("Ожидает строителя или ресурсов"));
+	}
+	if(ResourceScreen && ResourceScreen->Definition && ResourceScreen->Definition->bFirstOnly)
+	{
+		if(const auto* Research=BuildingResearch(P,State.Building); Research && !BuildingWork)
+		{
+			V.bCanCancel=true;
+			V.bWorking=Research->StartedAtUnix>0;
+			V.Seconds=FMath::Max<int64>(0,Research->CompletesAtUnix-Now);
+			V.WorkName=CityText(DYKCityResearch::Find(Research->ResearchId)->DisplayName);
+			V.Process=V.WorkName.ToString()+TEXT("\n")+(V.bWorking ? CityDuration(V.Seconds) : TEXT("Ожидает ячейку"));
+		}
+		if(V.WorkName.IsEmpty()) V.WorkName=CityText(TEXT("Нет активного улучшения"));
+		V.WorkTime=CityText(V.bWorking ? CityDuration(V.Seconds) : V.bCanCancel ? TEXT("Ожидает") : TEXT("—"));
+	}
+    FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=State.Instance; R.Kind=EDYKCityBuildingWorkKind::Upgrade;
 	R.BuildingId=FDYKBuildingId(State.Building); R.ExpectedLevel=P.Buildings[S->BuildingIndex].Level;
 	FDYKCityBuildingWorkPlan Plan;
 	V.bCanUpgrade= DYKCityBuildingRules::Prepare(P,R,DYKCityTerritory::DEV_PLACEHOLDER(),DYKCityBuildingRules::DEV_PLACEHOLDER(),Plan);
@@ -536,7 +574,7 @@ void UDYKCityWorkWidget::PositionResourceWindow()
 	}
 	FVector2D Viewport=UWidgetLayoutLibrary::GetViewportSize(this)/FMath::Max(.01f,UWidgetLayoutLibrary::GetViewportScale(this));
 	if(Viewport.X<=0 || Viewport.Y<=0) Viewport={1920,1080};
-	const FVector2D Popup=UDYKResourceBuildingWidget::PopupSize(Viewport);
+	const FVector2D Popup=UDYKResourceBuildingWidget::PopupSize(Viewport,ResourceScreen->Definition->FirstSize);
 	FVector2D Anchor=Viewport*.5;
 	for(TActorIterator<ADYKCityBuildingActor> It(GetWorld());It;++It) if(It->InstanceId==State.Instance)
 	{

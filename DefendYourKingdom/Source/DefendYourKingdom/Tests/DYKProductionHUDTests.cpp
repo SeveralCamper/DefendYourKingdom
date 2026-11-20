@@ -88,13 +88,7 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
   UI->CloseClicked();UI->OpenBuilding(Instance,Def.Id.GetName());
   if(!TestNotNull(TEXT("Shared widget"),UI->ResourceScreen.Get()))continue;
   const auto& View=UI->ResourceScreen->GetView();
-  const auto* Picture=Cast<UImage>(UI->ResourceScreen->WidgetTree->FindWidget(TEXT("PrimaryIllustration")));
-  const auto& Illustration=Shared->PrimaryIllustrations.FindRef(Def.Id.GetName());
-  if(TestNotNull(TEXT("Producer has a configured illustration"),Illustration.Get()) &&
-     TestNotNull(TEXT("Primary window shows its illustration"),Picture))
-  {
-   TestTrue(TEXT("Primary window uses the selected producer's artwork"),Picture->GetBrush().GetResourceObject()==Illustration.Get());
-  }
+  TestNull(TEXT("Compact popup has no illustration slot"),UI->ResourceScreen->WidgetTree->FindWidget(TEXT("PrimaryIllustration")));
   TestEqual(TEXT("Title is building data"),View.BuildingName.ToString(),FString(Def.DisplayName));
   TestEqual(TEXT("Product is building data"),View.ResourceName.ToString(),FString(Def.ProductName));
   const auto* Cancel=UI->ResourceScreen->FindAction(EDYKResourceAction::CancelWork);
@@ -103,7 +97,6 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
   TestTrue(TEXT("Visit remains actionable"),UI->ResourceScreen->FindAction(EDYKResourceAction::Visit)->GetIsEnabled());
   Press(UI->ResourceScreen->FindAction(EDYKResourceAction::Visit));
   TestTrue(TEXT("Visit opens shared interior"),UI->ResourceScreen && UI->ResourceScreen->IsInterior());
-  TestNull(TEXT("Interior has no primary illustration"),UI->ResourceScreen->WidgetTree->FindWidget(TEXT("PrimaryIllustration")));
   const auto* Images=Shared->InteriorIllustrations.Find(Def.Id.GetName());
   if(TestNotNull(TEXT("Producer has a configured recipe artwork set"),Images))
   {
@@ -151,6 +144,94 @@ bool FDYKProductionSharedTest::RunTest(const FString& Parameters)
  TestEqual(TEXT("Every recipe has its own material illustration"),RecipeArtwork.Num(),16);
  UI->ReleaseSlateResources(true);return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKLiveBuildingPopupTest,"DYK.ProductionHUD.LiveQueueAndMilitaryStatus",ProductionFlags)
+bool FDYKLiveBuildingPopupTest::RunTest(const FString& Parameters)
+{
+ TStrongObjectPtr<UGameInstance> GI(NewObject<UGameInstance>(GEngine));GI->Init();
+ UWorld* World=UWorld::CreateWorld(EWorldType::Game,false);World->SetGameInstance(GI.Get());
+ struct FCleanup{UWorld* W;UGameInstance* G;~FCleanup(){W->DestroyWorld(false);G->Shutdown();}} Cleanup{World,GI.Get()};
+ FURL URL;URL.AddOption(TEXT("game=/Script/DefendYourKingdom.DYKCityGameMode"));if(!World->SetGameMode(URL))return false;
+ auto* Save=GI->GetSubsystem<UDYKSaveSubsystem>();
+ TStrongObjectPtr<UDYKCityWorkWidget> UI(NewObject<UDYKCityWorkWidget>(World));UI->Initialize();const auto Root=UI->TakeWidget();
+ const auto Recipe=DYKCityOrders::DEV_PLACEHOLDER()[0];
+ const int64 Start=FDateTime::UtcNow().ToUnixTimestamp()-Recipe.Seconds-2;
+ if(!TestTrue(TEXT("Seed profile before first order completion"),Save->ApplyProfileCommand(FGuid::NewGuid(),[Start](auto& P)
+ {
+  return DYKCityHUDTest::Seed(P,Start);
+ }))) return false;
+ const auto Bakery=DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-MILL"));
+ for(int32 Index=0;Index<DYKCityOrders::QueueCapacity;++Index)
+  if(!TestTrue(TEXT("Queue identical orders"),DYKCityOrders::Enqueue(*Save,FGuid::NewGuid(),Bakery,0,Start)))return false;
+ const auto FindBakery=[&]() -> const FDYKCityProductionSaveData&
+ {
+  return *Save->GetProfileSnapshot()->CityEconomy.Instances.FindByPredicate([Bakery](const auto& Row){return Row.InstanceId==Bakery;});
+ };
+ const int64 StoredBefore=FindBakery().Stored;
+ UI->OpenBuilding(Bakery,TEXT("CITY-MILL"));
+ UI->Dispatch(EDYKCityUIAction::Visit);
+ const auto* Interior=UI->ResourceScreen.Get();
+ if(!TestNotNull(TEXT("Production interior"),Interior))return false;
+ const auto CheckQueue=[&](int32 Completed)
+ {
+  const int32 Remaining=DYKCityOrders::QueueCapacity-Completed;
+  const FString Expected=FString::Printf(TEXT("%d / %d"),Remaining,DYKCityOrders::QueueCapacity);
+  TestEqual(TEXT("Saved queue removes each completed order"),FindBakery().Orders.Num(),Remaining);
+  TestEqual(TEXT("Output is credited once to building storage"),FindBakery().Stored,StoredBefore+Completed*Recipe.Amount);
+  if(const auto* Label=UI->ResourceScreen->FindField(EDYKProductionField::Queue);TestNotNull(TEXT("Visible queue label"),Label))
+   TestEqual(TEXT("HUD shows the same count as the saved queue"),Label->GetText().ToString(),Expected);
+  for(int32 Index=0;Index<DYKCityOrders::DEV_PLACEHOLDER().Num();++Index)
+   TestEqual(TEXT("Order availability follows queue capacity"),UI->ResourceScreen->FindAction(EDYKResourceAction::Order,Index)->GetIsEnabled(),Completed>0);
+ };
+ CheckQueue(0);
+ UI->Refresh();
+ TestTrue(TEXT("Timed completion keeps the interior open"),UI->ResourceScreen==Interior);
+ CheckQueue(1);
+ for(int32 Completed=2;Completed<=DYKCityOrders::QueueCapacity;++Completed)
+ {
+  TestTrue(TEXT("Advance to next completion deadline"),DYKCityWork::Update(*Save,Start+Recipe.Seconds*Completed));
+  UI->Refresh();
+  CheckQueue(Completed);
+ }
+ UI->Dispatch(EDYKCityUIAction::Back);
+ if(const auto* Queue=UI->ResourceScreen->FindField(EDYKProductionField::Queue);TestNotNull(TEXT("Primary queue label"),Queue))
+  TestEqual(TEXT("Primary popup shows the same empty queue"),Queue->GetText().ToString(),FString(TEXT("0 / 3")));
+ UI->CloseClicked();
+
+ const int64 ResearchStart=FDateTime::UtcNow().ToUnixTimestamp();
+ if(!TestTrue(TEXT("Seed profile for military popups"),Save->ApplyProfileCommand(FGuid::NewGuid(),[ResearchStart](auto& P)
+ {
+  return DYKCityHUDTest::Seed(P,ResearchStart);
+ }))) return false;
+ const FName Trap(TEXT("RESEARCH-TRAP-SPIKES-L1")),Unit(TEXT("RESEARCH-INFANTRY-T2"));
+ TestTrue(TEXT("Start workshop research"),DYKCityResearch::Enqueue(*Save,FGuid::NewGuid(),Trap,ResearchStart));
+ TestTrue(TEXT("Queue barracks research"),DYKCityResearch::Enqueue(*Save,FGuid::NewGuid(),Unit,ResearchStart));
+ const auto* Military=UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-WORKSHOP"));
+ if(!TestNotNull(TEXT("Shared compact military asset"),Military))return false;
+ for(const auto Type:{TEXT("CITY-WORKSHOP"),TEXT("CITY-BARRACKS"),TEXT("CITY-WIZARD-TOWER")})
+ {
+  UI->OpenBuilding(DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),Type),Type);
+  const auto* Popup=UI->ResourceScreen.Get();
+  if(!TestNotNull(TEXT("Military popup"),Popup))return false;
+  TestTrue(TEXT("Military buildings share the same popup layout"),Popup->Definition==Military && !Popup->IsInterior());
+  if(const auto* Name=Popup->FindField(EDYKProductionField::WorkName);TestNotNull(TEXT("Improvement name label"),Name))
+  {
+   const auto* Research=FName(Type)==TEXT("CITY-WORKSHOP") ? DYKCityResearch::Find(Trap)
+    : FName(Type)==TEXT("CITY-BARRACKS") ? DYKCityResearch::Find(Unit) : nullptr;
+   TestEqual(TEXT("Popup shows the selected building's own improvement"),Name->GetText().ToString(),
+    Research ? Research->DisplayName : FString(TEXT("Нет активного улучшения")));
+  }
+  if(const auto* Time=Popup->FindField(EDYKProductionField::WorkTime);TestNotNull(TEXT("Improvement time label"),Time))
+   TestEqual(TEXT("Idle and waiting research have explicit statuses"),Time->GetText().ToString(),
+    FName(Type)==TEXT("CITY-WORKSHOP") ? FString::Printf(TEXT("%lld с"),Popup->GetView().Seconds)
+     : FName(Type)==TEXT("CITY-BARRACKS") ? FString(TEXT("Ожидает")) : FString(TEXT("—")));
+  TestFalse(TEXT("Military buildings have no resources to collect"),Popup->FindAction(EDYKResourceAction::Collect)->GetIsEnabled());
+  UI->CloseClicked();
+ }
+ UI->ReleaseSlateResources(true);
+ return true;
+}
+
 #if WITH_EDITOR
 #include "Slate/WidgetRenderer.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -191,7 +272,6 @@ bool FDYKProductionRenderTest::RunTest(const FString& Parameters)
   {
    TStrongObjectPtr<UDYKResourceBuildingWidget> UI(NewObject<UDYKResourceBuildingWidget>());UI->Initialize();UI->Configure(Definition,Interior);
    const auto Slate=UI->TakeWidget();FDYKResourceBuildingView View;
-   View.Illustration=Definition->PrimaryIllustrations.FindRef(Def.Id.GetName()).Get();
    View.BuildingName=FText::FromString(Def.DisplayName);View.ResourceName=FText::FromString(Def.ProductName);
    View.Description=FText::FromString(TEXT("Производство: ")+View.ResourceName.ToString()+TEXT(".\nЗаказы выполняются по очереди."));
    const auto* Images=Definition->InteriorIllustrations.Find(Def.Id.GetName());
@@ -205,7 +285,7 @@ bool FDYKProductionRenderTest::RunTest(const FString& Parameters)
    View.Stored=15;View.Orders=1;View.Seconds=3204;View.bWorking=true;
    View.bCanCollect=View.bCanCancel=View.bCanUpgrade=true;
    UI->UpdateView(View);
-   const FIntPoint Pixels=Interior?FIntPoint(960,720):FIntPoint(506,633);
+   const FIntPoint Pixels=Interior?FIntPoint(960,720):FIntPoint(506,443);
    const FString Prefix=Def.Id.GetName().ToString()+(Interior?TEXT("-interior"):TEXT("-first"));
    const auto Normal=Draw(Slate,Pixels,Prefix);
    if(Interior)

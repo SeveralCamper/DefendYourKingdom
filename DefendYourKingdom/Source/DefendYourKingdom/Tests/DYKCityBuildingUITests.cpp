@@ -101,7 +101,10 @@ bool FDYKCityNativeWindowsTest::RunTest(const FString& Parameters)
 	UI->OpenBuilding(FGuid::NewGuid(),TEXT("CITY-WORKSHOP")); TestFalse(TEXT("Unknown ownership cannot open a forged building"),UI->GetWindowState().IsModal());
 	const auto Workshop=DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-WORKSHOP"));
 	UI->OpenBuilding(Workshop,TEXT("CITY-WORKSHOP"));
-	UI->FindAction(EDYKCityUIAction::Visit)->OnClicked.Broadcast();
+	if(!TestNotNull(TEXT("Workshop primary popup"),UI->ResourceScreen.Get())) return false;
+	auto* Visit=UI->ResourceScreen->FindAction(EDYKResourceAction::Visit);
+	if(!TestNotNull(TEXT("Primary popup visit action"),Visit)) return false;
+	Visit->OnClicked.Broadcast();
 	TestTrue(TEXT("Visit opens owner's list"),UI->GetWindowState().Window==EDYKCityWindow::Interior);
 	const FGeometry Geometry=FGeometry::MakeRoot(FVector2D(310,225),FSlateLayoutTransform());
 	const FKeyEvent Space(EKeys::SpaceBar,FModifierKeysState(),0,false,0,0);

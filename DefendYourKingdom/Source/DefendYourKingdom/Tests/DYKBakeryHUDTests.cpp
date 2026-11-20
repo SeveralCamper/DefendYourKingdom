@@ -84,9 +84,9 @@ bool FDYKBakeryGeometryTest::RunTest(const FString& Parameters)
 		else TestNull(TEXT("Buttons use transparent hit areas over the intact base"),Part.Texture.Get());
 		TestFalse(TEXT("No duplicate layers or duplicate clickable buttons"),Keys.Contains(Part.Key)); Keys.Add(Part.Key);
 	}
-	const FVector2D Viewport(1920,1080),Size=UDYKResourceBuildingWidget::PopupSize(Viewport),Anchor(700,400);
-	TestTrue(TEXT("Popup is 15 percent larger"),Size.Equals(FVector2D(506,632.5)));
-	TestTrue(TEXT("Small viewport keeps popup inside"),UDYKResourceBuildingWidget::PopupSize({320,240}).Y<=224);
+	const FVector2D Viewport(1920,1080),Size=UDYKResourceBuildingWidget::PopupSize(Viewport,Def->FirstSize),Anchor(700,400);
+	TestTrue(TEXT("Compact popup preserves the authored aspect ratio"),FMath::IsNearlyEqual(Size.Y,506*1056./1206));
+	TestTrue(TEXT("Small viewport keeps popup inside"),UDYKResourceBuildingWidget::PopupSize({320,240},Def->FirstSize).Y<=224);
 	TestTrue(TEXT("First window centered on building"),UDYKResourceBuildingWidget::PopupPosition(Anchor,Viewport,Size)+Size*.5==Anchor);
 	TestTrue(TEXT("Screen edge clamped"),UDYKResourceBuildingWidget::PopupPosition({0,0},Viewport,Size)==FVector2D(8,8));
 	return true;
@@ -137,7 +137,7 @@ bool FDYKBakeryRenderTest::RunTest(const FString& Parameters)
 		const bool Interior=(Pass%2)==1, Hover=Pass>=2;
 		TStrongObjectPtr<UDYKResourceBuildingWidget> UI(NewObject<UDYKResourceBuildingWidget>()); UI->Initialize(); UI->Configure(Definition,Interior);
 		const auto Slate=UI->TakeWidget(); FDYKResourceBuildingView View; View.BuildingName=FText::FromString(TEXT("Пекарня")); View.ResourceName=FText::FromString(TEXT("Хлеб")); View.Description=FText::FromString(TEXT("Производство: Хлеб.\nЗаказы выполняются по очереди.")); for(const auto& Recipe:DYKCityOrders::DEV_PLACEHOLDER()) View.Recipes.Add({Recipe.Amount,Recipe.Seconds}); View.Stored=2150; View.Capacity=2160; View.Orders=1; View.Seconds=3204; View.bWorking=true; View.bCanCollect=Pass!=4; View.bCanUpgrade=Pass!=6; View.bCanCancel=Pass!=8; if(Pass==3) View.bCanOrder=false; UI->UpdateView(View);
-		const FIntPoint Pixels=Interior ? FIntPoint(960,720) : FIntPoint(506,633);
+		const FIntPoint Pixels=Interior ? FIntPoint(960,720) : FIntPoint(506,443);
 		if(Hover)
 		{
 		 const EDYKResourceAction A=Pass==4 ? EDYKResourceAction::Collect : Pass==6 ? EDYKResourceAction::Upgrade : Pass==8 ? EDYKResourceAction::CancelWork : Pass==5 || Pass==7 || Pass==9 ? EDYKResourceAction::Back : Interior ? EDYKResourceAction::Order : EDYKResourceAction::Visit;

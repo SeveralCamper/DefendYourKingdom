@@ -14,6 +14,7 @@
 
 #include "DYKHUDButtonSlate.h"
 #include "../Meta/DYKCityCatalog.h"
+#include "../Meta/DYKCityBuildingUI.h"
 
 namespace
 {
@@ -46,7 +47,7 @@ TSharedRef<SWidget> UDYKResourceHUDButton::RebuildWidget()
  Native->bRound=Action==EDYKResourceAction::Close || Action==EDYKResourceAction::Back;
  if(Action==EDYKResourceAction::Back) Native->CircleCenter={.5,37./91.};
  Native->HoverOutline=HoverOutline;
- if(!bActionAvailable && (!Screen || !Screen->Definition || !Screen->Definition->bProductionTemplate))
+ if(!bActionAvailable && (!Screen || !Screen->Definition || !Screen->Definition->UsesAuthoredLayout()))
   Native->HighlightColor=FLinearColor(.65f,.68f,.72f,1);
  MyButton=Native;
  if(GetChildrenCount()>0) CastChecked<UButtonSlot>(GetContentSlot())->BuildSlot(MyButton.ToSharedRef());
@@ -57,6 +58,14 @@ UDYKResourceHUDDefinition* UDYKResourceBuildingWidget::FindDefinition(FName Buil
 	if(const auto* BuildingData=DYKCityCatalog::Find(FDYKBuildingId(Building).ToContentId());
     BuildingData && BuildingData->Category==EDYKCityBuildingCategory::Production)
   return LoadObject<UDYKResourceHUDDefinition>(nullptr,TEXT("/Game/DefendYourKingdom/Art/ResourceHUD/ProductionTemplate.ProductionTemplate"));
+ switch(DYKCityBuildingUI::Interior(Building))
+ {
+ case EDYKCityInterior::Workshop:
+ case EDYKCityInterior::Barracks:
+ case EDYKCityInterior::Magic:
+  return LoadObject<UDYKResourceHUDDefinition>(nullptr,TEXT("/Game/DefendYourKingdom/Art/ResourceHUD/MilitaryPopup.MilitaryPopup"));
+ default: break;
+ }
  const auto* Catalog=LoadObject<UDYKResourceHUDCatalog>(nullptr,TEXT("/Game/DefendYourKingdom/Art/ResourceHUD/Catalog.Catalog"));
 	if(Catalog) for(const auto& Soft:Catalog->Definitions) if(auto* Content=Soft.LoadSynchronous();Content && Content->bFirstOnly && !Content->bProductionTemplate && Content->BuildingId==Building) return Content;
 	return nullptr;
@@ -76,7 +85,6 @@ TSharedRef<SWidget> UDYKResourceBuildingWidget::RebuildWidget()
 void UDYKResourceBuildingWidget::Build()
 {
 	++Generation; Buttons.Reset(); Canvas->ClearChildren(); ProcessText=nullptr; WorkText=nullptr; Feedback=nullptr;
-	PrimaryIllustration=nullptr;
 	RecipeIllustrations.Reset();
  ProductionLabels.Reset(); ProductionSlots.Reset();
 	if(!Definition) return;
@@ -92,7 +100,7 @@ void UDYKResourceBuildingWidget::Build()
 			auto Brush=DYKCityHUDArt::TextureBrush(Part.Texture);
             if(!Part.Texture) Brush.DrawAs=ESlateBrushDrawType::NoDrawType;
 			FButtonStyle Style; Style.SetNormal(Brush); Style.SetHovered(Brush); Style.SetPressed(Brush); Style.SetDisabled(Brush);
-			if(Definition->bProductionTemplate)
+			if(Definition->UsesAuthoredLayout())
 			{
 				auto Disabled=DYKCityHUDArt::TextureBrush(Part.UnavailableTexture);
 				// Controls without a disabled variant keep their original artwork.
@@ -105,7 +113,7 @@ void UDYKResourceBuildingWidget::Build()
 			DYKCityHUDArt::Place(Canvas,Button,Part.Position,Part.Size); Buttons.Add(Button);
 		}
 	}
-	if(Definition->bProductionTemplate)
+	if(Definition->UsesAuthoredLayout())
     {
      if(bInterior)
      {
@@ -116,15 +124,6 @@ void UDYKResourceBuildingWidget::Build()
        DYKCityHUDArt::Place(Canvas,Image,ArtworkSlot.Position,ArtworkSlot.Size);
        RecipeIllustrations.Add(Image);
       }
-     }
-     else
-     {
-      auto* Fit=WidgetTree->ConstructWidget<UScaleBox>();
-      Fit->SetStretch(EStretch::ScaleToFit);
-      Fit->SetVisibility(ESlateVisibility::HitTestInvisible);
-      PrimaryIllustration=WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(),TEXT("PrimaryIllustration"));
-      Fit->AddChild(PrimaryIllustration);
-      DYKCityHUDArt::Place(Canvas,Fit,Definition->PrimaryIllustrationPosition,Definition->PrimaryIllustrationSize);
      }
      BuildProductionLabels();
      UpdateView(View);
@@ -144,10 +143,8 @@ void UDYKResourceBuildingWidget::Build()
 void UDYKResourceBuildingWidget::UpdateView(const FDYKResourceBuildingView& Value)
 {
 	View=Value;
-    if(Definition && Definition->bProductionTemplate)
+    if(Definition && Definition->UsesAuthoredLayout())
     {
-     if(PrimaryIllustration)
-      SetIllustration(*PrimaryIllustration,View.Illustration.Get());
      for(int32 Index=0;Index<RecipeIllustrations.Num();++Index)
      {
       const auto* Recipe=View.Recipes.IsValidIndex(Index) ? &View.Recipes[Index] : nullptr;
@@ -181,7 +178,7 @@ void UDYKResourceBuildingWidget::UpdateButtons()
 		default: break;
 		}
 
-        if(Definition->bProductionTemplate)
+        if(Definition->UsesAuthoredLayout())
         {
             Button->SetAvailability(Enabled,FString());
             continue;
@@ -210,9 +207,9 @@ FVector2D UDYKResourceBuildingWidget::PopupPosition(FVector2D Anchor,FVector2D V
 	return {FMath::Clamp(Anchor.X-Popup.X*.5,8.,FMath::Max(8.,Viewport.X-Popup.X-8)),FMath::Clamp(Anchor.Y-Popup.Y*.5,8.,FMath::Max(8.,Viewport.Y-Popup.Y-8))};
 }
 
-FVector2D UDYKResourceBuildingWidget::PopupSize(FVector2D Viewport)
+FVector2D UDYKResourceBuildingWidget::PopupSize(FVector2D Viewport,FVector2D DesignSize)
 {
- const FVector2D Preferred(506,632.5); // 15% larger than 440 x 550; source aspect preserved.
+ const FVector2D Preferred(506,506*DesignSize.Y/DesignSize.X);
  const double Scale=FMath::Clamp(FMath::Min((Viewport.X-16)/Preferred.X,(Viewport.Y-16)/Preferred.Y),0.,1.);
  return Preferred*Scale;
 }
@@ -223,7 +220,7 @@ void UDYKResourceBuildingWidget::SetFeedback(const FString& Text)
 void UDYKResourceHUDButton::SetAvailability(bool Available,const FString& Reason)
 {
  bActionAvailable=Available;
- if(Screen && Screen->Definition && Screen->Definition->bProductionTemplate)
+ if(Screen && Screen->Definition && Screen->Definition->UsesAuthoredLayout())
  {
   SetIsEnabled(Available);
   return;
@@ -265,7 +262,8 @@ FText UDYKResourceBuildingWidget::ProductionText(const FDYKProductionTextSlot& T
  case EDYKProductionField::ProductName:return View.ResourceName;
  case EDYKProductionField::Stored:return FText::AsNumber(View.Stored,&FNumberFormattingOptions::DefaultNoGrouping());
  case EDYKProductionField::Queue:return FText::FromString(FString::Printf(TEXT("%d / %d"),View.Orders,View.QueueCapacity));
- case EDYKProductionField::WorkTime:return FText::FromString(FormatWorkTime(View.bWorking ? View.Seconds : 0));
+ case EDYKProductionField::WorkTime:return View.WorkTime.IsEmpty() ? FText::FromString(FormatWorkTime(View.bWorking ? View.Seconds : 0)) : View.WorkTime;
+ case EDYKProductionField::WorkName:return View.WorkName;
  case EDYKProductionField::RecipeAmount:return Recipe ? FText::AsNumber(Recipe->Amount,&FNumberFormattingOptions::DefaultNoGrouping()) : FText::GetEmpty();
  case EDYKProductionField::RecipeDuration:return Recipe ? FText::FromString(RecipeDuration(Recipe->Seconds)) : FText::GetEmpty();
  case EDYKProductionField::Speed:return FText::FromString(FString::Printf(TEXT("%+d%%"),View.SpeedPercent));

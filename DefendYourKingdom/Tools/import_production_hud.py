@@ -1,4 +1,4 @@
-"""One immutable two-window production template, with transparent controls and data slots."""
+"""Import the shared production windows and the compact military popup."""
 from pathlib import Path
 from math import cos, pi, sin
 import unreal as u
@@ -18,30 +18,28 @@ def import_ui_texture(name, folder, destination):
  return texture
 
 textures={name:import_ui_texture(name,source,dest) for name in
-          ('FirstBase','InteriorBase','CollectDisabled','UpgradeDisabled','CancelWorkDisabled','OrderNormal','OrderDisabled')}
+          ('InteriorBase','OrderNormal','OrderDisabled')}
 producers={'CITY-MILL':'Bakery','CITY-SAWMILL':'Sawmill','CITY-QUARRY':'Quarry','CITY-FORGE':'Forge'}
 recipe_positions=(235,497,757,1017)
-illustrations={}
 recipe_illustrations={}
 for building,name in producers.items():
- illustrations[building]=import_ui_texture(name+'Icon',source/'Illustrations',dest+'/Illustrations')
  recipe_images=u.DYKProductionRecipeImages()
  recipe_images.set_editor_property('images',[
   import_ui_texture(f'{name}_{index:02}',source/'RecipeArt',dest+'/RecipeArt')
   for index in range(1,len(recipe_positions)+1)
  ])
  recipe_illustrations[building]=recipe_images
-path='/Game/DefendYourKingdom/Art/ResourceHUD/ProductionTemplate'
-asset=u.load_asset(path) if u.EditorAssetLibrary.does_asset_exist(path) else None
-if not asset:
+def definition(name):
+ folder='/Game/DefendYourKingdom/Art/ResourceHUD'
+ path=folder+'/'+name
+ if u.EditorAssetLibrary.does_asset_exist(path):
+  return u.load_asset(path)
  factory=u.DataAssetFactory();factory.set_editor_property('data_asset_class',u.load_class(None,'/Script/DefendYourKingdom.DYKResourceHUDDefinition'))
- asset=u.AssetToolsHelpers.get_asset_tools().create_asset('ProductionTemplate','/Game/DefendYourKingdom/Art/ResourceHUD',None,factory)
+ return u.AssetToolsHelpers.get_asset_tools().create_asset(name,folder,None,factory)
+
+asset=definition('ProductionTemplate')
 asset.set_editor_property('building_id','None');asset.set_editor_property('production_template',True);asset.set_editor_property('first_only',False)
-asset.set_editor_property('first_size',u.Vector2D(1122,1402));asset.set_editor_property('interior_size',u.Vector2D(1448,1086));asset.set_editor_property('resource_icon',None)
-asset.set_editor_property('primary_illustrations',illustrations)
-# Leave clearance above the stats frame and below the title banner.
-asset.set_editor_property('primary_illustration_position',u.Vector2D(277,257))
-asset.set_editor_property('primary_illustration_size',u.Vector2D(568,405))
+asset.set_editor_property('first_size',u.Vector2D(1206,1056));asset.set_editor_property('interior_size',u.Vector2D(1448,1086));asset.set_editor_property('resource_icon',None)
 recipe_slots=[]
 for x in recipe_positions:
  slot=u.DYKProductionIllustrationSlot()
@@ -75,16 +73,26 @@ def ellipse(cx,cy,rx,ry):
  angles=[2*pi*i/64 for i in range(24,91)]
  return [(cx+rx*cos(angle),cy+ry*sin(angle)) for angle in angles]
 
-part('FirstBase',(0,0,1122,1402),texture=textures['FirstBase']);part('InteriorBase',(0,0,1448,1086),True,texture=textures['InteriorBase'])
-for key,rect,action,outline in [
- ('CloseFirst',(966,84,143,145),u.DYKResourceAction.CLOSE,ellipse(1035,155,59,59)),
- ('Collect',(210,770,705,141),u.DYKResourceAction.COLLECT,bevel(225,782,898,892,32,27)),
- ('Visit',(205,913,714,124),u.DYKResourceAction.VISIT,bevel(211,918,909,1028,35,27)),
- ('Upgrade',(157,1043,404,107),u.DYKResourceAction.UPGRADE,bevel(173,1055,550,1132,18,17)),
- ('CancelWork',(562,1043,403,107),u.DYKResourceAction.CANCEL_WORK,bevel(575,1055,951,1132,18,17)),
- ('Rotate',(179,1152,376,88),u.DYKResourceAction.ROTATE,bevel(185,1156,545,1232,18,17)),
- ('Move',(567,1152,391,88),u.DYKResourceAction.MOVE,bevel(575,1156,941,1232,18,17))]:
- part(key,rect,action=action,outline=outline,disabled=textures.get(key+'Disabled'))
+def compact_texture(name):
+ return import_ui_texture(name,source/'Compact',dest+'/Compact')
+
+def popup_parts(kind,width):
+ part('FirstBase',(0,0,width,1056),texture=compact_texture(kind+'Base'))
+ part('CloseFirst',(1033,105,139,134),action=u.DYKResourceAction.CLOSE,outline=ellipse(1102,172,62,62))
+ for key,rect,action,corner,has_gray in [
+  ('Collect',(227,412,753,134),u.DYKResourceAction.COLLECT,(40,33),True),
+  ('Visit',(216,555,779,127),u.DYKResourceAction.VISIT,(36,32),False),
+  ('Upgrade',(174,701,422,88),u.DYKResourceAction.UPGRADE,(23,22),True),
+  ('CancelWork',(613,701,422,88),u.DYKResourceAction.CANCEL_WORK,(23,22),True),
+  ('Rotate',(179,803,416,92),u.DYKResourceAction.ROTATE,(22,22),False),
+  ('Move',(613,803,417,92),u.DYKResourceAction.MOVE,(22,22),False),
+ ]:
+  x,y,w,h=rect
+  part(key,rect,action=action,outline=bevel(x+3,y+3,x+w-5,y+h-5,*corner),
+       disabled=compact_texture(kind+key+'Disabled') if has_gray else None)
+
+popup_parts('Production',1206)
+part('InteriorBase',(0,0,1448,1086),True,texture=textures['InteriorBase'])
 part('CloseInterior',(1256,78,108,100),True,u.DYKResourceAction.CLOSE,outline=ellipse(1307,128,47,47))
 part('Back',(1265,180,96,91),True,u.DYKResourceAction.BACK,outline=ellipse(1309,224,43,42))
 for i,x in enumerate((236,498,757,1016)):
@@ -95,10 +103,13 @@ slots=[]
 cream=(1,.91,.70,1);yellow=(1,.82,.04,1);green=(.4,.8,.025,1)
 def label(field,rect,font=28,inside=False,index=0,color=cream):
  slot=u.DYKProductionTextSlot();slot.set_editor_property('field',getattr(u.DYKProductionField,field));slot.set_editor_property('position',u.Vector2D(*rect[:2]));slot.set_editor_property('size',u.Vector2D(*rect[2:]));slot.set_editor_property('font_size',font);slot.set_editor_property('interior',inside);slot.set_editor_property('index',index);slot.set_editor_property('color',u.LinearColor(*color));slots.append(slot)
-label('BUILDING_NAME',(325,135,490,90),64)
-label('STORED',(341,688,110,58),34,color=yellow)
-label('QUEUE',(629,688,90,58),32,color=yellow)
-label('WORK_TIME',(759,688,197,58),30,color=yellow)
+def popup_labels():
+ label('BUILDING_NAME',(335,146,540,83),56)
+ label('WORK_TIME',(808,317,210,60),33,color=yellow)
+
+popup_labels()
+label('STORED',(366,317,105,60),36,color=yellow)
+label('QUEUE',(665,317,92,60),36,color=yellow)
 label('BUILDING_NAME',(420,102,600,88),54,True)
 for i in range(4):
  label('PRODUCT_NAME',(240+260*i,445,220,46),30,True,i)
@@ -110,4 +121,18 @@ for i in range(3):label('QUEUE_SLOT',(1036+66*i,823,50,48),27,True,i,yellow)
 asset.set_editor_property('text_slots',slots)
 if not u.EditorAssetLibrary.save_loaded_asset(asset):
  raise RuntimeError('Could not save ProductionTemplate')
-print('PRODUCTION_TEMPLATE_IMPORTED: one shared template with authored disabled states')
+
+military=definition('MilitaryPopup')
+military.set_editor_property('production_template',False)
+military.set_editor_property('first_only',True)
+military.set_editor_property('first_size',u.Vector2D(1205,1056))
+parts.clear()
+popup_parts('Military',1205)
+military.set_editor_property('parts',parts)
+slots.clear()
+popup_labels()
+label('WORK_NAME',(201,317,561,60),39)
+military.set_editor_property('text_slots',slots)
+if not u.EditorAssetLibrary.save_loaded_asset(military):
+ raise RuntimeError('Could not save MilitaryPopup')
+print('PRODUCTION_TEMPLATE_IMPORTED: compact production and military popups')

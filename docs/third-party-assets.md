@@ -52,3 +52,7 @@ Task-49: BakeryIcon.png и SawmillIcon.png заменены вложениями
 ## Иллюстрации заказов — Task-50
 
 Из авторских `BakeryEnterenceHUD.png`, `SawmillEnterenceHUD.png`, `QuarryEnterenceHUD.png` и `ForgeEnterenceHUD.png` в `concept-arts/HUD` извлечены только области с материалами. Скрипт `prepare_production_recipe_art.ps1` смягчает края в пределах фона иллюстрации. Полученные PNG находятся в `SourceArt/CityHUD/ProductionTemplate/RecipeArt`.
+
+## Компактные карточки зданий — Task-51
+
+Авторские вложения 3ff4bff2-86eb-4fc4-a882-869f77415579 и adc38d1c-5b62-49d9-a277-b084f5e40aef сохранены в SourceArt/CityHUD/ProductionTemplate/Compact. Скрипт подготовки обрезает прозрачные поля, очищает образцы текста и создаёт серые состояния из тех же контуров кнопок.

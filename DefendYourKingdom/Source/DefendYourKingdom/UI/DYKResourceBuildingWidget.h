@@ -28,7 +28,7 @@ struct FDYKResourceHUDPart
 // Shared layout fields; the values come from a building view, never from an ID branch.
 UENUM(BlueprintType)
 enum class EDYKProductionField:uint8
-{BuildingName,Description,Stored,Queue,WorkTime,ProductName,RecipeAmount,RecipeDuration,Speed,QueueSlot};
+{BuildingName,Description,Stored,Queue,WorkTime,ProductName,RecipeAmount,RecipeDuration,Speed,QueueSlot,WorkName};
 USTRUCT(BlueprintType)
 struct FDYKProductionTextSlot
 {
@@ -63,14 +63,12 @@ public:
  // A single immutable template serves every Production entry in the city catalogue.
  UPROPERTY(EditAnywhere) bool bProductionTemplate=false;
  UPROPERTY(EditAnywhere) TArray<FDYKProductionTextSlot> TextSlots;
-	UPROPERTY(EditAnywhere) TMap<FName, TObjectPtr<UTexture2D>> PrimaryIllustrations;
-	UPROPERTY(EditAnywhere) FVector2D PrimaryIllustrationPosition{272, 262};
-	UPROPERTY(EditAnywhere) FVector2D PrimaryIllustrationSize{578, 294};
 	UPROPERTY(EditAnywhere) TArray<FDYKProductionIllustrationSlot> InteriorIllustrationSlots;
 	UPROPERTY(EditAnywhere) TMap<FName, FDYKProductionRecipeImages> InteriorIllustrations;
  UPROPERTY(EditAnywhere) FText DisplayName;
  UPROPERTY(EditAnywhere) FText Description;
  UPROPERTY(EditAnywhere) bool bFirstOnly=false;
+ bool UsesAuthoredLayout() const {return bProductionTemplate || !TextSlots.IsEmpty();}
 	UPROPERTY(EditAnywhere) TArray<FDYKResourceHUDPart> Parts;
 	UPROPERTY(EditAnywhere) FVector2D FirstSize=FVector2D(1122,1402);
 	UPROPERTY(EditAnywhere) FVector2D InteriorSize=FVector2D(1448,1086);
@@ -92,7 +90,6 @@ struct FDYKProductionRecipeView
 struct FDYKResourceBuildingView
 {
 	FGuid Instance;
-	TWeakObjectPtr<UTexture2D> Illustration;
  FText BuildingName;
  FText ResourceName;
  FText Description;
@@ -102,6 +99,8 @@ struct FDYKResourceBuildingView
  bool bCanOrder=true;
  int32 Level=1;
  FString Process;
+ FText WorkName;
+ FText WorkTime;
 	int64 Stored=0;
 	int64 Capacity=0;
 	int32 Orders=0;
@@ -145,7 +144,7 @@ public:
 	void Activate(EDYKResourceAction Action,int32 Index,int32 ExpectedGeneration);
 	void Deactivate() {++Generation; OnAction.Clear();}
 	UDYKResourceHUDButton* FindAction(EDYKResourceAction Action,int32 Index=0) const;
-	static FVector2D PopupSize(FVector2D Viewport);
+	static FVector2D PopupSize(FVector2D Viewport,FVector2D DesignSize);
 	static FVector2D PopupPosition(FVector2D Anchor,FVector2D Viewport,FVector2D Popup);
 	FDYKResourceActionEvent OnAction;
 	const FDYKResourceBuildingView& GetView() const {return View;}
@@ -165,7 +164,6 @@ private:
 	bool bInterior=false;
 	int32 Generation=0;
 	UPROPERTY() TObjectPtr<UCanvasPanel> Canvas;
-	UPROPERTY() TObjectPtr<UImage> PrimaryIllustration;
 	UPROPERTY() TArray<TObjectPtr<UImage>> RecipeIllustrations;
 	UPROPERTY() TObjectPtr<UTextBlock> Feedback;
  UPROPERTY() TObjectPtr<UTextBlock> ProcessText;
