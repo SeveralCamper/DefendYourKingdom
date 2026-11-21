@@ -7,17 +7,19 @@
 #include "Brushes/SlateNoResource.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
 
 namespace
 {
-	const FVector2D BoardSize(1448,1086);
+	const FVector2D AtlasSize(1448,1086);
+	const FVector2D BoardSize(1448,1170);
 	const FLinearColor Gold(1.f,.82f,.12f);
 
 	FBox2D AtlasRegion(FVector2D Start,FVector2D Size)
 	{
-		return {Start/BoardSize,(Start+Size)/BoardSize};
+		return {Start/AtlasSize,(Start+Size)/AtlasSize};
 	}
 
 	struct FUpgradeRow
@@ -25,7 +27,6 @@ namespace
 		int32 FDYKResearchBonus::* Stat;
 		int32 BaseValue;
 		double Y;
-		double Height;
 	};
 
 	const FDYKCityResearchWorkSaveData* QueuedResearch(const FDYKPlayerProfileSaveData& Profile,FName Research)
@@ -36,12 +37,6 @@ namespace
 		});
 	}
 
-	FText ResearchButtonText(const FDYKResearchDefinition& Research,const FDYKCityResearchWorkSaveData* Job)
-	{
-		if(Job) return NSLOCTEXT("DYKCity","CancelUnitUpgrade","Отменить");
-		return Research.Unlock.IsValid() ? NSLOCTEXT("DYKCity","LearnUnit","Изучить бойца")
-			: NSLOCTEXT("DYKCity","ImproveUnitStat","Улучшить");
-	}
 }
 
 void UDYKCityActionButton::BindHoverContent(UWidget* Content)
@@ -71,9 +66,10 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 	auto* Parts=LoadObject<UTexture2D>(nullptr,TEXT("/Game/DefendYourKingdom/Art/CityHUD/UnitUpgrade/UnitUpgradeParts.UnitUpgradeParts"));
 	if(!Base || !Parts) return false;
 
+	DesignSize->SetHeightOverride(BoardSize.Y);
 	if(auto* Layout=Cast<UCanvasPanelSlot>(ModalRoot->Slot))
 	{
-		Layout->SetAnchors(FAnchors(.125f,.125f,.875f,.875f));
+		Layout->SetAnchors(FAnchors(.125f,.096f,.875f,.904f));
 		Layout->SetOffsets(FMargin(0));
 	}
 	DYKCityHUDArt::Texture(WidgetTree,DesignCanvas,Base,{0,0},BoardSize);
@@ -97,10 +93,6 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		else if(!DYKCityHUDArt::Illustration(WidgetTree,DesignCanvas,Item.Key,{251,238},{344,251}))
 			DYKCityHUDArt::Image(WidgetTree,DesignCanvas,Item.Art,Item.ImageRegion,{251,238},{344,251});
 	}
-	auto* Description=Label(FText::FromString(Locked ? TEXT("Сначала изучите предыдущую ступень.") : Item.Description),
-		{662,244},{554,167},35,false);
-	Description->SetWrapTextAt(540);
-
 	for(const auto Action:{EDYKCityUIAction::Close,EDYKCityUIAction::Back})
 	{
 		const bool Close=Action==EDYKCityUIAction::Close;
@@ -145,34 +137,41 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 	const auto ResearchAction=[&](const FDYKResearchDefinition* Research,int32 Index,FVector2D Pos,FVector2D Size,const FText& Caption)
 	{
 		const auto* Job=Research ? QueuedResearch(Profile,Research->Id) : nullptr;
-		const bool Available=Research && (Job || DYKCityResearch::CanEnqueue(Profile,Research->Id));
-		const FName Key=Job ? FName(*Job->WorkId.ToString()) : Research ? Research->Id : NAME_None;
-		auto* Button=ActionButton(Job ? EDYKCityUIAction::CancelResearch : EDYKCityUIAction::Research,Index,
+		const bool Available=Research && !Job && DYKCityResearch::CanEnqueue(Profile,Research->Id);
+		const FName Key=Research ? Research->Id : NAME_None;
+		auto* Button=ActionButton(EDYKCityUIAction::Research,Index,
 			FText::GetEmpty(),Pos,Size,Key,Available,true);
 		FButtonStyle Style;
-		const auto Brush=DYKCityHUDArt::TextureBrush(Parts,Index<3 ? AtlasRegion(Pos,Size) : AtlasRegion({762,529},{264,62}));
+		const auto Brush=DYKCityHUDArt::TextureBrush(Parts,AtlasRegion({762,529},{264,62}));
 		auto Muted=Brush;
 		Muted.TintColor=FLinearColor(.60f,.63f,.55f);
 		Style.SetNormal(Available ? Brush : Muted).SetHovered(Available ? Brush : Muted).SetPressed(Muted).SetDisabled(Muted);
 		Style.SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
 		Button->SetStyle(Style);
 		Button->bHoverOnly=!Available;
-		Button->SetIsEnabled(Research!=nullptr);
+		Button->SetIsEnabled(Research && !Job);
 		if(Research && !Job && !Research->Costs.IsEmpty()) BindCost(Button,*Research);
-		Label(Job ? ResearchButtonText(*Research,Job) : Caption,Pos+FVector2D(Size.X*.29,2),{Size.X*.67,Size.Y-4},30);
+		Label(Job ? NSLOCTEXT("DYKCity","UnavailableWhileQueued","Недоступно") : Caption,
+			Pos+FVector2D(Size.X*.29,2),{Size.X*.67,Size.Y-4},30);
 	};
 
 	const auto Options=Locked ? TArray<FName>() : ResearchOptions(Profile,Item);
 	const auto& Definitions=DYKCityResearch::DEV_PLACEHOLDER().Definitions;
 	const auto Personal=DYKCityResearch::Bonus(Profile,*Unit,EDYKResearchScope::Type);
 	const FUpgradeRow Rows[]={
-		{&FDYKResearchBonus::Damage,Unit->Base.Attack.DamagePerHit.Value,529,62},
-		{&FDYKResearchBonus::HP,Unit->Base.MaxHP.Value,622,62},
-		{&FDYKResearchBonus::PhysicalArmor,Unit->Base.PhysicalArmor.Value,722,70}};
+		{&FDYKResearchBonus::Damage,Unit->Base.Attack.DamagePerHit.Value,529},
+		{&FDYKResearchBonus::HP,Unit->Base.MaxHP.Value,622},
+		{&FDYKResearchBonus::PhysicalArmor,Unit->Base.PhysicalArmor.Value,729}};
+	const FVector2D UpgradeSize(264,62),CellSize(58,56);
 	TSet<FName> StatResearch;
 	for(int32 Index=0;Index<UE_ARRAY_COUNT(Rows);++Index)
 	{
 		const auto& Row=Rows[Index];
+		for(int32 CellIndex=0;CellIndex<3;++CellIndex)
+		{
+			const FVector2D Cell(1054+61*CellIndex,Row.Y+3);
+			Picture(DesignCanvas,{1113,532},CellSize,Cell,CellSize);
+		}
 		const FDYKResearchDefinition* Next=nullptr;
 		int32 Stage=0;
 		for(const auto& Research:Definitions)
@@ -184,9 +183,9 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 			{
 				const FVector2D Cell(1054+61*Stage,Row.Y+3);
 				if(Profile.CityEconomy.CompletedResearch.Contains(Research.Id))
-					Picture(DesignCanvas,{1054,532},{58,56},Cell,{58,56});
+					Picture(DesignCanvas,{1054,532},CellSize,Cell,CellSize);
 				else if(QueuedResearch(Profile,Research.Id))
-					Label(NSLOCTEXT("DYKCity","QueuedUpgradeSlot","…"),Cell,{58,56},32)->SetColorAndOpacity(Gold);
+					Label(NSLOCTEXT("DYKCity","QueuedUpgradeSlot","…"),Cell,CellSize,32)->SetColorAndOpacity(Gold);
 			}
 			++Stage;
 		}
@@ -200,7 +199,7 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		const int32 Current=Row.BaseValue+Personal.*Row.Stat;
 		DrawStat(Current,Next ? Next->Bonus.*Row.Stat : 0,Index==2 ? 609. : 565.,Index==2 ? 716. : Row.Y+9);
 		if(Index==2) DrawStat(Unit->Base.MagicalArmor.Value,0,609,756);
-		ResearchAction(Next,Index,{762,Row.Y},{264,Row.Height},
+		ResearchAction(Next,Index,{762,Row.Y},UpgradeSize,
 			Next ? NSLOCTEXT("DYKCity","ImproveUnitStat","Улучшить") : NSLOCTEXT("DYKCity","UnitUpgradeUnavailable","Недоступно"));
 	}
 	for(const FName Key:Options)
@@ -208,9 +207,31 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		if(StatResearch.Contains(Key)) continue;
 		const auto* Research=DYKCityResearch::Find(Key);
 		if(!Research) continue;
-		Label(FText::FromString(Research->DisplayName),{648,418},{305,46},28,false);
-		ResearchAction(Research,3,{951,421},{276,44},ResearchButtonText(*Research,nullptr));
+		ResearchAction(Research,3,{951,421},{276,44},Research->Unlock.IsValid()
+			? NSLOCTEXT("DYKCity","LearnUnit","Изучить бойца") : NSLOCTEXT("DYKCity","ImproveUnitStat","Улучшить"));
 		break;
+	}
+	const FDYKCityResearchWorkSaveData* DisplayedJob=nullptr;
+	for(const auto& Work:Profile.CityEconomy.ResearchQueue)
+	{
+		if(!Options.Contains(Work.ResearchId)) continue;
+		if(Work.StartedAtUnix>0 || !DisplayedJob) DisplayedJob=&Work;
+		if(Work.StartedAtUnix>0) break;
+	}
+	if(DisplayedJob)
+	{
+		auto* Cancel=ActionButton(EDYKCityUIAction::CancelResearch,0,FText::GetEmpty(),{333,1019},{365,76},
+			FName(*DisplayedJob->WorkId.ToString()),true,true);
+		const auto Normal=DYKCityHUDArt::TextureBrush(Parts,AtlasRegion({0,0},{422,88}));
+		auto Hover=Normal;
+		Hover.TintColor=FLinearColor(1.25f,1.13f,.9f);
+		FButtonStyle Style;
+		Style.SetNormal(Normal).SetHovered(Hover).SetPressed(Hover).SetDisabled(Normal);
+		Style.SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
+		Cancel->SetStyle(Style);
+		Cancel->SetToolTipText(NSLOCTEXT("DYKCity","CancelUnitUpgrade","Отменить работу"));
+		LiveResearch=DisplayedJob->ResearchId;
+		LiveStatus=Label(ResearchTimerText(Profile,*DisplayedJob,FDateTime::UtcNow().ToUnixTimestamp()),{717,1027},{397,60},32,false);
 	}
 	return true;
 }

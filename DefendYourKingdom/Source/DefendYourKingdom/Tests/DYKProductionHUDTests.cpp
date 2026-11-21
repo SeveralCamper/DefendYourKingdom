@@ -226,8 +226,10 @@ bool FDYKLiveBuildingPopupTest::RunTest(const FString& Parameters)
   {
    const auto* Research=FName(Type)==TEXT("CITY-WORKSHOP") ? DYKCityResearch::Find(Trap)
     : FName(Type)==TEXT("CITY-BARRACKS") ? DYKCityResearch::Find(Unit) : nullptr;
+   FString Expected=Research ? Research->DisplayName : FString(TEXT("Нет активного улучшения"));
+   if(FName(Type)==TEXT("CITY-BARRACKS")) Expected+=TEXT(" · не хватает ресурсов");
    TestEqual(TEXT("Popup shows the selected building's own improvement"),Name->GetText().ToString(),
-    Research ? Research->DisplayName : FString(TEXT("Нет активного улучшения")));
+    Expected);
   }
   if(const auto* Time=Popup->FindField(EDYKProductionField::WorkTime);TestNotNull(TEXT("Improvement time label"),Time))
    TestEqual(TEXT("Active research shows time left and queued research shows its duration"),Time->GetText().ToString(),

@@ -80,10 +80,14 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 	const auto* Peasant=DYKUnitCatalog::Find(FDYKUnitTypeId(TEXT("DYK-PEASANT")).ToContentId());
 	TestEqual(TEXT("Base attack comes from the peasant definition"),TextAt({565,538}),FString::FromInt(Peasant->Base.Attack.DamagePerHit.Value));
 	TestEqual(TEXT("Base HP comes from the peasant definition"),TextAt({565,631}),FString::FromInt(Peasant->Base.MaxHP.Value));
+	TestTrue(TEXT("Description and rank caption areas are empty"),TextAt({662,244}).IsEmpty() && TextAt({648,418}).IsEmpty());
 	SelectUnit(1);
 	const auto* Damage=UI->FindAction(EDYKCityUIAction::Research,0);
 	const auto* Armor=UI->FindAction(EDYKCityUIAction::Research,2);
 	if(!TestNotNull(TEXT("Independent attack research"),Damage) || !TestNotNull(TEXT("Independent armor research"),Armor))return false;
+	TestTrue(TEXT("Armor uses the same button dimensions as attack and health"),
+		CastChecked<UCanvasPanelSlot>(Damage->Slot)->GetSize()==CastChecked<UCanvasPanelSlot>(Armor->Slot)->GetSize()
+		&& CastChecked<UCanvasPanelSlot>(Armor->Slot)->GetSize()==CastChecked<UCanvasPanelSlot>(UI->FindAction(EDYKCityUIAction::Research,1)->Slot)->GetSize());
 	TestEqual(TEXT("Attack uses the selected unit's research"),Damage->Key,FName(TEXT("RESEARCH-INFANTRY-T2-DAMAGE-1")));
 	TestEqual(TEXT("Armor uses a different research"),Armor->Key,FName(TEXT("RESEARCH-INFANTRY-T2-ARMOR-1")));
 	TestTrue(TEXT("Prices start hidden"),VisibleCost().IsEmpty());
@@ -108,6 +112,9 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		[DamageKey](const auto& Work){return Work.ResearchId==DamageKey;}));
 	if(auto* Cancel=UI->FindAction(EDYKCityUIAction::CancelResearch,0);TestNotNull(TEXT("Queued attack can be cancelled independently"),Cancel))
 	{
+		const auto* CancelSlot=CastChecked<UCanvasPanelSlot>(Cancel->Slot);
+		TestTrue(TEXT("Cancel is taller than upgrade controls and sits below the resources"),
+			CancelSlot->GetPosition().Y>1000. && CancelSlot->GetSize().Y>62.);
 		const auto Native=Cancel->TakeWidget();
 		Native->OnMouseEnter(Geometry,Pointer);
 		TestTrue(TEXT("Cancel does not reveal any prices"),VisibleCost().IsEmpty());
@@ -115,6 +122,18 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		Native->OnMouseLeave(Pointer);
 	}
 	TestEqual(TEXT("Queued stage has its own marker"),TextAt({1054,532}),FString(TEXT("…")));
+	TestTrue(TEXT("An active improvement shows a running timer next to cancel"),TextAt({717,1027}).StartsWith(TEXT("Осталось:")));
+	if(!TestTrue(TEXT("Move the paid research close to its deadline"),Save->ApplyProfileCommand(FGuid::NewGuid(),[DamageKey](auto& Profile)
+	{
+		auto* Job=Profile.CityEconomy.ResearchQueue.FindByPredicate([DamageKey](const auto& Work){return Work.ResearchId==DamageKey;});
+		if(!Job || Job->StartedAtUnix<=0) return false;
+		Job->CompletesAtUnix=FDateTime::UtcNow().ToUnixTimestamp()+5;
+		return Job->CompletesAtUnix>Job->StartedAtUnix;
+	}))) return false;
+	UI->Refresh();
+	const FString Timer=TextAt({717,1027});
+	TestTrue(TEXT("The open detail HUD refreshes the remaining seconds"),Timer.StartsWith(TEXT("Осталось: ")) &&
+		FCString::Atoi(*Timer.RightChop(FString(TEXT("Осталось: ")).Len()))<=5);
 	if(!TestTrue(TEXT("Complete the queued attack"),DYKCityWork::Update(*Save,FDateTime::UtcNow().ToUnixTimestamp()+60)))return false;
 	SelectUnit(1);
 	TestFalse(TEXT("Next stat was actually shown"),Preview.IsEmpty());

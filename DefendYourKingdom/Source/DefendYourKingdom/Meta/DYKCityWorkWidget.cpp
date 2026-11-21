@@ -47,6 +47,13 @@ namespace
 		if(Seconds>=60) return Seconds%60==0 ? FString::Printf(TEXT("%lld мин"),Seconds/60) : FString::Printf(TEXT("%lld мин %lld с"),Seconds/60,Seconds%60);
 		return FString::Printf(TEXT("%lld с"),Seconds);
 	}
+	bool LacksResearchResources(const FDYKPlayerProfileSaveData& P,const FDYKResearchDefinition& Definition)
+	{
+		return Definition.Costs.ContainsByPredicate([&P](const auto& Cost)
+		{
+			return DYKCityEconomy::Balance(P,FDYKResourceId(Cost.ResourceId.Name))<Cost.Amount;
+		});
+	}
 	void CityBrown(UWidgetTree* Tree,UCanvasPanel* Canvas,FVector2D Pos,FVector2D Size)
 	{DYKCityHUDArt::Plate(Tree,Canvas,Pos,Size);}
 	FString CityCosts(const FDYKResearchDefinition& D)
@@ -155,7 +162,7 @@ void UDYKCityWorkWidget::Refresh()
 		if(Current && !LiveResearch.IsNone())
 		{
 			const auto* W=Current->CityEconomy.ResearchQueue.FindByPredicate([this](const auto& Row){return Row.ResearchId==LiveResearch;});
-			if(W) LiveStatus->SetText(CityText(W->StartedAtUnix>0 ? TEXT("Осталось: ")+CityDuration(W->CompletesAtUnix-Now) : TEXT("Ожидает ячейку или ресурсы")));
+			if(W) LiveStatus->SetText(ResearchTimerText(*Current,*W,Now));
 		}
 		else if(Current) if(const auto* S=ScreenInstance(*Current,State.Instance); S && !S->Orders.IsEmpty())
 		{
@@ -164,6 +171,14 @@ void UDYKCityWorkWidget::Refresh()
 				O.StartedAtUnix==0 ? TEXT("Ожидает места") : *CityDuration(O.CompletesAtUnix-Now))));
 		}
 	}
+}
+FText UDYKCityWorkWidget::ResearchTimerText(const FDYKPlayerProfileSaveData& P,const FDYKCityResearchWorkSaveData& Work,int64 Now)
+{
+	if(Work.StartedAtUnix>0) return CityText(TEXT("Осталось: ")+CityDuration(Work.CompletesAtUnix-Now));
+	const auto* Definition=DYKCityResearch::Find(Work.ResearchId);
+	if(!Definition) return FText::GetEmpty();
+	const TCHAR* Status=LacksResearchResources(P,*Definition) ? TEXT("Не хватает ресурсов") : TEXT("В очереди");
+	return CityText(FString(Status)+TEXT(" · ")+CityDuration(Definition->DurationSeconds));
 }
 void UDYKCityWorkWidget::RebuildModal()
 {
@@ -554,7 +569,10 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
 			V.bWorking=Research->StartedAtUnix>0;
 			V.Seconds=V.bWorking ? FMath::Max<int64>(0,Research->CompletesAtUnix-Now) : Definition->DurationSeconds;
 			V.WorkName=CityText(Definition->DisplayName);
-			V.Process=V.WorkName.ToString()+TEXT("\n")+CityDuration(V.Seconds);
+			V.Process=ResearchTimerText(P,*Research,Now).ToString();
+			if(!V.bWorking)
+				V.WorkName=CityText(Definition->DisplayName+(LacksResearchResources(P,*Definition)
+					? TEXT(" · не хватает ресурсов") : TEXT(" · в очереди")));
 		}
 		if(V.WorkName.IsEmpty()) V.WorkName=CityText(TEXT("Нет активного улучшения"));
 		V.WorkTime=CityText(V.bCanCancel ? CityDuration(V.Seconds) : TEXT("—"));

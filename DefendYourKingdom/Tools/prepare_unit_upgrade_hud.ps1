@@ -74,6 +74,31 @@ function Clear-Title($target, $source)
     }
 }
 
+function Extend-UnitBoard($Source)
+{
+    $extra=84
+    $board=[Drawing.Bitmap]::new($Source.Width,$Source.Height+$extra,[Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics=[Drawing.Graphics]::FromImage($board)
+    $graphics.DrawImageUnscaled($Source,0,0)
+    $graphics.Dispose()
+    for($x=0;$x -lt $Source.Width;++$x){
+        # Move the original lower corners intact. The seam across the parchment starts
+        # below the resource plates; at the sides it runs above the corner hardware.
+        $interior=[Math]::Clamp([Math]::Min(($x-188)/6.0,(1260-$x)/6.0),0,1)
+        $center=[Math]::Clamp([Math]::Min(($x-211)/12.0,(1238-$x)/12.0),0,1)
+        $seam=942+[int](44*$interior+13*$center)
+        $depth=18-15*$interior
+        for($y=$seam;$y -lt $board.Height;++$y){
+            $offset=$y-$seam
+            $sourceY=if($offset -ge $extra){$y-$extra}else{
+                $seam-1-[int]($depth*[Math]::Min($offset,$extra-1-$offset)/41.0)
+            }
+            $board.SetPixel($x,$y,$Source.GetPixel($x,$sourceY))
+        }
+    }
+    return $board
+}
+
 $reference=[Drawing.Bitmap]::new((Join-Path $folder 'Reference.png'))
 $parchment=[Drawing.Bitmap]::new((Join-Path $city 'Modular/WindowBase.png'))
 $base=$reference.Clone()
@@ -90,28 +115,34 @@ try {
         $valueLeft=$row -eq 2 ? 615 : 565
         # Replace the sample values with the neighboring brown strip; the labels stay engraved.
         Patch $base $reference @($valueLeft,($top+11),(745-$valueLeft),($row -eq 2 ? 88 : 59)) @(730,($top+11),20,($row -eq 2 ? 88 : 59))
-        # The filled slot is drawn by the widget; the base starts with three empty slots.
-        $slotY=$top+12
-        $slotHeight=$row -eq 2 ? 76 : 65
-        Patch $base $reference @(1047,$slotY,69,$slotHeight) @(1170,$slotY,69,$slotHeight) 2
-        $captionY=$row -eq 2 ? 733 : $top+21
-        $captionHeight=$row -eq 2 ? 47 : 42
-        Patch $parts $reference @(842,$captionY,165,$captionHeight) @(834,$captionY,8,$captionHeight) 4
-        $buttonY=@(529,622,722)[$row]
-        $buttonHeight=@(62,62,70)[$row]
-        $bottom=$buttonY+$buttonHeight-1
-        $shape=New-HudPolygon @(762,($buttonY+16),778,$buttonY,1009,$buttonY,1025,($buttonY+16),
-            1025,($bottom-15),1009,$bottom,778,$bottom,762,($bottom-15))
-        Add-HudSprite $parts $parts $shape ([Drawing.Rectangle]::new(762,$buttonY,264,$buttonHeight))
-        $shape.Dispose()
+        # All three rows use the same button and cell sprites over their original plates.
+        $controlsY=$top+5
+        $controlsHeight=$row -eq 2 ? 98 : 76
+        Patch $base $reference @(750,$controlsY,487,$controlsHeight) @(1030,$controlsY,15,$controlsHeight) 6
     }
     foreach ($plate in @(@(290,916,103,46),@(501,916,99,46),@(723,916,91,46),@(901,916,123,46),@(1151,916,91,46))) {
         Remove-HudInk $base $reference ([Drawing.Rectangle]::new($plate[0],$plate[1],$plate[2],$plate[3])) {param($p) $p.G -ge 123}
     }
-    $slotShape=New-HudPolygon @(1055,543,1066,532,1101,532,1111,542,1111,574,1102,585,1065,585,1055,574)
-    Add-HudSprite $parts $parts $slotShape ([Drawing.Rectangle]::new(1054,532,58,56))
-    $slotShape.Dispose()
-    $base.Save((Join-Path $folder 'UnitUpgradeBase.png'),[Drawing.Imaging.ImageFormat]::Png)
+    Patch $parts $reference @(842,539,165,42) @(834,539,8,42) 4
+    $shape=New-HudPolygon @(762,545,778,529,1009,529,1025,545,1025,575,1009,590,778,590,762,575)
+    Add-HudSprite $parts $parts $shape ([Drawing.Rectangle]::new(762,529,264,62))
+    $shape.Dispose()
+    foreach($slot in @(1054,1113)){
+        $shape=New-HudPolygon @(($slot+1),543,($slot+12),532,($slot+47),532,($slot+57),542,($slot+57),574,
+            ($slot+48),585,($slot+11),585,($slot+1),574)
+        Add-HudSprite $parts $parts $shape ([Drawing.Rectangle]::new($slot,532,58,56))
+        $shape.Dispose()
+    }
+    $popup=[Drawing.Bitmap]::new((Join-Path $city 'ProductionTemplate/Compact/ReferenceMilitary.png'))
+    $cancel=$popup.Clone([Drawing.Rectangle]::new(613,797,422,88),[Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $shape=New-HudPolygon @(0,21,22,0,400,0,420,21,420,64,399,87,22,87,0,64)
+    Add-HudSprite $parts $cancel $shape ([Drawing.Rectangle]::new(0,0,422,88))
+    $shape.Dispose()
+    $cancel.Dispose()
+    $popup.Dispose()
+    $extended=Extend-UnitBoard $base
+    $extended.Save((Join-Path $folder 'UnitUpgradeBase.png'),[Drawing.Imaging.ImageFormat]::Png)
+    $extended.Dispose()
     $parts.Save((Join-Path $folder 'UnitUpgradeParts.png'),[Drawing.Imaging.ImageFormat]::Png)
 } finally {
     $parts.Dispose()
