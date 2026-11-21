@@ -231,7 +231,9 @@ bool FDYKCityModularLayoutTest::RunTest(const FString& Parameters)
 		for(const auto& Button:UI->Actions)
 		{
 			const auto* S=Cast<UCanvasPanelSlot>(Button->Slot); if(!S) continue;
-			if(Button->Action!=EDYKCityUIAction::Close) TestTrue(TEXT("Actions stay above footer"),S->GetPosition().Y+S->GetSize().Y<=890);
+			const bool Pagination=Button->Action==EDYKCityUIAction::Previous || Button->Action==EDYKCityUIAction::Next;
+			if(Button->Action!=EDYKCityUIAction::Close)
+				TestTrue(TEXT("Actions stay inside their respective panel"),S->GetPosition().Y+S->GetSize().Y<=(Pagination ? 970 : 960));
 			for(const auto& Other:UI->Actions)
 			{
 				if(Button==Other) continue;
@@ -255,12 +257,46 @@ bool FDYKCityModularLayoutTest::RunTest(const FString& Parameters)
 			}
 		});
 	};
-	UI->OpenBuilding(DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-BARRACKS")),TEXT("CITY-BARRACKS")); UI->Dispatch(EDYKCityUIAction::Visit); CheckLayout();
-	int32 FrameCount=0,NewCount=0;
-	UI->WidgetTree->ForEachWidget([&](UWidget* W){if(const auto* I=Cast<UImage>(W)) {FrameCount+=I->GetBrush().GetResourceObject()==Skin->CardFrame; NewCount+=I->GetBrush().GetResourceObject()==Skin->NewRibbon;}});
-	TestEqual(TEXT("Six separate card rims over content"),FrameCount,6);
-	TestEqual(TEXT("Only four available unviewed cards get new overlays"),NewCount,4);
-	UI->Dispatch(EDYKCityUIAction::Item,0); CheckLayout(); UI->CloseClicked();
+	const UObject* CatalogBase=nullptr;
+	for(const auto Type:{TEXT("CITY-BARRACKS"),TEXT("CITY-WORKSHOP"),TEXT("CITY-TAVERN")})
+	{
+		UI->OpenBuilding(DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),Type),Type);
+		UI->Dispatch(EDYKCityUIAction::Visit); CheckLayout();
+		int32 FrameCount=0,NewCount=0;
+		const UObject* Background=nullptr;
+		for(const auto* Child:UI->DesignCanvas->GetAllChildren())
+		{
+			const auto* Image=Cast<UImage>(Child);
+			const auto* Slot=Cast<UCanvasPanelSlot>(Child->Slot);
+			if(!Image || !Slot) continue;
+			const auto* Texture=Image->GetBrush().GetResourceObject();
+			if(!Texture) continue;
+			if(Texture->GetFName()==TEXT("RecruitmentBase")) Background=Texture;
+			if(Texture->GetFName()==TEXT("RecruitmentParts"))
+			{
+				FrameCount+=Slot->GetSize()==FVector2D(328,302);
+				NewCount+=Slot->GetSize()==FVector2D(152,72);
+			}
+		}
+		TestNotNull(TEXT("Catalog uses the new reference board"),Background);
+		if(!CatalogBase) CatalogBase=Background;
+		TestTrue(TEXT("Recruitment buildings use the same board and grid"),CatalogBase==Background);
+		TestEqual(TEXT("Six separate frames or lock cells"),FrameCount,6);
+		const bool Tavern=FName(Type)==TEXT("CITY-TAVERN");
+		TestEqual(TEXT("New overlays are limited to available unviewed cards"),NewCount,Tavern ? 0 : 4);
+		const auto* Next=UI->FindAction(EDYKCityUIAction::Next);
+		if(TestNotNull(TEXT("Catalog next page control"),Next))
+			TestEqual(TEXT("Pagination availability follows each catalog's item count"),Next->GetIsEnabled(),!Tavern);
+		if(!Tavern)
+		{
+			UI->Dispatch(EDYKCityUIAction::Next);
+			TestEqual(TEXT("Next opens the second page"),UI->GetWindowState().Page,1);
+			UI->Dispatch(EDYKCityUIAction::Previous);
+			UI->Dispatch(EDYKCityUIAction::Item,0);
+			CheckLayout();
+		}
+		UI->CloseClicked();
+	}
 	UI->OpenBuilding(DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-SAWMILL")),TEXT("CITY-SAWMILL")); UI->Dispatch(EDYKCityUIAction::Visit); CheckLayout();
 	UI->ReleaseSlateResources(true); return true;
 }

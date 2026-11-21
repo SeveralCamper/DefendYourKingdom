@@ -72,13 +72,13 @@ void DYKCityHUDArt::Paper(UWidgetTree*,UCanvasPanel*,FVector2D,FVector2D)
 {
 	// Clean parchment belongs to the whole window, never stretched patch rectangles.
 }
-bool DYKCityHUDArt::Illustration(UWidgetTree* Tree,UCanvasPanel* Canvas,FName Key,FVector2D Position,FVector2D Size)
+bool DYKCityHUDArt::Illustration(UWidgetTree* Tree,UCanvasPanel* Canvas,FName Key,FVector2D Position,FVector2D Size,bool bFill)
 {
 	const auto* Skin=Presentation(); const auto* Row=Skin ? Skin->Find(Key) : nullptr;
 	if(!Row) return false;
 	auto* Source=Row->Illustration.LoadSynchronous(); if(!Source) return false;
 	auto* Art=Tree->ConstructWidget<UImage>(); Art->SetBrush(TextureBrush(Source,FBox2D(Row->UVMin,Row->UVMax)));
-	auto* Fit=Tree->ConstructWidget<UScaleBox>(); Fit->SetStretch(EStretch::ScaleToFit); Fit->SetClipping(EWidgetClipping::ClipToBounds);
+	auto* Fit=Tree->ConstructWidget<UScaleBox>(); Fit->SetStretch(bFill ? EStretch::ScaleToFill : EStretch::ScaleToFit); Fit->SetClipping(EWidgetClipping::ClipToBounds);
 	Fit->SetVisibility(ESlateVisibility::HitTestInvisible); Fit->AddChild(Art); Place(Canvas,Fit,Position,Size); return true;
 }
 UTextBlock* DYKCityHUDArt::Label(UWidgetTree* Tree,UCanvasPanel* Canvas,const FText& Text,FVector2D Position,FVector2D Size,int32 Font,bool Light)

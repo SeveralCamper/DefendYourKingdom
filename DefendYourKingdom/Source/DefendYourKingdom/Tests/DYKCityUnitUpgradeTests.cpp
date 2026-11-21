@@ -73,7 +73,7 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		int32 Pieces=0;
 		for(const auto* Child:UI->DesignCanvas->GetAllChildren())
 			if(const auto* Art=Cast<UImage>(Child);Art && Art->GetVisibility()==ESlateVisibility::HitTestInvisible)
-				if(const auto* Slot=Cast<UCanvasPanelSlot>(Art->Slot);Slot && Slot->GetPosition().Y>=824.) ++Pieces;
+				if(const auto* Texture=Art->GetBrush().GetResourceObject();Texture && Texture->GetFName()==TEXT("UnitUpgradeBase")) ++Pieces;
 		return Pieces;
 	};
 	SelectUnit(0);
@@ -87,7 +87,7 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Attack uses the selected unit's research"),Damage->Key,FName(TEXT("RESEARCH-INFANTRY-T2-DAMAGE-1")));
 	TestEqual(TEXT("Armor uses a different research"),Armor->Key,FName(TEXT("RESEARCH-INFANTRY-T2-ARMOR-1")));
 	TestTrue(TEXT("Prices start hidden"),VisibleCost().IsEmpty());
-	TestEqual(TEXT("Cost panel heading and six resource plates are always visible"),FooterArt(),7);
+	TestEqual(TEXT("The original footer stays on the full board"),FooterArt(),1);
 	const FPointerEvent Pointer(0,FVector2D(10),FVector2D(10),TSet<FKey>(),EKeys::Invalid,0,FModifierKeysState());
 	const FGeometry Geometry=FGeometry::MakeRoot(FVector2D(264,62),FSlateLayoutTransform());
 	for(auto* Button:{UI->FindAction(EDYKCityUIAction::Research,0),UI->FindAction(EDYKCityUIAction::Research,2)})
@@ -97,7 +97,7 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		const auto* Research=DYKCityResearch::Find(Button->Key);
 		TestTrue(TEXT("Hovered button shows the exact research price"),
 			VisibleCost().Contains(FString::Printf(TEXT("/ %lld"),Research->Costs[0].Amount)));
-		TestEqual(TEXT("Hover preserves the same panel artwork"),FooterArt(),7);
+		TestEqual(TEXT("Hover preserves the same panel artwork"),FooterArt(),1);
 		Native->OnMouseLeave(Pointer);
 		TestTrue(TEXT("Leaving hides the price panel"),VisibleCost().IsEmpty());
 	}
@@ -111,7 +111,7 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		const auto Native=Cancel->TakeWidget();
 		Native->OnMouseEnter(Geometry,Pointer);
 		TestTrue(TEXT("Cancel does not reveal any prices"),VisibleCost().IsEmpty());
-		TestEqual(TEXT("Cancel hover leaves the resource panel visible"),FooterArt(),7);
+		TestEqual(TEXT("Cancel hover leaves the resource panel visible"),FooterArt(),1);
 		Native->OnMouseLeave(Pointer);
 	}
 	TestEqual(TEXT("Queued stage has its own marker"),TextAt({1054,532}),FString(TEXT("…")));

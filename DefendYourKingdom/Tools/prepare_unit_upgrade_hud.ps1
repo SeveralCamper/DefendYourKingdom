@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Drawing
+. (Join-Path $PSScriptRoot 'hud_alpha_mask.ps1')
 $city = Join-Path $PSScriptRoot '../SourceArt/CityHUD'
 $folder = Join-Path $city 'UnitUpgrade'
 
@@ -83,7 +83,6 @@ try {
     Clear-Title $base $reference
     Patch $base $parchment @(671,280,554,165) @(295,435,554,165) 15 -MatchTone
     Patch $base $parchment @(225,205,401,312) @(254,303,401,312) 4
-    Patch $base $parchment @(188,817,1076,177) @(240,565,965,177) 11 -MatchTone
 
     $rowTops=@(518,611,705)
     foreach ($row in 0..2) {
@@ -98,10 +97,20 @@ try {
         $captionY=$row -eq 2 ? 733 : $top+21
         $captionHeight=$row -eq 2 ? 47 : 42
         Patch $parts $reference @(842,$captionY,165,$captionHeight) @(834,$captionY,8,$captionHeight) 4
+        $buttonY=@(529,622,722)[$row]
+        $buttonHeight=@(62,62,70)[$row]
+        $bottom=$buttonY+$buttonHeight-1
+        $shape=New-HudPolygon @(762,($buttonY+16),778,$buttonY,1009,$buttonY,1025,($buttonY+16),
+            1025,($bottom-15),1009,$bottom,778,$bottom,762,($bottom-15))
+        Add-HudSprite $parts $parts $shape ([Drawing.Rectangle]::new(762,$buttonY,264,$buttonHeight))
+        $shape.Dispose()
     }
     foreach ($plate in @(@(290,916,103,46),@(501,916,99,46),@(723,916,91,46),@(901,916,123,46),@(1151,916,91,46))) {
-        Patch $parts $reference $plate @(716,916,8,46) 4
+        Remove-HudInk $base $reference ([Drawing.Rectangle]::new($plate[0],$plate[1],$plate[2],$plate[3])) {param($p) $p.G -ge 123}
     }
+    $slotShape=New-HudPolygon @(1055,543,1066,532,1101,532,1111,542,1111,574,1102,585,1065,585,1055,574)
+    Add-HudSprite $parts $parts $slotShape ([Drawing.Rectangle]::new(1054,532,58,56))
+    $slotShape.Dispose()
     $base.Save((Join-Path $folder 'UnitUpgradeBase.png'),[Drawing.Imaging.ImageFormat]::Png)
     $parts.Save((Join-Path $folder 'UnitUpgradeParts.png'),[Drawing.Imaging.ImageFormat]::Png)
 } finally {

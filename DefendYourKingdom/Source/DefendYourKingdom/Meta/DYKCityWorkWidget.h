@@ -60,6 +60,7 @@ private:
 	void BuildConstruction(const FDYKPlayerProfileSaveData& P);
 	void BuildBuilding(const FDYKPlayerProfileSaveData& P);
 	void BuildInterior(const FDYKPlayerProfileSaveData& P);
+	bool BuildRecruitmentCatalog(const FDYKPlayerProfileSaveData& P,const FText& Title,TConstArrayView<FDYKCityInteriorItem> Items);
 	void BuildDetail(const FDYKPlayerProfileSaveData& P);
 	bool BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData& P,const FDYKCityInteriorItem& Item);
 	UFUNCTION() void ResourceAction(EDYKResourceAction Action,int32 Index);

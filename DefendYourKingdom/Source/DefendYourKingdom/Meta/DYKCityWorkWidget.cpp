@@ -197,6 +197,16 @@ void UDYKCityWorkWidget::RebuildModal()
 	// Production windows have exactly one rendering path: ResourceScreen above.
 	if(D && D->Category==EDYKCityBuildingCategory::Production && State.Window!=EDYKCityWindow::Construction)
 	{ensureMsgf(false,TEXT("Shared production HUD asset is missing"));State.Close();ModalRoot->SetVisibility(ESlateVisibility::Collapsed);ModalBlocker->SetVisibility(ESlateVisibility::Collapsed);return;}
+	if(State.Window==EDYKCityWindow::Interior)
+	{
+		const auto Kind=DYKCityBuildingUI::Interior(State.Building);
+		if(Kind==EDYKCityInterior::Barracks || Kind==EDYKCityInterior::Workshop || Kind==EDYKCityInterior::Tavern)
+		{
+			const auto Items=DYKCityBuildingUI::Items(State.Building,State.LibraryTab);
+			const auto CatalogTitle=Kind==EDYKCityInterior::Barracks ? NSLOCTEXT("DYKCity","BarracksCatalogTitle","Казарма") : Title;
+			if(BuildRecruitmentCatalog(*P,CatalogTitle,Items)) return;
+		}
+	}
 	const bool Detail=State.Window==EDYKCityWindow::Detail;
 	FName Art=DYKCityBuildingUI::Art(State.Building,Detail);
 	if(Detail)

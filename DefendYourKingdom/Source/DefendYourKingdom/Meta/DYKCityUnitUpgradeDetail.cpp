@@ -114,50 +114,30 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 	}
 
 	const FVector2D FooterOrigin(191,824);
-	const FVector2D FooterSize(1067,164);
-	Picture(DesignCanvas,FooterOrigin,{FooterSize.X,78},FooterOrigin,{FooterSize.X,78});
-	struct FResourcePlate {FName Id; double SourceX; double SourceWidth;};
-	const FResourcePlate Plates[]={
-		{TEXT("RES-WOOD"),195,210}, {TEXT("RES-STONE"),413,198}, {TEXT("RES-IRON"),619,200},
-		{TEXT("RES-GOLD"),826,211}, {TEXT("RES-FOOD"),1043,208}, {TEXT("RES-MEDALS"),0,0}};
-	constexpr double PlateGap=6.;
-	const double PlateWidth=(FooterSize.X-PlateGap*(UE_ARRAY_COUNT(Plates)-1))/UE_ARRAY_COUNT(Plates);
-	const auto PlatePosition=[PlateWidth](int32 Index)
-	{
-		return FVector2D(Index*(PlateWidth+PlateGap),81);
-	};
-	for(int32 Index=0;Index<UE_ARRAY_COUNT(Plates);++Index)
-	{
-		const auto& Plate=Plates[Index];
-		const FVector2D Position=FooterOrigin+PlatePosition(Index);
-		if(Plate.SourceWidth>0.)
-			Picture(DesignCanvas,{Plate.SourceX,905},{Plate.SourceWidth,73},Position,{PlateWidth,73});
-		else
-		{
-			DYKCityHUDArt::Plate(WidgetTree,DesignCanvas,Position,{PlateWidth,73});
-			Label(FText::FromString(DYKCityCatalog::ResourceName(FDYKResourceId(Plate.Id))),
-				Position+FVector2D(8,5),{PlateWidth-16,27},23);
-		}
-	}
+	const FVector2D FooterSize(1067,188);
+	struct FResourcePriceSlot {FName Id; FVector2D Position; FVector2D Size;};
+	const FResourcePriceSlot PriceSlots[]={
+		{TEXT("RES-WOOD"),{96,90},{106,50}}, {TEXT("RES-STONE"),{306,90},{105,50}},
+		{TEXT("RES-IRON"),{526,90},{99,50}}, {TEXT("RES-GOLD"),{704,90},{133,50}},
+		{TEXT("RES-FOOD"),{949,90},{103,50}}, {TEXT("RES-MEDALS"),{529,153},{104,31}}};
+	Label(NSLOCTEXT("DYKCity","UnitUpgradeMedals","Медали"),{599,977},{120,31},22,false);
 	const auto BindCost=[&](UDYKCityActionButton* Button,const FDYKResearchDefinition& Research)
 	{
 		auto* Panel=WidgetTree->ConstructWidget<UCanvasPanel>();
 		DYKCityHUDArt::Place(DesignCanvas,Panel,FooterOrigin,FooterSize);
-		for(int32 Index=0;Index<UE_ARRAY_COUNT(Plates);++Index)
+		for(const auto& Slot:PriceSlots)
 		{
-			const auto& Plate=Plates[Index];
-			const auto* Cost=Research.Costs.FindByPredicate([&Plate](const auto& Entry)
+			const auto* Cost=Research.Costs.FindByPredicate([&Slot](const auto& Entry)
 			{
-				return Entry.ResourceId.Name==Plate.Id;
+				return Entry.ResourceId.Name==Slot.Id;
 			});
 			if(!Cost) continue;
-			const bool HasIcon=Plate.SourceWidth>0.;
-			const double Left=HasIcon ? PlateWidth*.44 : 8.;
-			const int64 Owned=DYKCityEconomy::Balance(Profile,FDYKResourceId(Plate.Id));
+			const int64 Owned=DYKCityEconomy::Balance(Profile,FDYKResourceId(Slot.Id));
 			const auto Amount=FText::FromString(FString::Printf(TEXT("%lld / %lld"),Owned,Cost->Amount));
-			auto* Value=DYKCityHUDArt::Label(WidgetTree,Panel,Amount,
-				PlatePosition(Index)+FVector2D(Left,HasIcon ? 10 : 31),{PlateWidth-Left-8,HasIcon ? 52. : 32.},28,true);
-			Value->SetColorAndOpacity(Owned>=Cost->Amount ? Gold : FLinearColor(1.f,.38f,.28f));
+			const bool OnPlate=Slot.Id!=TEXT("RES-MEDALS");
+			auto* Value=DYKCityHUDArt::Label(WidgetTree,Panel,Amount,Slot.Position,Slot.Size,OnPlate ? 28 : 22,OnPlate);
+			Value->SetColorAndOpacity(Owned>=Cost->Amount ? (OnPlate ? Gold : FLinearColor(.23f,.13f,.06f))
+				: FLinearColor(.84f,.20f,.11f));
 		}
 		Button->BindHoverContent(Panel);
 	};
