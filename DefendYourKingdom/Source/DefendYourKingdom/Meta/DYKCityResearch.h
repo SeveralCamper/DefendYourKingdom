@@ -45,7 +45,8 @@ namespace DYKCityResearch
 	DEFENDYOURKINGDOM_API bool Enqueue(IDYKProfileService& Service,FGuid Command,FName Research,int64 Now,const FDYKResearchConfig& Config=DEV_PLACEHOLDER());
 	DEFENDYOURKINGDOM_API bool Cancel(IDYKProfileService& Service,FGuid Command,FGuid Work,int64 Now,const FDYKResearchConfig& Config=DEV_PLACEHOLDER());
 	DEFENDYOURKINGDOM_API bool IsUnlocked(const FDYKPlayerProfileSaveData& Profile,FDYKUnitTypeId Type);
-	// Query scopes separately: spec/10 leaves their final composition undefined.
+	// Separate scopes remain queryable for inspection and balance tests.
 	DEFENDYOURKINGDOM_API FDYKResearchBonus Bonus(const FDYKPlayerProfileSaveData& Profile,const FDYKUnitDefinition& Unit,
 		EDYKResearchScope Scope=EDYKResearchScope::Line,const FDYKResearchConfig& Config=DEV_PLACEHOLDER());
+	DEFENDYOURKINGDOM_API FDYKUnitBaseStats EffectiveStats(const FDYKPlayerProfileSaveData& Profile,const FDYKUnitDefinition& Unit);
 }

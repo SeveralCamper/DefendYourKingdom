@@ -240,8 +240,7 @@ bool FDYKLiveBuildingPopupTest::RunTest(const FString& Parameters)
   }
   if(const auto* Time=Popup->FindField(EDYKProductionField::WorkTime);TestNotNull(TEXT("Improvement time label"),Time))
    TestEqual(TEXT("Active research shows time left and queued research shows its duration"),Time->GetText().ToString(),
-    FName(Type)==TEXT("CITY-WORKSHOP") ? FString::Printf(TEXT("%lld с"),Popup->GetView().Seconds)
-     : FName(Type)==TEXT("CITY-BARRACKS") ? FString::Printf(TEXT("%lld с"),DYKCityResearch::Find(Unit)->DurationSeconds) : FString(TEXT("—")));
+    FName(Type)==TEXT("CITY-WIZARD-TOWER") ? FString(TEXT("—")) : FString(TEXT("< 01 мин")));
   TestFalse(TEXT("Military buildings have no resources to collect"),Popup->FindAction(EDYKResourceAction::Collect)->GetIsEnabled());
   UI->CloseClicked();
  }

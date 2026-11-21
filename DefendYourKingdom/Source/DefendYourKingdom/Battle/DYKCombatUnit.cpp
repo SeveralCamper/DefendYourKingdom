@@ -21,12 +21,7 @@ void ADYKCombatUnit::InitializeCombat(ADYKPolygonGameMode* OwnerMode, const FDYK
 	InstanceDefinition = *UnitDefinition;
 	if (auto* Session=GetGameInstance()) if (const auto* Save=Session->GetSubsystem<UDYKSaveSubsystem>())
 		if (const auto* P=Save->GetProfileSnapshot())
-		{
-			const auto Bonus=DYKCityResearch::Bonus(*P,*UnitDefinition);
-			InstanceDefinition.Base.MaxHP.Value+=Bonus.HP;
-			InstanceDefinition.Base.PhysicalArmor.Value+=Bonus.PhysicalArmor;
-			InstanceDefinition.Base.Attack.DamagePerHit.Value+=Bonus.Damage;
-		}
+			InstanceDefinition.Base=DYKCityResearch::EffectiveStats(*P,*UnitDefinition);
 	Definition = &InstanceDefinition;
 	HP = Definition->Base.MaxHP.Value;
 	IdleFacing = GetActorRotation();

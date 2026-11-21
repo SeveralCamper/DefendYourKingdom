@@ -37,7 +37,9 @@ int64 DYKCityEconomy::Capacity(const FDYKPlayerProfileSaveData& P, FDYKResourceI
 	int32 Level = 0;
 	for (const auto& B : P.Buildings)
 		if (B.BuildingId.Name == TEXT("CITY-WAREHOUSE") && !B.bUnderConstruction) Level = B.Level;
-	return DYKCityCatalog::WarehouseCapacityDEV_PLACEHOLDER(Id,Level);
+	const int64 Capacity=DYKCityCatalog::WarehouseCapacityDEV_PLACEHOLDER(Id,Level);
+	const int64 Override=P.CityEconomy.WarehouseCapacityOverride;
+	return Capacity>0 && Capacity<MAX_uint32 && Override>0 ? Override : Capacity;
 }
 
 int64 DYKCityEconomy::Balance(const FDYKPlayerProfileSaveData& P, FDYKResourceId Id)
@@ -53,7 +55,8 @@ bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P)
 
 bool DYKCityEconomy::Validate(const FDYKPlayerProfileSaveData& P, const FDYKCityBuildingRulesConfig& Config)
 {
-	if (P.CityEconomy.Version != 1) { return false; }
+	if (P.CityEconomy.Version != 1 || P.CityEconomy.WarehouseCapacityOverride<0
+		|| P.CityEconomy.WarehouseCapacityOverride>MAX_uint32) { return false; }
 	TSet<FName> Viewed;
 	for(const auto Key:P.CityEconomy.VisitedCards)
 	{

@@ -80,6 +80,12 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 	const auto* Peasant=DYKUnitCatalog::Find(FDYKUnitTypeId(TEXT("DYK-PEASANT")).ToContentId());
 	TestEqual(TEXT("Base attack comes from the peasant definition"),TextAt({565,538}),FString::FromInt(Peasant->Base.Attack.DamagePerHit.Value));
 	TestEqual(TEXT("Base HP comes from the peasant definition"),TextAt({565,631}),FString::FromInt(Peasant->Base.MaxHP.Value));
+	TestEqual(TEXT("Peasant attack upgrade preview"),TextAt({656,538}),FString(TEXT("6")));
+	TestEqual(TEXT("Peasant HP upgrade preview"),TextAt({656,631}),FString(TEXT("20")));
+	TestEqual(TEXT("Peasant physical armor upgrade preview"),TextAt({700,716}),FString(TEXT("1")));
+	TestTrue(TEXT("Peasant magic armor has no upgrade preview"),TextAt({700,756}).IsEmpty());
+	for(const int32 Row:{0,1,2})
+		TestTrue(TEXT("Peasant has an available upgrade in this row"),UI->FindAction(EDYKCityUIAction::Research,Row)->GetIsEnabled());
 	TestTrue(TEXT("Description and rank caption areas are empty"),TextAt({662,244}).IsEmpty() && TextAt({648,418}).IsEmpty());
 	SelectUnit(1);
 	const auto* Damage=UI->FindAction(EDYKCityUIAction::Research,0);
@@ -146,19 +152,18 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		Native->OnMouseLeave(Pointer);
 	}
 	TestEqual(TEXT("Queued stage has its own marker"),TextAt({1054,532}),FString(TEXT("…")));
-	TestTrue(TEXT("An active improvement shows a running timer next to cancel"),TextAt({717,1027}).StartsWith(TEXT("Осталось:")));
+	TestEqual(TEXT("A twenty-second improvement shows the subminute label next to cancel"),TextAt({717,1027}),FString(TEXT("Осталось: < 01 мин")));
 	if(!TestTrue(TEXT("Move the paid research close to its deadline"),Save->ApplyProfileCommand(FGuid::NewGuid(),[DamageKey](auto& Profile)
 	{
 		auto* Job=Profile.CityEconomy.ResearchQueue.FindByPredicate([DamageKey](const auto& Work){return Work.ResearchId==DamageKey;});
 		if(!Job || Job->StartedAtUnix<=0) return false;
-		Job->CompletesAtUnix=FDateTime::UtcNow().ToUnixTimestamp()+5;
+		Job->CompletesAtUnix=FDateTime::UtcNow().ToUnixTimestamp()+3920;
 		return Job->CompletesAtUnix>Job->StartedAtUnix;
 	}))) return false;
 	UI->Refresh();
 	const FString Timer=TextAt({717,1027});
-	TestTrue(TEXT("The open detail HUD refreshes the remaining seconds"),Timer.StartsWith(TEXT("Осталось: ")) &&
-		FCString::Atoi(*Timer.RightChop(FString(TEXT("Осталось: ")).Len()))<=5);
-	if(!TestTrue(TEXT("Complete the queued attack"),DYKCityWork::Update(*Save,FDateTime::UtcNow().ToUnixTimestamp()+60)))return false;
+	TestEqual(TEXT("The open detail HUD refreshes hours and minutes"),Timer,FString(TEXT("Осталось: 01 ч 05 мин")));
+	if(!TestTrue(TEXT("Complete the queued attack"),DYKCityWork::Update(*Save,FDateTime::UtcNow().ToUnixTimestamp()+4000)))return false;
 	SelectUnit(1);
 	TestFalse(TEXT("Next stat was actually shown"),Preview.IsEmpty());
 	TestEqual(TEXT("Completed personal upgrade updates the current attack"),TextAt({565,538}),Preview);

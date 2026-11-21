@@ -67,6 +67,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 		const TCHAR* LineKeys[]={TEXT("INFANTRY"),TEXT("RANGED")};
 		const TCHAR* StatKeys[]={TEXT("HP"),TEXT("ARMOR"),TEXT("DAMAGE")};
 		const TCHAR* StatNames[]={TEXT("Улучшенное снаряжение"),TEXT("Стальные заплатки"),TEXT("Мурштра")};
+		const FDYKResearchBonus PeasantBonuses[]={{5,0,0},{0,1,0},{0,0,2}};
 		for(int32 LineIndex=0;LineIndex<2;++LineIndex)
 		{
 			const auto Line=LineIndex==0 ? EDYKUnitLine::Infantry : EDYKUnitLine::Ranged;
@@ -90,10 +91,12 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 				D.TargetLine=Line; D.Bonus=Stat==0 ? FDYKResearchBonus{10,0,0} : Stat==1 ? FDYKResearchBonus{0,1,0} : FDYKResearchBonus{0,0,2};
 				D.Costs=Stat==1 ? ResearchCosts(1000,900,700,5) : ResearchCosts(800,300,500,5);
 				C.Definitions.Add(D);
-				for(int32 Tier=2;Tier<=3;++Tier)
+				for(int32 Tier=1;Tier<=3;++Tier)
 				{
+					const bool bPeasant=Line==EDYKUnitLine::Infantry && Tier==1;
+					const int32 Steps=bPeasant ? 1 : Tier-1;
 					FName Prior;
-					for(int32 Level=1;Level<=Tier-1;++Level)
+					for(int32 Level=1;Level<=Steps;++Level)
 					{
 						auto Personal=D;
 						Personal.Building=TEXT("CITY-BARRACKS");
@@ -102,6 +105,12 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 						Personal.Prerequisites={FName(*FString::Printf(TEXT("RESEARCH-%s-T%d"),LineKeys[LineIndex],Tier))};
 						if(!Prior.IsNone()) Personal.Prerequisites.Add(Prior);
 						Personal.TargetLine=EDYKUnitLine::None; Personal.TargetType=FDYKUnitTypeId(Types[LineIndex][Tier-1]);
+						if(bPeasant)
+						{
+							Personal.DurationSeconds=20;
+							Personal.Bonus=PeasantBonuses[Stat];
+							Personal.Costs=ResearchCosts(20,20,10,0); // DEV_PLACEHOLDER until the author sets prices.
+						}
 						Prior=Personal.Id; C.Definitions.Add(MoveTemp(Personal));
 					}
 				}
@@ -278,4 +287,15 @@ FDYKResearchBonus DYKCityResearch::Bonus(const FDYKPlayerProfileSaveData& P,cons
 		Result.HP+=D->Bonus.HP; Result.PhysicalArmor+=D->Bonus.PhysicalArmor; Result.Damage+=D->Bonus.Damage;
 	}
 	return Result;
+}
+
+FDYKUnitBaseStats DYKCityResearch::EffectiveStats(const FDYKPlayerProfileSaveData& P,const FDYKUnitDefinition& Unit)
+{
+	FDYKUnitBaseStats Stats=Unit.Base;
+	const auto LineBonus=Bonus(P,Unit,EDYKResearchScope::Line);
+	const auto PersonalBonus=Bonus(P,Unit,EDYKResearchScope::Type);
+	Stats.MaxHP.Value+=LineBonus.HP+PersonalBonus.HP;
+	Stats.PhysicalArmor.Value+=LineBonus.PhysicalArmor+PersonalBonus.PhysicalArmor;
+	Stats.Attack.DamagePerHit.Value+=LineBonus.Damage+PersonalBonus.Damage;
+	return Stats;
 }

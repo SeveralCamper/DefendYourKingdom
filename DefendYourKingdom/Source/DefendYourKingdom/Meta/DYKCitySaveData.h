@@ -84,4 +84,6 @@ struct DEFENDYOURKINGDOM_API FDYKCitySaveData
 	UPROPERTY(SaveGame) TArray<FDYKCityResearchWorkSaveData> ResearchQueue;
 	// Stable card keys, independent of page, building instance and research completion.
 	UPROPERTY(SaveGame) TArray<FName> VisitedCards;
+	// Optional save-specific limit for warehouse resources. Zero uses the city rules.
+	UPROPERTY(SaveGame) int64 WarehouseCapacityOverride = 0;
 };

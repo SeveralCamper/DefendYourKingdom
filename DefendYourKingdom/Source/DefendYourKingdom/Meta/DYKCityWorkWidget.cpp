@@ -49,6 +49,14 @@ namespace
 		if(Seconds>=60) return Seconds%60==0 ? FString::Printf(TEXT("%lld мин"),Seconds/60) : FString::Printf(TEXT("%lld мин %lld с"),Seconds/60,Seconds%60);
 		return FString::Printf(TEXT("%lld с"),Seconds);
 	}
+	FString CityUpgradeDuration(int64 Seconds)
+	{
+		if(Seconds<60) return TEXT("< 01 мин");
+		const int64 Minutes=Seconds/60;
+		if(Minutes<60) return FString::Printf(TEXT("%02lld мин"),Minutes);
+		return FString::Printf(TEXT("%02lld ч %02lld мин"),Minutes/60,Minutes%60);
+	}
+
 	void CityBrown(UWidgetTree* Tree,UCanvasPanel* Canvas,FVector2D Pos,FVector2D Size)
 	{DYKCityHUDArt::Plate(Tree,Canvas,Pos,Size);}
 	FString CityCosts(const FDYKResearchDefinition& D)
@@ -183,11 +191,11 @@ void UDYKCityWorkWidget::Refresh()
 }
 FText UDYKCityWorkWidget::ResearchTimerText(const FDYKPlayerProfileSaveData& P,const FDYKCityResearchWorkSaveData& Work,int64 Now)
 {
-	if(Work.StartedAtUnix>0) return CityText(TEXT("Осталось: ")+CityDuration(Work.CompletesAtUnix-Now));
+	if(Work.StartedAtUnix>0) return CityText(TEXT("Осталось: ")+CityUpgradeDuration(Work.CompletesAtUnix-Now));
 	const auto* Definition=DYKCityResearch::Find(Work.ResearchId);
 	if(!Definition) return FText::GetEmpty();
 	const TCHAR* Status=!DYKCityWork::CanPay(P,Definition->Costs) ? TEXT("Не хватает ресурсов") : TEXT("В очереди");
-	return CityText(FString(Status)+TEXT(" · ")+CityDuration(Definition->DurationSeconds));
+	return CityText(FString(Status)+TEXT(" · ")+CityUpgradeDuration(Definition->DurationSeconds));
 }
 void UDYKCityWorkWidget::RebuildModal()
 {
@@ -294,7 +302,7 @@ void UDYKCityWorkWidget::BuildBuilding(const FDYKPlayerProfileSaveData& P)
 	DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(DYKCityBuildingUI::Description(State.Building)),{275,250},{900,95},28);
 	FString Process=TEXT("Нет активных процессов.");
 	if(const auto* W=P.CityEconomy.Work.FindByPredicate([this](const auto& Work){return Work.InstanceId==State.Instance;}))
-		Process=W->StartedAtUnix>0 ? TEXT("Работы: ")+CityDuration(W->CompletesAtUnix-FDateTime::UtcNow().ToUnixTimestamp()) : TEXT("Строительная заявка ожидает строителя или ресурсов.");
+		Process=W->StartedAtUnix>0 ? TEXT("Работы: ")+CityUpgradeDuration(W->CompletesAtUnix-FDateTime::UtcNow().ToUnixTimestamp()) : TEXT("Строительная заявка ожидает строителя или ресурсов.");
 	else if(D->Resource.IsValid())
 	{
 		const auto V=DYKCityEconomy::View(P,State.Instance,FDateTime::UtcNow().ToUnixTimestamp());
@@ -303,7 +311,7 @@ void UDYKCityWorkWidget::BuildBuilding(const FDYKPlayerProfileSaveData& P)
 	}
 	else for(const auto& ResearchWork:P.CityEconomy.ResearchQueue)
 		if(const auto* R=DYKCityResearch::Find(ResearchWork.ResearchId); R && R->Building==State.Building)
-		{Process=R->DisplayName+TEXT("\n")+(ResearchWork.StartedAtUnix>0 ? CityDuration(ResearchWork.CompletesAtUnix-FDateTime::UtcNow().ToUnixTimestamp()) : TEXT("Ожидает исследовательскую ячейку")); LiveResearch=R->Id; break;}
+		{Process=R->DisplayName+TEXT("\n")+ResearchTimerText(P,ResearchWork,FDateTime::UtcNow().ToUnixTimestamp()).ToString(); LiveResearch=R->Id; break;}
 	LiveStatus=DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(FString::Printf(TEXT("Уровень %d\n%s"),B.Level,*Process)),{290,365},{870,155},30);
 	if(D->Resource.IsValid()) ActionButton(EDYKCityUIAction::Collect,0,NSLOCTEXT("DYKCity","Collect","Собрать"),{430,522},{590,55},NAME_None,DYKCityEconomy::View(P,State.Instance,FDateTime::UtcNow().ToUnixTimestamp()).Collectable>0);
 	FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=State.Instance; R.Kind=EDYKCityBuildingWorkKind::Upgrade; R.BuildingId=D->Id; R.ExpectedLevel=B.Level;
@@ -412,10 +420,8 @@ void UDYKCityWorkWidget::BuildDetail(const FDYKPlayerProfileSaveData& P)
 	{
 		if(const auto* Unit=DYKUnitCatalog::Find(Root->Unlock))
 		{
-			const auto Bonus=DYKCityResearch::Bonus(P,*Unit);
-			const auto Personal=DYKCityResearch::Bonus(P,*Unit,EDYKResearchScope::Type);
-			Stats=FString::Printf(TEXT("Урон: %d    Здоровье: %d    Физическая броня: %d\nМагическая броня: %d    Размещение: %d припасов"),Unit->Base.Attack.DamagePerHit.Value+Bonus.Damage,Unit->Base.MaxHP.Value+Bonus.HP,Unit->Base.PhysicalArmor.Value+Bonus.PhysicalArmor,Unit->Base.MagicalArmor.Value,Unit->Base.PlacementSupplies.Value);
-			if(Personal.HP || Personal.PhysicalArmor || Personal.Damage) Stats+=FString::Printf(TEXT("\nПерсональные бонусы: HP +%d · Броня +%d · Урон +%d"),Personal.HP,Personal.PhysicalArmor,Personal.Damage);
+			const auto UnitStats=DYKCityResearch::EffectiveStats(P,*Unit);
+			Stats=FString::Printf(TEXT("Урон: %d    Здоровье: %d    Физическая броня: %d\nМагическая броня: %d    Размещение: %d припасов"),UnitStats.Attack.DamagePerHit.Value,UnitStats.MaxHP.Value,UnitStats.PhysicalArmor.Value,UnitStats.MagicalArmor.Value,UnitStats.PlacementSupplies.Value);
 		}
 		else if(Root->TargetLine!=EDYKUnitLine::None)
 			Stats=FString::Printf(TEXT("Бонус линии\nЗдоровье: +%d · Броня: +%d · Урон: +%d"),Root->Bonus.HP,Root->Bonus.PhysicalArmor,Root->Bonus.Damage);
@@ -425,7 +431,7 @@ void UDYKCityWorkWidget::BuildDetail(const FDYKPlayerProfileSaveData& P)
 	const auto* R=Options.IsEmpty() ? nullptr : DYKCityResearch::Find(Options[ResearchChoice]);
 	FString Status=Locked ? TEXT("Пока недоступно") : TEXT("Доступно");
 	const auto* Queued=R ? P.CityEconomy.ResearchQueue.FindByPredicate([R](const auto& W){return W.ResearchId==R->Id;}) : nullptr;
-	if(Queued) Status=Queued->StartedAtUnix>0 ? TEXT("Осталось: ")+CityDuration(Queued->CompletesAtUnix-FDateTime::UtcNow().ToUnixTimestamp()) : TEXT("Ожидает ячейку или ресурсы");
+	if(Queued) Status=ResearchTimerText(P,*Queued,FDateTime::UtcNow().ToUnixTimestamp()).ToString();
 	LiveStatus=DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(Status),{330,664},{790,35},25);
 	if(R)
 	{
@@ -433,7 +439,7 @@ void UDYKCityWorkWidget::BuildDetail(const FDYKPlayerProfileSaveData& P)
 		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(R->DisplayName),{345,717},{760,42},28);
 		ActionButton(EDYKCityUIAction::ResearchPrevious,0,CityText(TEXT("Предыдущее улучшение")),{260,710},{60,53},NAME_None,ResearchChoice>0);
 		ActionButton(EDYKCityUIAction::ResearchNext,0,CityText(TEXT("Следующее улучшение")),{1130,710},{60,53},NAME_None,ResearchChoice+1<Options.Num());
-		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(CityCosts(*R)+TEXT(" · ")+CityDuration(R->DurationSeconds)),{290,772},{870,34},24);
+		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,CityText(CityCosts(*R)+TEXT(" · ")+CityUpgradeDuration(R->DurationSeconds)),{290,772},{870,34},24);
 		ActionButton(EDYKCityUIAction::Research,0,R->Id==Item.ResearchRoot ? NSLOCTEXT("DYKCity","Learn","Изучить") : NSLOCTEXT("DYKCity","Improve","Улучшить"),{355,820},{355,64},R->Id,DYKCityResearch::CanEnqueue(P,R->Id));
 	}
 	else ActionButton(EDYKCityUIAction::Research,0,CityText(Locked ? TEXT("Недоступно") : TEXT("Изучено")),{355,820},{355,64},NAME_None,false);
@@ -561,7 +567,7 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
 		V.bWorking=BuildingWork->StartedAtUnix>0;
 		V.Seconds=FMath::Max<int64>(0,BuildingWork->CompletesAtUnix-Now);
 		V.WorkName=CityText(BuildingWork->bUpgrade ? TEXT("Улучшение здания") : TEXT("Строительство"));
-		V.Process=V.WorkName.ToString()+TEXT("\n")+(V.bWorking ? CityDuration(V.Seconds) : TEXT("Ожидает строителя или ресурсов"));
+		V.Process=V.WorkName.ToString()+TEXT("\n")+(V.bWorking ? CityUpgradeDuration(V.Seconds) : TEXT("Ожидает строителя или ресурсов"));
 	}
 	if(ResourceScreen && ResourceScreen->Definition && ResourceScreen->Definition->bFirstOnly)
 	{
@@ -584,7 +590,7 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
 					? TEXT(" · не хватает ресурсов") : TEXT(" · в очереди")));
 		}
 		if(V.WorkName.IsEmpty()) V.WorkName=CityText(TEXT("Нет активного улучшения"));
-		V.WorkTime=CityText(V.bCanCancel ? CityDuration(V.Seconds) : TEXT("—"));
+		V.WorkTime=CityText(V.bCanCancel ? CityUpgradeDuration(V.Seconds) : TEXT("—"));
 	}
     FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=State.Instance; R.Kind=EDYKCityBuildingWorkKind::Upgrade;
 	R.BuildingId=FDYKBuildingId(State.Building); R.ExpectedLevel=P.Buildings[S->BuildingIndex].Level;

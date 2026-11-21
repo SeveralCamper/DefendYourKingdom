@@ -274,6 +274,25 @@ bool FDYKResearchCombatSnapshotTest::RunTest(const FString& Parameters)
 	auto* Save=GI->GetSubsystem<UDYKSaveSubsystem>();
 	if(!TestNotNull(TEXT("Actual profile service"),Save)) return false;
 	FResearchTestService Fixture;
+	const auto* Peasant=DYKUnitCatalog::Find(DYKUnitIds::Peasant());
+	if(!TestNotNull(TEXT("Peasant definition"),Peasant)) return false;
+	const TCHAR* Upgrades[]={TEXT("RESEARCH-INFANTRY-T1-HP-1"),TEXT("RESEARCH-INFANTRY-T1-DAMAGE-1"),TEXT("RESEARCH-INFANTRY-T1-ARMOR-1")};
+	for(const auto* Upgrade:Upgrades)
+		TestTrue(TEXT("A peasant upgrade can enter the actual research queue"),DYKCityResearch::Enqueue(Fixture,FGuid::NewGuid(),Upgrade,ResearchTestTime));
+	TestTrue(TEXT("Research is still active after nineteen seconds"),DYKCityWork::Update(Fixture,ResearchTestTime+19));
+	TestEqual(TEXT("Active research does not increase health yet"),DYKCityResearch::EffectiveStats(Fixture.State,*Peasant).MaxHP.Value,15);
+	TestTrue(TEXT("First upgrade completes at twenty seconds"),DYKCityWork::Update(Fixture,ResearchTestTime+20));
+	TestEqual(TEXT("Personal HP bonus is five"),DYKCityResearch::EffectiveStats(Fixture.State,*Peasant).MaxHP.Value,20);
+	TestTrue(TEXT("Second upgrade completes at forty seconds"),DYKCityWork::Update(Fixture,ResearchTestTime+40));
+	TestEqual(TEXT("Personal damage bonus is two"),DYKCityResearch::EffectiveStats(Fixture.State,*Peasant).Attack.DamagePerHit.Value,6);
+	TestTrue(TEXT("Third upgrade completes at sixty seconds"),DYKCityWork::Update(Fixture,ResearchTestTime+60));
+	const auto Stats=DYKCityResearch::EffectiveStats(Fixture.State,*Peasant);
+	TestEqual(TEXT("Personal physical armor bonus is one"),Stats.PhysicalArmor.Value,1);
+	TestEqual(TEXT("Personal research leaves magical armor unchanged"),Stats.MagicalArmor.Value,0);
+	const auto* Guard=DYKUnitCatalog::Find(FDYKUnitTypeId(TEXT("DYK-GUARD")));
+	if(!TestNotNull(TEXT("Guard definition"),Guard)) return false;
+	const auto GuardBonus=DYKCityResearch::Bonus(Fixture.State,*Guard,EDYKResearchScope::Type);
+	TestTrue(TEXT("Peasant improvements do not affect the guard"),GuardBonus.HP==0 && GuardBonus.Damage==0 && GuardBonus.PhysicalArmor==0);
 	TestTrue(TEXT("Save researched infantry modifiers"),Save->ApplyProfileCommand(FGuid::NewGuid(),[&Fixture](auto& P)
 	{
 		P=Fixture.State;
@@ -286,15 +305,17 @@ bool FDYKResearchCombatSnapshotTest::RunTest(const FString& Parameters)
 	FString Error;
 	TestTrue(TEXT("Initialize pure battle state"),Mode->GetBattleSession().Initialize(Battle,Error));
 	TestTrue(TEXT("Initialize actual combat actor"),Defender->Initialize(Mode,FGuid::NewGuid()));
-	TestEqual(TEXT("Actual HP includes researched ten"),Defender->GetHP(),25);
-	TestEqual(TEXT("Actual attack includes researched two"),Defender->GetUnitDefinition()->Base.Attack.DamagePerHit.Value,6);
+	TestEqual(TEXT("Combat HP combines personal and line research"),Defender->GetHP(),30);
+	TestEqual(TEXT("Combat attack combines personal and line research"),Defender->GetUnitDefinition()->Base.Attack.DamagePerHit.Value,8);
+	TestEqual(TEXT("Combat applies both physical armor bonuses"),Defender->GetUnitDefinition()->Base.PhysicalArmor.Value,2);
+	TestEqual(TEXT("Combat magic armor remains unchanged"),Defender->GetUnitDefinition()->Base.MagicalArmor.Value,0);
 	TestTrue(TEXT("Register defender in pure session"),Mode->GetBattleSession().AddDefense(Defender->GetDefenseId()));
 	TestTrue(TEXT("Enter active phase without playing/ticking the world"),Mode->GetBattleSession().StartWave(Mode->GetBattleSession().GetPreparationToken(),0));
 	TestTrue(TEXT("Apply actual physical damage"),Defender->ApplyDamage(4));
-	TestEqual(TEXT("Flat researched physical armor subtracts one"),Defender->GetHP(),22);
+	TestEqual(TEXT("Flat researched physical armor subtracts two"),Defender->GetHP(),28);
 	TestTrue(TEXT("Apply actual magic damage"),Defender->ApplyDamage(4,EDYKDamageType::Magical));
-	TestEqual(TEXT("Physical research cannot reduce magic hit"),Defender->GetHP(),18);
-	Defender->RestoreAfterWave(); TestEqual(TEXT("Restore uses researched maximum"),Defender->GetHP(),25);
+	TestEqual(TEXT("Physical research cannot reduce magic hit"),Defender->GetHP(),24);
+	Defender->RestoreAfterWave(); TestEqual(TEXT("Restore uses researched maximum"),Defender->GetHP(),30);
 	TestEqual(TEXT("Shared base catalog never changed"),DYKUnitCatalog::Find(DYKUnitIds::Peasant())->Base.MaxHP.Value,15);
 	return true;
 }

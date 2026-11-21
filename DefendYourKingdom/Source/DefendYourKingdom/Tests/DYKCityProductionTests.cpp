@@ -93,6 +93,16 @@ bool FDYKWarehouseLevelsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Partial collection respects upgraded free space"),V.Collectable,int64(30));
 	for (auto& R:P.Resources) if(R.ResourceId==ProductionWood.ToContentId()) R.Amount=4101;
 	TestFalse(TEXT("Warehouse overflow rejected"),DYKCityEconomy::Validate(P));
+	auto* Save=NewObject<UDYKProfileSaveGame>();
+	Save->Profile=P;
+	Save->Profile.CityEconomy.WarehouseCapacityOverride=100000;
+	TArray<uint8> Bytes;
+	if(!TestTrue(TEXT("Serialize the profile-specific limit"),UGameplayStatics::SaveGameToMemory(Save,Bytes))) return false;
+	const auto* Reload=Cast<UDYKProfileSaveGame>(UGameplayStatics::LoadGameFromMemory(Bytes));
+	if(!TestNotNull(TEXT("Reload the profile-specific limit"),Reload)) return false;
+	TestTrue(TEXT("Reloaded profile accepts the stocked warehouse"),DYKCityEconomy::Validate(Reload->Profile));
+	TestEqual(TEXT("Only the selected save gets larger storage"),DYKCityEconomy::Capacity(Reload->Profile,ProductionWood),int64(100000));
+	TestEqual(TEXT("Other profiles still use the warehouse level"),DYKCityEconomy::Capacity(P,ProductionWood),int64(4100));
 	return true;
 }
 #endif

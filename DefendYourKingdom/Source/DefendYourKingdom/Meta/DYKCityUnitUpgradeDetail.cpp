@@ -155,11 +155,11 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 
 	const auto Options=Locked ? TArray<FName>() : ResearchOptions(Profile,Item);
 	const auto& Definitions=DYKCityResearch::DEV_PLACEHOLDER().Definitions;
-	const auto Personal=DYKCityResearch::Bonus(Profile,*Unit,EDYKResearchScope::Type);
+	const auto Stats=DYKCityResearch::EffectiveStats(Profile,*Unit);
 	const FUpgradeRow Rows[]={
-		{&FDYKResearchBonus::Damage,Unit->Base.Attack.DamagePerHit.Value,529},
-		{&FDYKResearchBonus::HP,Unit->Base.MaxHP.Value,622},
-		{&FDYKResearchBonus::PhysicalArmor,Unit->Base.PhysicalArmor.Value,729}};
+		{&FDYKResearchBonus::Damage,Stats.Attack.DamagePerHit.Value,529},
+		{&FDYKResearchBonus::HP,Stats.MaxHP.Value,622},
+		{&FDYKResearchBonus::PhysicalArmor,Stats.PhysicalArmor.Value,729}};
 	const FVector2D UpgradeSize(264,62),CellSize(58,56);
 	TSet<FName> StatResearch;
 	for(int32 Index=0;Index<UE_ARRAY_COUNT(Rows);++Index)
@@ -190,13 +190,12 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		const auto DrawStat=[&](int32 Current,int32 Delta,double X,double Y)
 		{
 			Label(Locked ? FText::FromString(TEXT("—")) : FText::AsNumber(Current),{X,Y},{54,40},33);
-			if(!Next) return;
+			if(Delta==0) return;
 			Label(FText::FromString(TEXT("»")),{X+51,Y},{40,40},33)->SetColorAndOpacity(Gold);
 			Label(FText::AsNumber(Current+Delta),{X+91,Y},{61,40},33)->SetColorAndOpacity(Gold);
 		};
-		const int32 Current=Row.BaseValue+Personal.*Row.Stat;
-		DrawStat(Current,Next ? Next->Bonus.*Row.Stat : 0,Index==2 ? 609. : 565.,Index==2 ? 716. : Row.Y+9);
-		if(Index==2) DrawStat(Unit->Base.MagicalArmor.Value,0,609,756);
+		DrawStat(Row.BaseValue,Next ? Next->Bonus.*Row.Stat : 0,Index==2 ? 609. : 565.,Index==2 ? 716. : Row.Y+9);
+		if(Index==2) DrawStat(Stats.MagicalArmor.Value,0,609,756);
 		ResearchAction(Next,Index,{762,Row.Y},UpgradeSize,
 			Next ? NSLOCTEXT("DYKCity","ImproveUnitStat","Улучшить") : NSLOCTEXT("DYKCity","UnitUpgradeUnavailable","Недоступно"));
 	}
