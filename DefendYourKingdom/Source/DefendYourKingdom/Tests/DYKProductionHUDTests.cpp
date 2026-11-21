@@ -10,6 +10,7 @@
 #include "Engine/World.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Blueprint/WidgetTree.h"
 #include "Engine/Texture2D.h"
 #include "UObject/StrongObjectPtr.h"
@@ -214,6 +215,13 @@ bool FDYKLiveBuildingPopupTest::RunTest(const FString& Parameters)
   const auto* Popup=UI->ResourceScreen.Get();
   if(!TestNotNull(TEXT("Military popup"),Popup))return false;
   TestTrue(TEXT("Military buildings share the same popup layout"),Popup->Definition==Military && !Popup->IsInterior());
+  if(const auto* Layout=Cast<UCanvasPanelSlot>(UI->ModalRoot->Slot);TestNotNull(TEXT("Military popup canvas slot"),Layout))
+  {
+   const auto Size=Layout->GetSize();
+   const FString AspectCheck=FString::Printf(TEXT("Actual popup %s preserves the art aspect %s"),*Size.ToString(),*Military->FirstSize.ToString());
+   TestTrue(AspectCheck,Size.Y>0. && FMath::IsNearlyEqual(Size.X/Size.Y,Military->FirstSize.X/Military->FirstSize.Y,0.001));
+   TestTrue(TEXT("Military popup uses the taller size when not constrained"),Size.Y>470.);
+  }
   if(const auto* Name=Popup->FindField(EDYKProductionField::WorkName);TestNotNull(TEXT("Improvement name label"),Name))
   {
    const auto* Research=FName(Type)==TEXT("CITY-WORKSHOP") ? DYKCityResearch::Find(Trap)
@@ -222,9 +230,9 @@ bool FDYKLiveBuildingPopupTest::RunTest(const FString& Parameters)
     Research ? Research->DisplayName : FString(TEXT("Нет активного улучшения")));
   }
   if(const auto* Time=Popup->FindField(EDYKProductionField::WorkTime);TestNotNull(TEXT("Improvement time label"),Time))
-   TestEqual(TEXT("Idle and waiting research have explicit statuses"),Time->GetText().ToString(),
+   TestEqual(TEXT("Active research shows time left and queued research shows its duration"),Time->GetText().ToString(),
     FName(Type)==TEXT("CITY-WORKSHOP") ? FString::Printf(TEXT("%lld с"),Popup->GetView().Seconds)
-     : FName(Type)==TEXT("CITY-BARRACKS") ? FString(TEXT("Ожидает")) : FString(TEXT("—")));
+     : FName(Type)==TEXT("CITY-BARRACKS") ? FString::Printf(TEXT("%lld с"),DYKCityResearch::Find(Unit)->DurationSeconds) : FString(TEXT("—")));
   TestFalse(TEXT("Military buildings have no resources to collect"),Popup->FindAction(EDYKResourceAction::Collect)->GetIsEnabled());
   UI->CloseClicked();
  }

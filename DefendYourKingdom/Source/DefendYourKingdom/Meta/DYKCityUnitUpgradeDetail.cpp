@@ -3,7 +3,6 @@
 #include "DYKCityResearch.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "../UI/DYKCityHUDArt.h"
-#include "Algo/Find.h"
 #include "Blueprint/WidgetTree.h"
 #include "Brushes/SlateNoResource.h"
 #include "Components/CanvasPanel.h"
@@ -114,38 +113,51 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		Button->SetToolTipText(Close ? NSLOCTEXT("DYKCity","Close","Закрыть") : NSLOCTEXT("DYKCity","Back","Назад"));
 	}
 
+	const FVector2D FooterOrigin(191,824);
+	const FVector2D FooterSize(1067,164);
+	Picture(DesignCanvas,FooterOrigin,{FooterSize.X,78},FooterOrigin,{FooterSize.X,78});
+	struct FResourcePlate {FName Id; double SourceX; double SourceWidth;};
+	const FResourcePlate Plates[]={
+		{TEXT("RES-WOOD"),195,210}, {TEXT("RES-STONE"),413,198}, {TEXT("RES-IRON"),619,200},
+		{TEXT("RES-GOLD"),826,211}, {TEXT("RES-FOOD"),1043,208}, {TEXT("RES-MEDALS"),0,0}};
+	constexpr double PlateGap=6.;
+	const double PlateWidth=(FooterSize.X-PlateGap*(UE_ARRAY_COUNT(Plates)-1))/UE_ARRAY_COUNT(Plates);
+	const auto PlatePosition=[PlateWidth](int32 Index)
+	{
+		return FVector2D(Index*(PlateWidth+PlateGap),81);
+	};
+	for(int32 Index=0;Index<UE_ARRAY_COUNT(Plates);++Index)
+	{
+		const auto& Plate=Plates[Index];
+		const FVector2D Position=FooterOrigin+PlatePosition(Index);
+		if(Plate.SourceWidth>0.)
+			Picture(DesignCanvas,{Plate.SourceX,905},{Plate.SourceWidth,73},Position,{PlateWidth,73});
+		else
+		{
+			DYKCityHUDArt::Plate(WidgetTree,DesignCanvas,Position,{PlateWidth,73});
+			Label(FText::FromString(DYKCityCatalog::ResourceName(FDYKResourceId(Plate.Id))),
+				Position+FVector2D(8,5),{PlateWidth-16,27},23);
+		}
+	}
 	const auto BindCost=[&](UDYKCityActionButton* Button,const FDYKResearchDefinition& Research)
 	{
 		auto* Panel=WidgetTree->ConstructWidget<UCanvasPanel>();
-		DYKCityHUDArt::Place(DesignCanvas,Panel,{191,824},{1067,164});
-		Picture(Panel,{191,824},{1067,78},{0,0},{1067,78});
-		if(Research.Costs.IsEmpty())
+		DYKCityHUDArt::Place(DesignCanvas,Panel,FooterOrigin,FooterSize);
+		for(int32 Index=0;Index<UE_ARRAY_COUNT(Plates);++Index)
 		{
-			DYKCityHUDArt::Label(WidgetTree,Panel,NSLOCTEXT("DYKCity","FreeUnitUpgrade","Бесплатно"),{0,77},{1067,72},34,false);
-		}
-		else
-		{
-			struct FResourcePlate {FName Id; double X; double Width;};
-			const FResourcePlate Plates[]={
-				{TEXT("RES-WOOD"),195,210}, {TEXT("RES-STONE"),413,198}, {TEXT("RES-IRON"),619,200},
-				{TEXT("RES-GOLD"),826,211}, {TEXT("RES-FOOD"),1043,208}};
-			const double Width=FMath::Min(210.,1055./Research.Costs.Num()-4.);
-			const double Start=(1067-(Width+5)*Research.Costs.Num()+5)*.5;
-			for(int32 Index=0;Index<Research.Costs.Num();++Index)
+			const auto& Plate=Plates[Index];
+			const auto* Cost=Research.Costs.FindByPredicate([&Plate](const auto& Entry)
 			{
-				const auto& Cost=Research.Costs[Index];
-				const auto* Plate=Algo::FindByPredicate(Plates,[&Cost](const FResourcePlate& Skin){return Skin.Id==Cost.ResourceId.Name;});
-				const double X=Start+Index*(Width+5);
-				if(Plate) Picture(Panel,{Plate->X,905},{Plate->Width,73},{X,81},{Width,73});
-				else DYKCityHUDArt::Plate(WidgetTree,Panel,{X,81},{Width,73});
-				const FDYKResourceId Resource(Cost.ResourceId.Name);
-				const int64 Owned=DYKCityEconomy::Balance(Profile,Resource);
-				const FString Amount=FString::Printf(TEXT("%lld / %lld"),Owned,Cost.Amount);
-				const FString Text=Plate ? Amount : FString::Printf(TEXT("%s\n%s"),DYKCityCatalog::ResourceName(Resource),*Amount);
-				const double Left=Plate ? Width*.44 : 10;
-				auto* Value=DYKCityHUDArt::Label(WidgetTree,Panel,FText::FromString(Text),{X+Left,90},{Width-Left-9,53},30,true);
-				Value->SetColorAndOpacity(Owned>=Cost.Amount ? Gold : FLinearColor(1.f,.38f,.28f));
-			}
+				return Entry.ResourceId.Name==Plate.Id;
+			});
+			if(!Cost) continue;
+			const bool HasIcon=Plate.SourceWidth>0.;
+			const double Left=HasIcon ? PlateWidth*.44 : 8.;
+			const int64 Owned=DYKCityEconomy::Balance(Profile,FDYKResourceId(Plate.Id));
+			const auto Amount=FText::FromString(FString::Printf(TEXT("%lld / %lld"),Owned,Cost->Amount));
+			auto* Value=DYKCityHUDArt::Label(WidgetTree,Panel,Amount,
+				PlatePosition(Index)+FVector2D(Left,HasIcon ? 10 : 31),{PlateWidth-Left-8,HasIcon ? 52. : 32.},28,true);
+			Value->SetColorAndOpacity(Owned>=Cost->Amount ? Gold : FLinearColor(1.f,.38f,.28f));
 		}
 		Button->BindHoverContent(Panel);
 	};
@@ -166,7 +178,7 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		Button->SetStyle(Style);
 		Button->bHoverOnly=!Available;
 		Button->SetIsEnabled(Research!=nullptr);
-		if(Research) BindCost(Button,*Research);
+		if(Research && !Job && !Research->Costs.IsEmpty()) BindCost(Button,*Research);
 		Label(Job ? ResearchButtonText(*Research,Job) : Caption,Pos+FVector2D(Size.X*.29,2),{Size.X*.67,Size.Y-4},30);
 	};
 

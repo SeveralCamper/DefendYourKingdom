@@ -531,16 +531,23 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
 	}
 	if(ResourceScreen && ResourceScreen->Definition && ResourceScreen->Definition->bFirstOnly)
 	{
-		if(const auto* Research=BuildingResearch(P,State.Building); Research && !BuildingWork)
+		if(BuildingWork && !V.bWorking)
 		{
+			const auto* Rule=DYKCityBuildingRules::DEV_PLACEHOLDER().Buildings.Find(State.Building);
+			const int32 LevelIndex=BuildingWork->bUpgrade ? BuildingWork->ExpectedLevel : 0;
+			if(Rule && Rule->Levels.IsValidIndex(LevelIndex)) V.Seconds=Rule->Levels[LevelIndex].DurationSeconds;
+		}
+		else if(const auto* Research=BuildingResearch(P,State.Building); Research && !BuildingWork)
+		{
+			const auto* Definition=DYKCityResearch::Find(Research->ResearchId);
 			V.bCanCancel=true;
 			V.bWorking=Research->StartedAtUnix>0;
-			V.Seconds=FMath::Max<int64>(0,Research->CompletesAtUnix-Now);
-			V.WorkName=CityText(DYKCityResearch::Find(Research->ResearchId)->DisplayName);
-			V.Process=V.WorkName.ToString()+TEXT("\n")+(V.bWorking ? CityDuration(V.Seconds) : TEXT("Ожидает ячейку"));
+			V.Seconds=V.bWorking ? FMath::Max<int64>(0,Research->CompletesAtUnix-Now) : Definition->DurationSeconds;
+			V.WorkName=CityText(Definition->DisplayName);
+			V.Process=V.WorkName.ToString()+TEXT("\n")+CityDuration(V.Seconds);
 		}
 		if(V.WorkName.IsEmpty()) V.WorkName=CityText(TEXT("Нет активного улучшения"));
-		V.WorkTime=CityText(V.bWorking ? CityDuration(V.Seconds) : V.bCanCancel ? TEXT("Ожидает") : TEXT("—"));
+		V.WorkTime=CityText(V.bCanCancel ? CityDuration(V.Seconds) : TEXT("—"));
 	}
     FDYKCityBuildingWorkRequest R; R.CommandId=FGuid::NewGuid(); R.InstanceId=State.Instance; R.Kind=EDYKCityBuildingWorkKind::Upgrade;
 	R.BuildingId=FDYKBuildingId(State.Building); R.ExpectedLevel=P.Buildings[S->BuildingIndex].Level;
@@ -575,8 +582,10 @@ void UDYKCityWorkWidget::PositionResourceWindow()
 		Layout->SetAnchors(FAnchors(.18333333f,.18333333f,.81666667f,.81666667f)); Layout->SetAlignment({0,0}); Layout->SetOffsets(FMargin(0)); return;
 	}
 	FVector2D Viewport=UWidgetLayoutLibrary::GetViewportSize(this)/FMath::Max(.01f,UWidgetLayoutLibrary::GetViewportScale(this));
-	if(Viewport.X<=0 || Viewport.Y<=0) Viewport={1920,1080};
-	const FVector2D Popup=UDYKResourceBuildingWidget::PopupSize(Viewport,ResourceScreen->Definition->FirstSize);
+	if(Viewport.X<=16. || Viewport.Y<=16.) Viewport={1920,1080};
+	const auto& Content=*ResourceScreen->Definition;
+	const double PreferredWidth=Content.bFirstOnly && Content.UsesAuthoredLayout() ? 550. : 506.;
+	const FVector2D Popup=UDYKResourceBuildingWidget::PopupSize(Viewport,Content.FirstSize,PreferredWidth);
 	FVector2D Anchor=Viewport*.5;
 	for(TActorIterator<ADYKCityBuildingActor> It(GetWorld());It;++It) if(It->InstanceId==State.Instance)
 	{

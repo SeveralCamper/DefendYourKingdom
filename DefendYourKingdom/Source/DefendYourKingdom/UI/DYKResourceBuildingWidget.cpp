@@ -207,9 +207,9 @@ FVector2D UDYKResourceBuildingWidget::PopupPosition(FVector2D Anchor,FVector2D V
 	return {FMath::Clamp(Anchor.X-Popup.X*.5,8.,FMath::Max(8.,Viewport.X-Popup.X-8)),FMath::Clamp(Anchor.Y-Popup.Y*.5,8.,FMath::Max(8.,Viewport.Y-Popup.Y-8))};
 }
 
-FVector2D UDYKResourceBuildingWidget::PopupSize(FVector2D Viewport,FVector2D DesignSize)
+FVector2D UDYKResourceBuildingWidget::PopupSize(FVector2D Viewport,FVector2D DesignSize,double PreferredWidth)
 {
- const FVector2D Preferred(506,506*DesignSize.Y/DesignSize.X);
+ const FVector2D Preferred=DesignSize*(PreferredWidth/DesignSize.X);
  const double Scale=FMath::Clamp(FMath::Min((Viewport.X-16)/Preferred.X,(Viewport.Y-16)/Preferred.Y),0.,1.);
  return Preferred*Scale;
 }

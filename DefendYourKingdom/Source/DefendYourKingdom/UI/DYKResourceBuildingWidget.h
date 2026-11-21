@@ -144,7 +144,7 @@ public:
 	void Activate(EDYKResourceAction Action,int32 Index,int32 ExpectedGeneration);
 	void Deactivate() {++Generation; OnAction.Clear();}
 	UDYKResourceHUDButton* FindAction(EDYKResourceAction Action,int32 Index=0) const;
-	static FVector2D PopupSize(FVector2D Viewport,FVector2D DesignSize);
+	static FVector2D PopupSize(FVector2D Viewport,FVector2D DesignSize,double PreferredWidth=506.);
 	static FVector2D PopupPosition(FVector2D Anchor,FVector2D Viewport,FVector2D Popup);
 	FDYKResourceActionEvent OnAction;
 	const FDYKResourceBuildingView& GetView() const {return View;}
