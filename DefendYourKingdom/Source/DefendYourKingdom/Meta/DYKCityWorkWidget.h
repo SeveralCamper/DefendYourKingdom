@@ -22,7 +22,13 @@ public:
 	UPROPERTY() int32 Index=0;
 	UPROPERTY() FName Key;
 	UPROPERTY() int64 Generation=0;
+	void BindHoverContent(UWidget* Content);
+	bool bHoverOnly=false;
 	UFUNCTION() void Invoke();
+private:
+	UPROPERTY() TObjectPtr<UWidget> HoverContent;
+	UFUNCTION() void ShowHoverContent();
+	UFUNCTION() void HideHoverContent();
 };
 UCLASS()
 class DEFENDYOURKINGDOM_API UDYKCityWorkWidget : public UDYKScreenWidget
@@ -55,6 +61,7 @@ private:
 	void BuildBuilding(const FDYKPlayerProfileSaveData& P);
 	void BuildInterior(const FDYKPlayerProfileSaveData& P);
 	void BuildDetail(const FDYKPlayerProfileSaveData& P);
+	bool BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData& P,const FDYKCityInteriorItem& Item);
 	UFUNCTION() void ResourceAction(EDYKResourceAction Action,int32 Index);
 	FDYKResourceBuildingView ResourceView(const FDYKPlayerProfileSaveData& P) const;
 	void PositionResourceWindow();

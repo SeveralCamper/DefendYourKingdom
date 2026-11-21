@@ -1,0 +1,111 @@
+#include "DYKCityHUDTestProfile.h"
+#include "../Meta/DYKCityWorkWidget.h"
+#include "../Core/Content/DYKUnitCatalog.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/TextBlock.h"
+#include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "Input/Events.h"
+#include "Misc/AutomationTest.h"
+#include "UObject/StrongObjectPtr.h"
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKUnitUpgradeDetailTest,"DYK.CityHUD.UnitUpgrade.LiveStatsProgressAndHoverCosts",
+	EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UGameInstance> Game(NewObject<UGameInstance>(GEngine));
+	Game->Init();
+	auto* World=UWorld::CreateWorld(EWorldType::Game,false);
+	World->SetGameInstance(Game.Get());
+	struct FCleanup {UWorld* World; UGameInstance* Game; ~FCleanup(){World->DestroyWorld(false);Game->Shutdown();}} Cleanup{World,Game.Get()};
+	FURL URL; URL.AddOption(TEXT("game=/Script/DefendYourKingdom.DYKCityGameMode"));
+	if(!World->SetGameMode(URL)) return false;
+	auto* Save=Game->GetSubsystem<UDYKSaveSubsystem>();
+	const int64 Now=FDateTime::UtcNow().ToUnixTimestamp();
+	const FName Guard(TEXT("RESEARCH-INFANTRY-T2"));
+	if(!TestTrue(TEXT("Seed barracks and eligible warehouse"),Save->ApplyProfileCommand(FGuid::NewGuid(),[Now](auto& Profile)
+	{
+		if(!DYKCityHUDTest::Seed(Profile,Now-60) || !DYKCityHUDTest::AddOwned(Profile,TEXT("CITY-WAREHOUSE"),Now-60)) return false;
+		Profile.Buildings.Last().Level=4;
+		for(auto& Resource:Profile.Resources)
+			Resource.Amount=FMath::Min<int64>(1800,DYKCityEconomy::Capacity(Profile,FDYKResourceId(Resource.ResourceId.Name)));
+		Profile.Resources.Add({FDYKResourceId(TEXT("RES-MEDALS")).ToContentId(),70});
+		return true;
+	}))) return false;
+	if(!TestTrue(TEXT("Unlock the second infantry tier"),DYKCityResearch::Enqueue(*Save,FGuid::NewGuid(),Guard,Now-60)
+		&& DYKCityWork::Update(*Save,Now))) return false;
+
+	TStrongObjectPtr<UDYKCityWorkWidget> UI(NewObject<UDYKCityWorkWidget>(World));
+	UI->Initialize();
+	const auto Slate=UI->TakeWidget();
+	UI->OpenBuilding(DYKCityHUDTest::Instance(*Save->GetProfileSnapshot(),TEXT("CITY-BARRACKS")),TEXT("CITY-BARRACKS"));
+	UI->Dispatch(EDYKCityUIAction::Visit);
+	const auto SelectUnit=[&](int32 Index)
+	{
+		if(UI->GetWindowState().Window==EDYKCityWindow::Detail) UI->Dispatch(EDYKCityUIAction::Back);
+		UI->Dispatch(EDYKCityUIAction::Item,Index);
+	};
+	const auto TextAt=[&](FVector2D Position)
+	{
+		for(const auto* Child:UI->DesignCanvas->GetAllChildren())
+			if(const auto* CanvasSlot=Cast<UCanvasPanelSlot>(Child->Slot);CanvasSlot && CanvasSlot->GetPosition()==Position)
+				if(const auto* Panel=Cast<UPanelWidget>(Child);Panel && Panel->GetChildrenCount()==1)
+					if(const auto* Text=Cast<UTextBlock>(Panel->GetChildAt(0))) return Text->GetText().ToString();
+		return FString();
+	};
+	const auto VisibleCost=[&]()
+	{
+		FString Text;
+		for(auto* Child:UI->DesignCanvas->GetAllChildren())
+			if(const auto* Panel=Cast<UCanvasPanel>(Child);Panel && Panel->GetVisibility()==ESlateVisibility::HitTestInvisible)
+				for(auto* Cost:Panel->GetAllChildren())
+					if(const auto* Fit=Cast<UPanelWidget>(Cost);Fit && Fit->GetChildrenCount()==1)
+						if(const auto* Price=Cast<UTextBlock>(Fit->GetChildAt(0))) Text+=Price->GetText().ToString()+TEXT(" ");
+		return Text;
+	};
+	SelectUnit(0);
+	const auto* Peasant=DYKUnitCatalog::Find(FDYKUnitTypeId(TEXT("DYK-PEASANT")).ToContentId());
+	TestEqual(TEXT("Base attack comes from the peasant definition"),TextAt({565,538}),FString::FromInt(Peasant->Base.Attack.DamagePerHit.Value));
+	TestEqual(TEXT("Base HP comes from the peasant definition"),TextAt({565,631}),FString::FromInt(Peasant->Base.MaxHP.Value));
+	SelectUnit(1);
+	const auto* Damage=UI->FindAction(EDYKCityUIAction::Research,0);
+	const auto* Armor=UI->FindAction(EDYKCityUIAction::Research,2);
+	if(!TestNotNull(TEXT("Independent attack research"),Damage) || !TestNotNull(TEXT("Independent armor research"),Armor))return false;
+	TestEqual(TEXT("Attack uses the selected unit's research"),Damage->Key,FName(TEXT("RESEARCH-INFANTRY-T2-DAMAGE-1")));
+	TestEqual(TEXT("Armor uses a different research"),Armor->Key,FName(TEXT("RESEARCH-INFANTRY-T2-ARMOR-1")));
+	TestTrue(TEXT("Prices start hidden"),VisibleCost().IsEmpty());
+	const FPointerEvent Pointer(0,FVector2D(10),FVector2D(10),TSet<FKey>(),EKeys::Invalid,0,FModifierKeysState());
+	const FGeometry Geometry=FGeometry::MakeRoot(FVector2D(264,62),FSlateLayoutTransform());
+	for(auto* Button:{UI->FindAction(EDYKCityUIAction::Research,0),UI->FindAction(EDYKCityUIAction::Research,2)})
+	{
+		const auto Native=Button->TakeWidget();
+		Native->OnMouseEnter(Geometry,Pointer);
+		const auto* Research=DYKCityResearch::Find(Button->Key);
+		TestTrue(TEXT("Hovered button shows the exact research price"),
+			VisibleCost().Contains(FString::Printf(TEXT("/ %lld"),Research->Costs[0].Amount)));
+		Native->OnMouseLeave(Pointer);
+		TestTrue(TEXT("Leaving hides the price panel"),VisibleCost().IsEmpty());
+	}
+	const FName DamageKey=Damage->Key;
+	const FString Preview=TextAt({656,538});
+	UI->FindAction(EDYKCityUIAction::Research,0)->Invoke();
+	TestTrue(TEXT("Research queues on its own row"),Save->GetProfileSnapshot()->CityEconomy.ResearchQueue.ContainsByPredicate(
+		[DamageKey](const auto& Work){return Work.ResearchId==DamageKey;}));
+	TestNotNull(TEXT("Queued attack can be cancelled independently"),UI->FindAction(EDYKCityUIAction::CancelResearch,0));
+	TestEqual(TEXT("Queued stage has its own marker"),TextAt({1054,532}),FString(TEXT("…")));
+	if(!TestTrue(TEXT("Complete the queued attack"),DYKCityWork::Update(*Save,FDateTime::UtcNow().ToUnixTimestamp()+60)))return false;
+	SelectUnit(1);
+	TestFalse(TEXT("Next stat was actually shown"),Preview.IsEmpty());
+	TestEqual(TEXT("Completed personal upgrade updates the current attack"),TextAt({565,538}),Preview);
+	TestTrue(TEXT("The completed marker is distinct from a queued stage"),TextAt({1054,532}).IsEmpty());
+	const auto* CompletedRow=UI->FindAction(EDYKCityUIAction::Research,0);
+	if(TestNotNull(TEXT("The completed row has no research command"),CompletedRow))
+		TestFalse(TEXT("A completed single-stage row cannot be queued again"),CompletedRow->GetIsEnabled());
+	UI->ReleaseSlateResources(true);
+	return true;
+}
+#endif

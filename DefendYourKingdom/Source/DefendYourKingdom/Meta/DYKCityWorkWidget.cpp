@@ -58,7 +58,7 @@ namespace
 	}
 }
 
-void UDYKCityActionButton::Invoke() {if(Screen && Screen->GetRenderGeneration()==Generation) Screen->Dispatch(Action,Index,Key);}
+void UDYKCityActionButton::Invoke() {if(!bHoverOnly && Screen && Screen->GetRenderGeneration()==Generation) Screen->Dispatch(Action,Index,Key);}
 
 UDYKCityActionButton* UDYKCityWorkWidget::ActionButton(EDYKCityUIAction Action,int32 Index,const FText& Label,FVector2D Pos,FVector2D Size,FName Key,bool Enabled,bool Transparent)
 {
@@ -202,6 +202,8 @@ void UDYKCityWorkWidget::RebuildModal()
 	if(Detail)
 	{
 		const auto Items=DYKCityBuildingUI::Items(State.Building,State.LibraryTab);
+		if(State.Building==TEXT("CITY-BARRACKS") && Items.IsValidIndex(State.SelectedItem)
+			&& BuildUnitUpgradeDetail(*P,Items[State.SelectedItem])) return;
 		if(Items.IsValidIndex(State.SelectedItem)) Title=CityText(Items[State.SelectedItem].Name);
 		if(DYKCityBuildingUI::Interior(State.Building)!=EDYKCityInterior::Barracks) Art=TEXT("AllTrapHUD");
 	}
