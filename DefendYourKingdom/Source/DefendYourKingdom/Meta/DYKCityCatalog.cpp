@@ -70,12 +70,9 @@ FDYKCityProductionLevel DYKCityCatalog::Production(FDYKBuildingId Id, int32 Leve
 
 int64 DYKCityCatalog::WarehouseCapacityDEV_PLACEHOLDER(FDYKResourceId Id, int32 Level)
 {
-	if (ResourceCapacity(Id) == MAX_uint32) return MAX_uint32;
-	if (ResourceCapacity(Id) == 0 || Level < 0 || Level > 4) return 0;
-	// Level 0 is the starter storage available without a warehouse building.
-	const int64 Food[] = {100,150,300,600,2400};
-	const int64 Wood[] = {100,200,400,800,1600};
-	const int64 Stone[] = {100,150,300,600,1600};
-	return Id.GetName() == TEXT("RES-FOOD") ? Food[Level]
-		: Id.GetName() == TEXT("RES-WOOD") ? Wood[Level] : Stone[Level];
+	const int64 StarterCapacity = ResourceCapacity(Id);
+	if (StarterCapacity == MAX_uint32) return StarterCapacity;
+	if (StarterCapacity == 0 || Level < 0 || Level > 4) return 0;
+	constexpr int64 CapacityPerLevel = 2000;
+	return StarterCapacity + CapacityPerLevel * Level;
 }

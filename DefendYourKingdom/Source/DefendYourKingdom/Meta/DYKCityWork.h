@@ -12,6 +12,7 @@ namespace DYKCityWork
 	DEFENDYOURKINGDOM_API bool Update(IDYKProfileService& Service, int64 Now);
 	DEFENDYOURKINGDOM_API bool Enqueue(IDYKProfileService& Service, const FDYKCityBuildingWorkRequest& Request, int64 Now);
 	DEFENDYOURKINGDOM_API bool Cancel(IDYKProfileService& Service, FGuid Command, FGuid Work, int64 Now);
+	DEFENDYOURKINGDOM_API bool CanPay(const FDYKPlayerProfileSaveData& Profile, TConstArrayView<FDYKResourceSaveData> Costs);
 	DEFENDYOURKINGDOM_API bool Pay(FDYKPlayerProfileSaveData& Profile, TConstArrayView<FDYKResourceSaveData> Costs, TArray<FDYKCityWorkCost>& Paid);
 	DEFENDYOURKINGDOM_API bool Refund(FDYKPlayerProfileSaveData& Profile, TConstArrayView<FDYKCityWorkCost> Paid);
 }

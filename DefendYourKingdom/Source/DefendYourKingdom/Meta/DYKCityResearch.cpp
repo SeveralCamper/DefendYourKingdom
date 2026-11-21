@@ -207,7 +207,7 @@ bool DYKCityResearch::CanEnqueue(const FDYKPlayerProfileSaveData& P,FName Resear
 	const auto* D=Find(Research,C);
 	return D && Validate(P,C) && !P.CityEconomy.CompletedResearch.Contains(Research)
 		&& !P.CityEconomy.ResearchQueue.ContainsByPredicate([Research](const auto& W){return W.ResearchId==Research;})
-		&& ResearchReady(P,*D,C);
+		&& ResearchReady(P,*D,C) && DYKCityWork::CanPay(P,D->Costs);
 }
 
 bool DYKCityResearch::Advance(FDYKPlayerProfileSaveData& P,int64 Now,const FDYKResearchConfig& C)

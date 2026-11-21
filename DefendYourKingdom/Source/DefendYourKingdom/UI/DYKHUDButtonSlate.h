@@ -6,14 +6,23 @@ class SDYKHUDButton final: public SButton
 {
 public:
  bool bRound=false;
+ bool bHoverOnly=false;
  FLinearColor HighlightColor=FLinearColor(1,.65f,.06f,1);
  FVector2D CircleCenter{.5,.48};
  double CircleRadius=.41;
  TArray<FVector2D> HoverOutline;
+ FReply OnMouseButtonDown(const FGeometry& Geometry,const FPointerEvent& Event) override
+ {
+  return bHoverOnly ? FReply::Unhandled() : SButton::OnMouseButtonDown(Geometry,Event);
+ }
+ FReply OnKeyDown(const FGeometry& Geometry,const FKeyEvent& Event) override
+ {
+  return bHoverOnly ? FReply::Unhandled() : SButton::OnKeyDown(Geometry,Event);
+ }
  virtual int32 OnPaint(const FPaintArgs& Args,const FGeometry& Geometry,const FSlateRect& Culling,FSlateWindowElementList& Elements,int32 Layer,const FWidgetStyle& WidgetTint,bool ParentEnabled) const override
  {
   const int32 Top=SButton::OnPaint(Args,Geometry,Culling,Elements,Layer,WidgetTint,ParentEnabled);
-  if(!ParentEnabled || !IsEnabled() || !(IsHovered() || HasKeyboardFocus())) return Top;
+  if(bHoverOnly || !ParentEnabled || !IsEnabled() || !(IsHovered() || HasKeyboardFocus())) return Top;
   const FVector2D Size=Geometry.GetLocalSize();
   TArray<FVector2D> Points;
   if(!HoverOutline.IsEmpty())

@@ -107,6 +107,30 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 	}
 	const FName DamageKey=Damage->Key;
 	const FString Preview=TextAt({656,538});
+	const auto SetMedals=[&](int64 Balance)
+	{
+		return Save->ApplyProfileCommand(FGuid::NewGuid(),[Balance](auto& Profile)
+		{
+			auto* Medals=Profile.Resources.FindByPredicate([](const auto& Resource){return Resource.ResourceId.Name==TEXT("RES-MEDALS");});
+			if(!Medals) return false;
+			Medals->Amount=Balance;
+			return true;
+		});
+	};
+	if(!TestTrue(TEXT("Leave the player one medal short"),SetMedals(4))) return false;
+	SelectUnit(1);
+	auto* Unaffordable=UI->FindAction(EDYKCityUIAction::Research,0);
+	const auto UnaffordableSlate=Unaffordable->TakeWidget();
+	const FKeyEvent Accept(EKeys::SpaceBar,FModifierKeysState(),0,false,0,0);
+	const int64 BeforeRejectedAction=Save->GetRevision();
+	TestFalse(TEXT("An unaffordable upgrade does not accept activation"),UnaffordableSlate->OnKeyDown(Geometry,Accept).IsEventHandled());
+	Unaffordable->Invoke();
+	TestEqual(TEXT("An unavailable HUD action does not write a save"),Save->GetRevision(),BeforeRejectedAction);
+	UnaffordableSlate->OnMouseEnter(Geometry,Pointer);
+	TestTrue(TEXT("An unavailable price still shows what is missing on hover"),VisibleCost().Contains(TEXT("4 / 5")));
+	UnaffordableSlate->OnMouseLeave(Pointer);
+	if(!TestTrue(TEXT("Restore the price of the next upgrade"),SetMedals(5))) return false;
+	SelectUnit(1);
 	UI->FindAction(EDYKCityUIAction::Research,0)->Invoke();
 	TestTrue(TEXT("Research queues on its own row"),Save->GetProfileSnapshot()->CityEconomy.ResearchQueue.ContainsByPredicate(
 		[DamageKey](const auto& Work){return Work.ResearchId==DamageKey;}));

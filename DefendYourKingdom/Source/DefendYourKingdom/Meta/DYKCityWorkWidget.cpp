@@ -1,4 +1,6 @@
 #include "DYKCityWorkWidget.h"
+#include "../UI/DYKHUDButtonSlate.h"
+#include "Components/ButtonSlot.h"
 #include "DYKCityOrders.h"
 #include "DYKCityGameMode.h"
 #include "DYKCityEditorWidget.h"
@@ -47,13 +49,6 @@ namespace
 		if(Seconds>=60) return Seconds%60==0 ? FString::Printf(TEXT("%lld мин"),Seconds/60) : FString::Printf(TEXT("%lld мин %lld с"),Seconds/60,Seconds%60);
 		return FString::Printf(TEXT("%lld с"),Seconds);
 	}
-	bool LacksResearchResources(const FDYKPlayerProfileSaveData& P,const FDYKResearchDefinition& Definition)
-	{
-		return Definition.Costs.ContainsByPredicate([&P](const auto& Cost)
-		{
-			return DYKCityEconomy::Balance(P,FDYKResourceId(Cost.ResourceId.Name))<Cost.Amount;
-		});
-	}
 	void CityBrown(UWidgetTree* Tree,UCanvasPanel* Canvas,FVector2D Pos,FVector2D Size)
 	{DYKCityHUDArt::Plate(Tree,Canvas,Pos,Size);}
 	FString CityCosts(const FDYKResearchDefinition& D)
@@ -65,12 +60,26 @@ namespace
 	}
 }
 
-void UDYKCityActionButton::Invoke() {if(!bHoverOnly && Screen && Screen->GetRenderGeneration()==Generation) Screen->Dispatch(Action,Index,Key);}
+TSharedRef<SWidget> UDYKCityActionButton::RebuildWidget()
+{
+	if(!bHoverOnly) return Super::RebuildWidget();
+	auto Native=SNew(SDYKHUDButton)
+		.OnHovered_UObject(this,&UDYKCityActionButton::SlateHandleHovered)
+		.OnUnhovered_UObject(this,&UDYKCityActionButton::SlateHandleUnhovered)
+		.ButtonStyle(&GetStyle()).IsFocusable(false);
+	Native->bHoverOnly=true;
+	MyButton=Native;
+	if(GetChildrenCount()>0) CastChecked<UButtonSlot>(GetContentSlot())->BuildSlot(MyButton.ToSharedRef());
+	return Native;
+}
 
-UDYKCityActionButton* UDYKCityWorkWidget::ActionButton(EDYKCityUIAction Action,int32 Index,const FText& Label,FVector2D Pos,FVector2D Size,FName Key,bool Enabled,bool Transparent)
+void UDYKCityActionButton::Invoke() {if(GetIsEnabled() && !bHoverOnly && Screen && Screen->GetRenderGeneration()==Generation) Screen->Dispatch(Action,Index,Key);}
+
+UDYKCityActionButton* UDYKCityWorkWidget::ActionButton(EDYKCityUIAction Action,int32 Index,const FText& Label,FVector2D Pos,FVector2D Size,FName Key,bool Enabled,bool Transparent,bool HoverWhenDisabled)
 {
 	auto* Button=WidgetTree->ConstructWidget<UDYKCityActionButton>(); Button->Screen=this; Button->Action=Action; Button->Index=Index; Button->Key=Key;
 	Button->Generation=RenderGeneration;
+	Button->bHoverOnly=!Enabled && HoverWhenDisabled;
 	const bool Left=Action==EDYKCityUIAction::Previous || Action==EDYKCityUIAction::ResearchPrevious;
 	const bool Right=Action==EDYKCityUIAction::Next || Action==EDYKCityUIAction::ResearchNext;
 	FSlateBrush B;
@@ -82,7 +91,7 @@ UDYKCityActionButton* UDYKCityWorkWidget::ActionButton(EDYKCityUIAction Action,i
 	Style.Hovered.TintColor=Transparent ? FLinearColor(1,1,1,.06f) : FLinearColor(1.12f,1.09f,1,1);
 	Style.Pressed.TintColor=Transparent ? FLinearColor(1,1,1,.12f) : FLinearColor(.72f,.68f,.55f,1);
 	Style.Disabled.TintColor=Transparent ? FLinearColor(1,1,1,0) : FLinearColor(.46f,.46f,.46f,.75f);
-	Style.SetNormalPadding(FMargin(0)); Style.SetPressedPadding(FMargin(0)); Button->SetStyle(Style); Button->SetIsEnabled(Enabled);
+	Style.SetNormalPadding(FMargin(0)); Style.SetPressedPadding(FMargin(0)); Button->SetStyle(Style); Button->SetIsEnabled(Enabled || Button->bHoverOnly);
 	Button->OnClicked.AddDynamic(Button,&UDYKCityActionButton::Invoke); Button->SetToolTipText(Label);
 	DYKCityHUDArt::Place(DesignCanvas,Button,Pos,Size); Actions.Add(Button);
 	if(!Label.IsEmpty() && !Left && !Right)
@@ -177,7 +186,7 @@ FText UDYKCityWorkWidget::ResearchTimerText(const FDYKPlayerProfileSaveData& P,c
 	if(Work.StartedAtUnix>0) return CityText(TEXT("Осталось: ")+CityDuration(Work.CompletesAtUnix-Now));
 	const auto* Definition=DYKCityResearch::Find(Work.ResearchId);
 	if(!Definition) return FText::GetEmpty();
-	const TCHAR* Status=LacksResearchResources(P,*Definition) ? TEXT("Не хватает ресурсов") : TEXT("В очереди");
+	const TCHAR* Status=!DYKCityWork::CanPay(P,Definition->Costs) ? TEXT("Не хватает ресурсов") : TEXT("В очереди");
 	return CityText(FString(Status)+TEXT(" · ")+CityDuration(Definition->DurationSeconds));
 }
 void UDYKCityWorkWidget::RebuildModal()
@@ -571,7 +580,7 @@ FDYKResourceBuildingView UDYKCityWorkWidget::ResourceView(const FDYKPlayerProfil
 			V.WorkName=CityText(Definition->DisplayName);
 			V.Process=ResearchTimerText(P,*Research,Now).ToString();
 			if(!V.bWorking)
-				V.WorkName=CityText(Definition->DisplayName+(LacksResearchResources(P,*Definition)
+				V.WorkName=CityText(Definition->DisplayName+(!DYKCityWork::CanPay(P,Definition->Costs)
 					? TEXT(" · не хватает ресурсов") : TEXT(" · в очереди")));
 		}
 		if(V.WorkName.IsEmpty()) V.WorkName=CityText(TEXT("Нет активного улучшения"));

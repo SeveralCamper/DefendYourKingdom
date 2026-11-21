@@ -202,11 +202,18 @@ bool FDYKLiveBuildingPopupTest::RunTest(const FString& Parameters)
  const int64 ResearchStart=FDateTime::UtcNow().ToUnixTimestamp();
  if(!TestTrue(TEXT("Seed profile for military popups"),Save->ApplyProfileCommand(FGuid::NewGuid(),[ResearchStart](auto& P)
  {
-  return DYKCityHUDTest::Seed(P,ResearchStart);
+  if(!DYKCityHUDTest::Seed(P,ResearchStart) || !DYKCityHUDTest::AddOwned(P,TEXT("CITY-WAREHOUSE"),ResearchStart)) return false;
+  for(auto& Resource:P.Resources) Resource.Amount=1000;
+  return true;
  }))) return false;
  const FName Trap(TEXT("RESEARCH-TRAP-SPIKES-L1")),Unit(TEXT("RESEARCH-INFANTRY-T2"));
  TestTrue(TEXT("Start workshop research"),DYKCityResearch::Enqueue(*Save,FGuid::NewGuid(),Trap,ResearchStart));
  TestTrue(TEXT("Queue barracks research"),DYKCityResearch::Enqueue(*Save,FGuid::NewGuid(),Unit,ResearchStart));
+ TestTrue(TEXT("Expect a pending request to remain visible after its funds are spent"),Save->ApplyProfileCommand(FGuid::NewGuid(),[](auto& P)
+ {
+  for(auto& Resource:P.Resources) if(Resource.ResourceId.Name==TEXT("RES-FOOD")) Resource.Amount=0;
+  return true;
+ }));
  const auto* Military=UDYKResourceBuildingWidget::FindDefinition(TEXT("CITY-WORKSHOP"));
  if(!TestNotNull(TEXT("Shared compact military asset"),Military))return false;
  for(const auto Type:{TEXT("CITY-WORKSHOP"),TEXT("CITY-BARRACKS"),TEXT("CITY-WIZARD-TOWER")})

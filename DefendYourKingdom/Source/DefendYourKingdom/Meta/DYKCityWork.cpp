@@ -90,7 +90,7 @@ bool DYKCityWork::Validate(const FDYKPlayerProfileSaveData& P)
 	return Active<=Builders(P);
 }
 
-bool DYKCityWork::Pay(FDYKPlayerProfileSaveData& P,TConstArrayView<FDYKResourceSaveData> Costs,TArray<FDYKCityWorkCost>& Paid)
+bool DYKCityWork::CanPay(const FDYKPlayerProfileSaveData& P,TConstArrayView<FDYKResourceSaveData> Costs)
 {
 	TSet<FName> Ids;
 	for(const auto& C:Costs)
@@ -99,6 +99,12 @@ bool DYKCityWork::Pay(FDYKPlayerProfileSaveData& P,TConstArrayView<FDYKResourceS
 		if(!Id || C.Amount<=0 || Ids.Contains(C.ResourceId.Name) || DYKCityEconomy::Balance(P,Id.GetValue())<C.Amount) return false;
 		Ids.Add(C.ResourceId.Name);
 	}
+	return true;
+}
+
+bool DYKCityWork::Pay(FDYKPlayerProfileSaveData& P,TConstArrayView<FDYKResourceSaveData> Costs,TArray<FDYKCityWorkCost>& Paid)
+{
+	if(!CanPay(P,Costs)) return false;
 	Paid.Reset();
 	for(const auto& C:Costs) for(auto& R:P.Resources) if(R.ResourceId==C.ResourceId)
 	{

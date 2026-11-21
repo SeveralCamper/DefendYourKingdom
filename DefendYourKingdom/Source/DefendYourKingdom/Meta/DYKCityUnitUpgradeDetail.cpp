@@ -140,7 +140,7 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		const bool Available=Research && !Job && DYKCityResearch::CanEnqueue(Profile,Research->Id);
 		const FName Key=Research ? Research->Id : NAME_None;
 		auto* Button=ActionButton(EDYKCityUIAction::Research,Index,
-			FText::GetEmpty(),Pos,Size,Key,Available,true);
+			FText::GetEmpty(),Pos,Size,Key,Available,true,Research && !Job);
 		FButtonStyle Style;
 		const auto Brush=DYKCityHUDArt::TextureBrush(Parts,AtlasRegion({762,529},{264,62}));
 		auto Muted=Brush;
@@ -148,8 +148,6 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		Style.SetNormal(Available ? Brush : Muted).SetHovered(Available ? Brush : Muted).SetPressed(Muted).SetDisabled(Muted);
 		Style.SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
 		Button->SetStyle(Style);
-		Button->bHoverOnly=!Available;
-		Button->SetIsEnabled(Research && !Job);
 		if(Research && !Job && !Research->Costs.IsEmpty()) BindCost(Button,*Research);
 		Label(Job ? NSLOCTEXT("DYKCity","UnavailableWhileQueued","Недоступно") : Caption,
 			Pos+FVector2D(Size.X*.29,2),{Size.X*.67,Size.Y-4},30);

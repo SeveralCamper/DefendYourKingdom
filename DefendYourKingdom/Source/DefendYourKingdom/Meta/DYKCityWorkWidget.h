@@ -30,6 +30,8 @@ private:
 	UPROPERTY() TObjectPtr<UWidget> HoverContent;
 	UFUNCTION() void ShowHoverContent();
 	UFUNCTION() void HideHoverContent();
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
 };
 UCLASS()
 class DEFENDYOURKINGDOM_API UDYKCityWorkWidget : public UDYKScreenWidget
@@ -69,7 +71,7 @@ private:
 	FDYKResourceBuildingView ResourceView(const FDYKPlayerProfileSaveData& P) const;
 	void PositionResourceWindow();
 	TArray<FName> ResearchOptions(const FDYKPlayerProfileSaveData& P,const FDYKCityInteriorItem& Item) const;
-	UDYKCityActionButton* ActionButton(EDYKCityUIAction Action,int32 Index,const FText& Label,FVector2D Position,FVector2D Size,FName Key=NAME_None,bool Enabled=true,bool Transparent=false);
+	UDYKCityActionButton* ActionButton(EDYKCityUIAction Action,int32 Index,const FText& Label,FVector2D Position,FVector2D Size,FName Key=NAME_None,bool Enabled=true,bool Transparent=false,bool HoverWhenDisabled=false);
 	FDYKCityWindowState State;
 	int64 RenderGeneration=0;
 	int32 ResearchChoice=0;

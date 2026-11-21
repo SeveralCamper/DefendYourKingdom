@@ -78,6 +78,16 @@ bool FDYKResearchRanksTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Fixture and authored graph valid"),DYKCityResearch::Validate(S.State));
 	TestTrue(TEXT("Fixture layout valid"),DYKCityTerritory::Validate(S.State,DYKCityTerritory::DEV_PLACEHOLDER()));
 	TestFalse(TEXT("T3 cannot skip T2"),DYKCityResearch::Enqueue(S,FGuid::NewGuid(),TEXT("RESEARCH-INFANTRY-T3"),ResearchTestTime));
+	const FName SecondRank(TEXT("RESEARCH-INFANTRY-T2"));
+	auto& Food=S.State.Resources.FindByPredicate([](const auto& R){return R.ResourceId.Name==TEXT("RES-FOOD");})->Amount;
+	Food=499;
+	TestFalse(TEXT("HUD eligibility rejects research one resource short"),DYKCityResearch::CanEnqueue(S.State,SecondRank));
+	TestFalse(TEXT("Direct research command rejects the same insufficient funds"),DYKCityResearch::Enqueue(S,FGuid::NewGuid(),SecondRank,ResearchTestTime));
+	TestTrue(TEXT("Rejection leaves the research queue empty"),S.State.CityEconomy.ResearchQueue.IsEmpty());
+	TestEqual(TEXT("Rejection leaves current balance untouched"),ResearchTestBalance(S,TEXT("RES-FOOD")),int64(499));
+	Food=500;
+	TestTrue(TEXT("Exact amount is sufficient"),DYKCityResearch::CanEnqueue(S.State,SecondRank));
+	Food=2400;
 	FDYKCityBuildingWorkRequest Build; Build.CommandId=FGuid::NewGuid(); Build.InstanceId=S.State.CityEconomy.Instances[0].InstanceId;
 	Build.Kind=EDYKCityBuildingWorkKind::Upgrade; Build.BuildingId=FDYKBuildingId(TEXT("CITY-CASTLE")); Build.ExpectedLevel=4;
 	TestTrue(TEXT("Occupy sole builder"),DYKCityWork::Enqueue(S,Build,ResearchTestTime));

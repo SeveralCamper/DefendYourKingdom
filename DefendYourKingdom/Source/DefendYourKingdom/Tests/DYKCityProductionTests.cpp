@@ -79,18 +79,19 @@ bool FDYKWarehouseLevelsTest::RunTest(const FString& Parameters)
 {
 	FDYKPlayerProfileSaveData P;
 	if (!TestTrue(TEXT("Initialize"),DYKCityEconomy::Initialize(P,ProductionTime))) return false;
-	const FDYKResourceId ProductionWood(TEXT("RES-WOOD")), ProductionFood(TEXT("RES-FOOD")), ProductionGold(TEXT("RES-GOLD"));
+	const FDYKResourceId ProductionWood(TEXT("RES-WOOD")), ProductionGold(TEXT("RES-GOLD"));
+	TestEqual(TEXT("Starter capacity without warehouse"),DYKCityEconomy::Capacity(P,ProductionWood),int64(100));
 	FDYKBuildingSaveData B; B.BuildingId=FDYKBuildingId(TEXT("CITY-WAREHOUSE")).ToContentId(); B.Level=2;
 	FDYKCityProductionSaveData S; S.InstanceId=FGuid::NewGuid(); S.BuildingIndex=P.Buildings.Add(B);
 	S.UpdatedAtUnix=S.CollectionStartedAtUnix=ProductionTime; P.CityEconomy.Instances.Add(S);
 	TestTrue(TEXT("Warehouse ownership valid"),DYKCityEconomy::Validate(P));
-	TestEqual(TEXT("ProductionWood capacity level 2"),DYKCityEconomy::Capacity(P,ProductionWood),int64(400));
-	TestEqual(TEXT("ProductionFood has independent capacity"),DYKCityEconomy::Capacity(P,ProductionFood),int64(300));
+	for(const auto* Resource:{TEXT("RES-FOOD"),TEXT("RES-WOOD"),TEXT("RES-STONE"),TEXT("RES-IRON")})
+		TestEqual(FString::Printf(TEXT("Level two adds 4000 to %s"),Resource),DYKCityEconomy::Capacity(P,FDYKResourceId(Resource)),int64(4100));
 	TestEqual(TEXT("ProductionGold retains uint32 technical bound"),DYKCityEconomy::Capacity(P,ProductionGold),int64(MAX_uint32));
-	for (auto& R:P.Resources) if(R.ResourceId==ProductionWood.ToContentId()) R.Amount=370;
+	for (auto& R:P.Resources) if(R.ResourceId==ProductionWood.ToContentId()) R.Amount=4070;
 	const auto V=DYKCityEconomy::View(P,ProductionGuid(P,ProductionIndex(P,TEXT("CITY-SAWMILL"))),ProductionTime+3000);
 	TestEqual(TEXT("Partial collection respects upgraded free space"),V.Collectable,int64(30));
-	for (auto& R:P.Resources) if(R.ResourceId==ProductionWood.ToContentId()) R.Amount=401;
+	for (auto& R:P.Resources) if(R.ResourceId==ProductionWood.ToContentId()) R.Amount=4101;
 	TestFalse(TEXT("Warehouse overflow rejected"),DYKCityEconomy::Validate(P));
 	return true;
 }
