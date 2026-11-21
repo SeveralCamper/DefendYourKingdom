@@ -11,14 +11,22 @@ bool DYKHeroes::Owns(const FDYKPlayerProfileSaveData& P)
 int64 DYKHeroes::HireGoldDEV_PLACEHOLDER() { return 100; }
 int32 DYKHeroes::RequiredLevelDEV_PLACEHOLDER(int32 Tier) {return Tier<=1 ? 1 : Tier==2 ? 3 : 6;}
 
-FString DYKHeroes::HireBlockReason(const FDYKPlayerProfileSaveData& P)
+FString DYKHeroes::UnlockBlockReason(const FDYKPlayerProfileSaveData& P)
 {
-	if(Owns(P)) return TEXT("Паладин уже нанят навсегда.");
+	if(Owns(P)) return {};
 	// Replaceable composite acquisition condition, never a blanket unlock bypass.
 	if(!P.Buildings.ContainsByPredicate([](const auto& B){return B.BuildingId.Name==TEXT("CITY-TAVERN") && !B.bUnderConstruction;}))
 		return TEXT("Требуется завершённая таверна.");
 	if(!P.Buildings.ContainsByPredicate([](const auto& B){return B.BuildingId.Name==TEXT("CITY-CASTLE") && B.Level>=2 && !B.bUnderConstruction;}))
 		return TEXT("Требуется замок уровня 2.");
+	return {};
+}
+
+FString DYKHeroes::HireBlockReason(const FDYKPlayerProfileSaveData& P)
+{
+	if(Owns(P)) return TEXT("Паладин уже нанят навсегда.");
+	const FString Locked=UnlockBlockReason(P);
+	if(!Locked.IsEmpty()) return Locked;
 	if(DYKCityEconomy::Balance(P,FDYKResourceId(TEXT("RES-GOLD")))<HireGoldDEV_PLACEHOLDER()) return TEXT("Недостаточно золота.");
 	return {};
 }

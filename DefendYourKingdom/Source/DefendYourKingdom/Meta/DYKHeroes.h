@@ -14,6 +14,7 @@ struct FDYKHeroAbilityDefinition
 namespace DYKHeroes
 {
 	DEFENDYOURKINGDOM_API bool Owns(const FDYKPlayerProfileSaveData& Profile);
+	DEFENDYOURKINGDOM_API FString UnlockBlockReason(const FDYKPlayerProfileSaveData& Profile);
 	DEFENDYOURKINGDOM_API FString HireBlockReason(const FDYKPlayerProfileSaveData& Profile);
 	DEFENDYOURKINGDOM_API int64 HireGoldDEV_PLACEHOLDER();
 	DEFENDYOURKINGDOM_API int32 RequiredLevelDEV_PLACEHOLDER(int32 Tier);

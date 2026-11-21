@@ -3,6 +3,8 @@
 #include "DYKCityEconomy.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "../UI/DYKCityHUDArt.h"
+#include "../UI/DYKHeroPortraitWidget.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/TextBlock.h"
 
 void UDYKCityWorkWidget::BuildPaladinDetail(const FDYKPlayerProfileSaveData& P)
@@ -19,7 +21,7 @@ void UDYKCityWorkWidget::BuildPaladinDetail(const FDYKPlayerProfileSaveData& P)
 	if(bHeroBiography)
 		DYKCityHUDArt::Label(WidgetTree,DesignCanvas,Text(TEXT("Паладин защищает рубеж и обрушивает молот на врагов перед собой.")),{230,330},{230,290},24,false);
 	else if(!DYKCityHUDArt::Illustration(WidgetTree,DesignCanvas,TEXT("CITY-TAVERN-0"),{235,330},{220,230},true))
-		DYKCityHUDArt::Illustration(WidgetTree,DesignCanvas,TEXT("UNIT-CARD-1"),{235,330},{220,230},true);
+		DYKCityHUDArt::Place(DesignCanvas,WidgetTree->ConstructWidget<UDYKHeroPortraitWidget>(),{235,330},{220,230});
 	ActionButton(EDYKCityUIAction::HeroBiography,0,Text(bHeroBiography ? TEXT("Портрет") : TEXT("Описание")),{235,635},{220,52});
 	if(!Owned)
 	{

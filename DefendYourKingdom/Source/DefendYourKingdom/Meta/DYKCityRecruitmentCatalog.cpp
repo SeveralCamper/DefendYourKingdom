@@ -2,6 +2,7 @@
 #include "DYKCityResearch.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "../UI/DYKCityHUDArt.h"
+#include "../UI/DYKHeroPortraitWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Brushes/SlateNoResource.h"
 #include "Components/CanvasPanelSlot.h"
@@ -87,7 +88,14 @@ bool UDYKCityWorkWidget::BuildRecruitmentCatalog(const FDYKPlayerProfileSaveData
 			const FVector2D PortraitPosition=Position+FVector2D(10,9);
 			const FVector2D PortraitSize(309,235);
 			if(!DYKCityHUDArt::Illustration(WidgetTree,DesignCanvas,Item->Key,PortraitPosition,PortraitSize,true))
-				DYKCityHUDArt::Image(WidgetTree,DesignCanvas,Item->Art,Item->ImageRegion,PortraitPosition,PortraitSize);
+			{
+				if(Item->Key==TEXT("CITY-TAVERN-0"))
+				{
+					auto* Portrait=WidgetTree->ConstructWidget<UDYKHeroPortraitWidget>();
+					DYKCityHUDArt::Place(DesignCanvas,Portrait,PortraitPosition,PortraitSize);
+				}
+				else DYKCityHUDArt::Image(WidgetTree,DesignCanvas,Item->Art,Item->ImageRegion,PortraitPosition,PortraitSize);
+			}
 			Sprite({218,574},CardSize,Position);
 			Sprite({230,482},{310,59},Position+FVector2D(10,240));
 			DYKCityHUDArt::Label(WidgetTree,DesignCanvas,FText::FromString(Item->Name),Position+FVector2D(17,245),{294,43},33,true);

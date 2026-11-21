@@ -283,7 +283,7 @@ bool FDYKCityModularLayoutTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Recruitment buildings use the same board and grid"),CatalogBase==Background);
 		TestEqual(TEXT("Six separate frames or lock cells"),FrameCount,6);
 		const bool Tavern=FName(Type)==TEXT("CITY-TAVERN");
-		TestEqual(TEXT("New overlays are limited to available unviewed cards"),NewCount,Tavern ? 0 : 4);
+		TestEqual(TEXT("New overlays are limited to available unviewed cards"),NewCount,Tavern ? 1 : 4);
 		const auto* Next=UI->FindAction(EDYKCityUIAction::Next);
 		if(TestNotNull(TEXT("Catalog next page control"),Next))
 			TestEqual(TEXT("Pagination availability follows each catalog's item count"),Next->GetIsEnabled(),!Tavern);

@@ -20,9 +20,17 @@
 #include "../Battle/DYKEnemyRoute.h"
 #include "../Battle/DYKUnitSlot.h"
 #include "../UI/DYKHeroAbilityWidget.h"
+#include "../UI/DYKHeroPortraitWidget.h"
+#include "Blueprint/WidgetTree.h"
 #include "../Meta/DYKCityDecorationActor.h"
 #include "../Meta/DYKCityWorkWidget.h"
 #include "UObject/StrongObjectPtr.h"
+
+struct FDYKHeroTestAccess
+{
+	static void RefreshTargets(ADYKPolygonGameMode& Mode)
+	{Mode.RefreshCombatTargets(Mode.GetWorld(),LEVELTICK_All,0);}
+};
 
 namespace
 {
@@ -220,11 +228,18 @@ bool FDYKHeroTavernTest::RunTest(const FString&)
 	if(!TestTrue(TEXT("City authority without Play"),F.World->SetGameMode(URL))) return false;
 	auto* UI=NewObject<UDYKCityWorkWidget>(F.World); UI->Initialize(); UI->TakeWidget();
 	UI->OpenBuilding(Instance(*Save->GetProfileSnapshot(),TEXT("CITY-TAVERN")),TEXT("CITY-TAVERN"));
-	UI->Dispatch(EDYKCityUIAction::Visit); UI->Dispatch(EDYKCityUIAction::Item,0);
+	UI->Dispatch(EDYKCityUIAction::Visit);
+	const auto Card=DYKCityBuildingUI::Items(TEXT("CITY-TAVERN"))[0];
+	TestFalse(TEXT("Paladin is implemented content, not a future cell"),Card.bFuture);
+	TestFalse(TEXT("Available paladin has no lock"),DYKCityBuildingUI::IsLocked(*Save->GetProfileSnapshot(),Card));
+	bool HasPortrait=false; UI->WidgetTree->ForEachWidget([&HasPortrait](UWidget* W){HasPortrait|=W->IsA<UDYKHeroPortraitWidget>();});
+	TestTrue(TEXT("Actual recruitment card contains monochrome hero portrait"),HasPortrait);
+	UI->Dispatch(EDYKCityUIAction::Item,0);
 	auto* Hire=UI->FindAction(EDYKCityUIAction::HeroHire);
 	if(!TestNotNull(TEXT("Tavern exposes real hire action"),Hire)) return false;
 	TestTrue(TEXT("Hire enabled"),Hire->GetIsEnabled()); Hire->OnClicked.Broadcast();
 	TestTrue(TEXT("UMG action permanently acquires hero"),DYKHeroes::Owns(*Save->GetProfileSnapshot()));
+	TestFalse(TEXT("Owned paladin stays visible in collection"),DYKCityBuildingUI::IsLocked(*Save->GetProfileSnapshot(),Card));
 	TestNull(TEXT("Hire button replaced with progression"),UI->FindAction(EDYKCityUIAction::HeroHire));
 	for(int32 I=0;I<4;++I) TestNotNull(TEXT("Level and three equipment branches"),UI->FindAction(EDYKCityUIAction::HeroResearch,I));
 	UI->Dispatch(EDYKCityUIAction::HeroBiography); TestNotNull(TEXT("Biography toggle remains available"),UI->FindAction(EDYKCityUIAction::HeroBiography));
@@ -235,6 +250,37 @@ bool FDYKHeroTavernTest::RunTest(const FString&)
 	if(!TestNotNull(TEXT("Active improvement cancellable in tavern"),Cancel)) return false;
 	Cancel->OnClicked.Broadcast(); TestEqual(TEXT("Cancellation removes research"),Save->GetProfileSnapshot()->CityEconomy.ResearchQueue.Num(),0);
 	UI->Dispatch(EDYKCityUIAction::Back); TestTrue(TEXT("Return to tavern collection"),UI->GetWindowState().Window==EDYKCityWindow::Interior);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKHeroCardAvailabilityTest,"DYK.M208.CardUnlockIndependentOfWallet",Flags)
+bool FDYKHeroCardAvailabilityTest::RunTest(const FString&)
+{
+	Service S; const auto Card=DYKCityBuildingUI::Items(TEXT("CITY-TAVERN"))[0]; Fund(S.State,0);
+	TestFalse(TEXT("No gold does not hide an unlocked character behind a lock"),DYKCityBuildingUI::IsLocked(S.State,Card));
+	TestFalse(TEXT("No gold still prevents paying for hire"),DYKHeroes::Hire(S,FGuid::NewGuid(),Time));
+	S.State.Buildings[0].Level=1;
+	TestTrue(TEXT("Actual unlock requirement still locks hero"),DYKCityBuildingUI::IsLocked(S.State,Card));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDYKHeroRegistryDeathTest,"DYK.M208.InstantKillAndHammerDuringTargetRefresh",Flags)
+bool FDYKHeroRegistryDeathTest::RunTest(const FString&)
+{
+	FHeroWorld F; auto* Hero=F.Hero(true); if(!TestNotNull(TEXT("Paladin"),Hero)) return false;
+	auto& B=F.Mode->GetBattleSession(); if(!TestTrue(TEXT("Active wave"),B.StartWave(B.GetPreparationToken(),0))) return false;
+	auto* First=F.Enemy({100,0,0}); auto* Second=F.Enemy({120,0,0}); auto* Third=F.Enemy({140,0,0});
+	if(!TestNotNull(TEXT("First target"),First) || !TestNotNull(TEXT("Second target"),Second) || !TestNotNull(TEXT("Third target"),Third)) return false;
+	FDYKHeroTestAccess::RefreshTargets(*F.Mode);
+	TestFalse(TEXT("Immediate normal hit destroys a later registry entry in the same pass"),First->IsAlive());
+	TestTrue(TEXT("Other entries still valid after lethal target refresh"),Second->IsAlive() && Third->IsAlive());
+	TestTrue(TEXT("Click hammer after lethal normal attack"),Hero->ActivateAbility());
+	F.Timers(0); F.Timers(.4f);
+	TestFalse(TEXT("Hammer kills second enemy"),Second->IsAlive()); TestFalse(TEXT("Hammer kills third enemy"),Third->IsAlive());
+	FDYKHeroTestAccess::RefreshTargets(*F.Mode);
+	TestEqual(TEXT("Registry update after AoE leaves no active enemies"),B.GetActiveEnemyCount(),0);
+	TestNull(TEXT("No retained destroyed target"),Hero->GetCurrentTarget());
+	TestEqual(TEXT("Ability and target refresh spend no extra supplies"),B.GetSupplies(),100);
 	return true;
 }
 #endif

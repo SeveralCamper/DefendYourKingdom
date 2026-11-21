@@ -206,11 +206,15 @@ void ADYKPolygonGameMode::RefreshCombatTargets(UWorld* World, ELevelTick TickTyp
 	if (World != GetWorld() || !bCombatTargetsDirty || UGameplayStatics::IsGamePaused(this)) return;
 	bCombatTargetsDirty = false;
 	CombatUnits.RemoveAll([](const auto& Unit) { return !Unit.IsValid() || Unit->IsActorBeingDestroyed(); });
+	// Immediate attacks can destroy later entries or register new units during this pass.
+	// Retain a stable iteration and resolve each weak pointer immediately before use.
+	const auto Units=CombatUnits;
 	TArray<ADYKCombatUnit*> Candidates;
-	for (const auto& Unit : CombatUnits) if (Unit->IsAlive()) Candidates.Add(Unit.Get());
+	for (const auto& Weak : Units) if (auto* Unit=Weak.Get(); IsValid(Unit) && Unit->IsAlive()) Candidates.Add(Unit);
 	// Movement/spawn/death/revival mark the registry dirty. Sample once after the game
 	// step, so simultaneous entrants share a stable registration-order tie-break.
-	for (const auto& Unit : CombatUnits) Unit->RefreshTargets(Candidates);
+	for (const auto& Weak : Units)
+		if (auto* Unit=Weak.Get(); IsValid(Unit) && !Unit->IsActorBeingDestroyed()) Unit->RefreshTargets(Candidates);
 }
 
 void ADYKPolygonGameMode::RestoreDefenders(int32 WaveNumber)

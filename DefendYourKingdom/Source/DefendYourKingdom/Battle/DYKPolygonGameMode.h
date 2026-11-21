@@ -43,6 +43,7 @@ public:
 	TConstArrayView<FDYKResourceSaveData> GetDeferredResources() const { return DeferredResources; }
 
 private:
+	friend struct FDYKHeroTestAccess;
 	void QueueWaveResolution(const FGuid& WaveToken);
 	void QueueEmission(const FGuid& WaveToken);
 	void EmitEnemy(const FGuid& WaveToken);
