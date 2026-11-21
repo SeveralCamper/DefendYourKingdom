@@ -34,7 +34,6 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		Profile.Buildings.Last().Level=4;
 		for(auto& Resource:Profile.Resources)
 			Resource.Amount=FMath::Min<int64>(1800,DYKCityEconomy::Capacity(Profile,FDYKResourceId(Resource.ResourceId.Name)));
-		Profile.Resources.Add({FDYKResourceId(TEXT("RES-MEDALS")).ToContentId(),70});
 		return true;
 	}))) return false;
 	TStrongObjectPtr<UDYKCityWorkWidget> UI(NewObject<UDYKCityWorkWidget>(World));
@@ -83,6 +82,7 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		});
 	};
 	SelectUnit(0);
+	TestTrue(TEXT("No retired currency caption under resource plates"),TextAt({599,977}).IsEmpty());
 	TestTrue(TEXT("The starter peasant has a noninteractive studied banner"),HasStudiedBanner());
 	TestNull(TEXT("The starter peasant has no study action"),UI->FindAction(EDYKCityUIAction::Research,3));
 	UI->Dispatch(EDYKCityUIAction::Research,3,Guard);
@@ -149,17 +149,17 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 	}
 	const FName DamageKey=Damage->Key;
 	const FString Preview=TextAt({656,538});
-	const auto SetMedals=[&](int64 Balance)
+	const auto SetFood=[&](int64 Balance)
 	{
 		return Save->ApplyProfileCommand(FGuid::NewGuid(),[Balance](auto& Profile)
 		{
-			auto* Medals=Profile.Resources.FindByPredicate([](const auto& Resource){return Resource.ResourceId.Name==TEXT("RES-MEDALS");});
-			if(!Medals) return false;
-			Medals->Amount=Balance;
+			auto* Food=Profile.Resources.FindByPredicate([](const auto& Resource){return Resource.ResourceId.Name==TEXT("RES-FOOD");});
+			if(!Food) return false;
+			Food->Amount=Balance;
 			return true;
 		});
 	};
-	if(!TestTrue(TEXT("Leave the player one medal short"),SetMedals(4))) return false;
+	if(!TestTrue(TEXT("Leave the player one food short"),SetFood(799))) return false;
 	SelectUnit(1);
 	auto* Unaffordable=UI->FindAction(EDYKCityUIAction::Research,0);
 	const auto UnaffordableSlate=Unaffordable->TakeWidget();
@@ -169,9 +169,9 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 	Unaffordable->Invoke();
 	TestEqual(TEXT("An unavailable HUD action does not write a save"),Save->GetRevision(),BeforeRejectedAction);
 	UnaffordableSlate->OnMouseEnter(Geometry,Pointer);
-	TestTrue(TEXT("An unavailable price still shows what is missing on hover"),VisibleCost().Contains(TEXT("4 / 5")));
+	TestTrue(TEXT("An unavailable price still shows what is missing on hover"),VisibleCost().Contains(TEXT("799 / 800")));
 	UnaffordableSlate->OnMouseLeave(Pointer);
-	if(!TestTrue(TEXT("Restore the price of the next upgrade"),SetMedals(5))) return false;
+	if(!TestTrue(TEXT("Restore the price of the next upgrade"),SetFood(800))) return false;
 	SelectUnit(1);
 	UI->FindAction(EDYKCityUIAction::Research,0)->Invoke();
 	TestTrue(TEXT("Research queues on its own row"),Save->GetProfileSnapshot()->CityEconomy.ResearchQueue.ContainsByPredicate(

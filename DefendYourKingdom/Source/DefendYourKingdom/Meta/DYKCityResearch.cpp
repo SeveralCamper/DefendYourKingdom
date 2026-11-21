@@ -6,14 +6,12 @@
 
 namespace
 {
-	TArray<FDYKResourceSaveData> ResearchCosts(int64 FoodCost,int64 WoodCost,int64 StoneCost,int64 MedalsCost)
+	TArray<FDYKResourceSaveData> ResearchCosts(int64 FoodCost,int64 WoodCost,int64 StoneCost)
 	{
-		TArray<FDYKResourceSaveData> Result={
+		return {
 			{FDYKResourceId(TEXT("RES-FOOD")).ToContentId(),FoodCost},
 			{FDYKResourceId(TEXT("RES-WOOD")).ToContentId(),WoodCost},
 			{FDYKResourceId(TEXT("RES-STONE")).ToContentId(),StoneCost}};
-		if(MedalsCost>0) Result.Add({FDYKResourceId(TEXT("RES-MEDALS")).ToContentId(),MedalsCost});
-		return Result;
 	}
 	bool ResearchReady(const FDYKPlayerProfileSaveData& P,const FDYKResearchDefinition& D,const FDYKResearchConfig& C)
 	{
@@ -79,7 +77,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 				D.DisplayName=Names[LineIndex][Tier-1]; D.Unlock=FDYKUnitTypeId(Types[LineIndex][Tier-1]).ToContentId();
 				if(!Previous.IsNone()) D.Prerequisites.Add(Previous);
 				// T1 remains the existing free initial rank. The node supplies the explicit graph root.
-				D.Costs=Tier==1 ? TArray<FDYKResourceSaveData>() : Tier==2 ? ResearchCosts(500,300,200,0) : ResearchCosts(1400,700,500,10);
+				D.Costs=Tier==1 ? TArray<FDYKResourceSaveData>() : Tier==2 ? ResearchCosts(500,300,200) : ResearchCosts(1400,700,500);
 				Previous=D.Id; C.Definitions.Add(D);
 			}
 			for(int32 Stat=0;Stat<3;++Stat)
@@ -89,7 +87,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 				D.DisplayName=FString::Printf(TEXT("%s: %s"),LineIndex==0 ? TEXT("Пехота") : TEXT("Стрелки"),StatNames[Stat]);
 				D.Prerequisites.Add(FName(*FString::Printf(TEXT("RESEARCH-%s-T1"),LineKeys[LineIndex])));
 				D.TargetLine=Line; D.Bonus=Stat==0 ? FDYKResearchBonus{10,0,0} : Stat==1 ? FDYKResearchBonus{0,1,0} : FDYKResearchBonus{0,0,2};
-				D.Costs=Stat==1 ? ResearchCosts(1000,900,700,5) : ResearchCosts(800,300,500,5);
+				D.Costs=Stat==1 ? ResearchCosts(1000,900,700) : ResearchCosts(800,300,500);
 				C.Definitions.Add(D);
 				for(int32 Tier=1;Tier<=3;++Tier)
 				{
@@ -109,7 +107,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 						{
 							Personal.DurationSeconds=20;
 							Personal.Bonus=PeasantBonuses[Stat];
-							Personal.Costs=ResearchCosts(20,20,10,0); // DEV_PLACEHOLDER until the author sets prices.
+							Personal.Costs=ResearchCosts(20,20,10); // DEV_PLACEHOLDER until the author sets prices.
 						}
 						Prior=Personal.Id; C.Definitions.Add(MoveTemp(Personal));
 					}
@@ -138,7 +136,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 				if(!PreviousTrap.IsNone()) D.Prerequisites.Add(PreviousTrap);
 				if(Level==1) D.Unlock=FDYKTrapId(FName(*FString::Printf(TEXT("DYK-TRAP-%s"),TrapKeys[Type]))).ToContentId();
 				// Unspecified trap research prices/level count: replaceable DEV_PLACEHOLDER.
-				D.Costs=ResearchCosts(10*Level,10*Level,5*Level,0);
+				D.Costs=ResearchCosts(10*Level,10*Level,5*Level);
 				PreviousTrap=D.Id; C.Definitions.Add(MoveTemp(D));
 			}
 		}

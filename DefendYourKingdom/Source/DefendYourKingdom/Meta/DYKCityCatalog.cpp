@@ -35,7 +35,6 @@ const FDYKCityBuildingDefinition* DYKCityCatalog::Find(const FDYKContentId& Id)
 }
 int64 DYKCityCatalog::ResourceCapacity(FDYKResourceId Id)
 {
-	if (Id.GetName()==TEXT("RES-MEDALS")) return MAX_uint32;
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ResourceIds); ++Index)
 	{
 		if (Id == ResourceIds[Index]) { return Index == 3 ? MAX_uint32 : 100; }
@@ -44,7 +43,6 @@ int64 DYKCityCatalog::ResourceCapacity(FDYKResourceId Id)
 }
 const TCHAR* DYKCityCatalog::ResourceName(FDYKResourceId Id)
 {
-	if (Id.GetName()==TEXT("RES-MEDALS")) return TEXT("Медали");
 	const TCHAR* Names[] = {TEXT("Еда"), TEXT("Древесина"), TEXT("Камень"), TEXT("Золото"), TEXT("Железо")};
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ResourceIds); ++Index)
 	{

@@ -53,7 +53,6 @@ namespace
 				BuildingState.UpdatedAtUnix=BuildingState.CollectionStartedAtUnix=ResearchTestTime; State.CityEconomy.Instances.Add(BuildingState);
 			}
 			for(auto& R:State.Resources) R.Amount=FMath::Min<int64>(2400,DYKCityEconomy::Capacity(State,FDYKResourceId(R.ResourceId.Name)));
-			State.Resources.Add({FDYKResourceId(TEXT("RES-MEDALS")).ToContentId(),100});
 			DYKCityResearch::Advance(State,ResearchTestTime);
 		}
 		virtual const FDYKPlayerProfileSaveData* GetProfileSnapshot() const override {return &State;}
@@ -100,8 +99,9 @@ bool FDYKResearchRanksTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Offline replays two researches"),DYKCityWork::Update(S,ResearchTestTime+40));
 	TestTrue(TEXT("Both T2 unlocked"),DYKCityResearch::IsUnlocked(S.State,FDYKUnitTypeId(TEXT("DYK-GUARD"))) && DYKCityResearch::IsUnlocked(S.State,FDYKUnitTypeId(TEXT("DYK-VETERAN-ARCHER"))));
 	TestEqual(TEXT("Builder still working on 75s task"),S.State.CityEconomy.Work.Num(),1);
+	const int64 FoodBeforeElite=ResearchTestBalance(S,TEXT("RES-FOOD"));
 	TestTrue(TEXT("Now T3 allowed"),DYKCityResearch::Enqueue(S,FGuid::NewGuid(),TEXT("RESEARCH-INFANTRY-T3"),ResearchTestTime+40));
-	TestEqual(TEXT("Author medals price paid"),ResearchTestBalance(S,TEXT("RES-MEDALS")),int64(90));
+	TestEqual(TEXT("Elite research pays its food price without medals"),ResearchTestBalance(S,TEXT("RES-FOOD")),FoodBeforeElite-1400);
 	TestTrue(TEXT("T3 completes"),DYKCityWork::Update(S,ResearchTestTime+60));
 	TestTrue(TEXT("T1 and T2 remain available after T3"),DYKCityResearch::IsUnlocked(S.State,DYKUnitIds::Peasant()) && DYKCityResearch::IsUnlocked(S.State,FDYKUnitTypeId(TEXT("DYK-GUARD"))));
 	TestTrue(TEXT("T3 unlocked"),DYKCityResearch::IsUnlocked(S.State,FDYKUnitTypeId(TEXT("DYK-ROYAL-GUARD"))));
@@ -127,7 +127,6 @@ bool FDYKResearchCancelTest::RunTest(const FString& Parameters)
 	S.bFail=false;
 	TestTrue(TEXT("Cancellation before boundary"),DYKCityResearch::Cancel(S,Cancel,Start,ResearchTestTime+19));
 	TestEqual(TEXT("Full food refund"),ResearchTestBalance(S,TEXT("RES-FOOD")),FoodBefore);
-	TestEqual(TEXT("Full medals refund"),ResearchTestBalance(S,TEXT("RES-MEDALS")),int64(100));
 	TestTrue(TEXT("Same cancel idempotent"),DYKCityResearch::Cancel(S,Cancel,Start,ResearchTestTime+19));
 	TestFalse(TEXT("Different command cannot refund twice"),DYKCityResearch::Cancel(S,FGuid::NewGuid(),Start,ResearchTestTime+19));
 	const auto Again=FGuid::NewGuid();
@@ -252,9 +251,18 @@ bool FDYKResearchDiskTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Persist first active research"),DYKCityResearch::Enqueue(*Save,First,TEXT("RESEARCH-INFANTRY-T2"),ResearchTestTime));
 	TestTrue(TEXT("Persist second queued research"),DYKCityResearch::Enqueue(*Save,Second,TEXT("RESEARCH-RANGED-T2"),ResearchTestTime));
 	const auto Expected=*Save->GetProfileSnapshot();
+	if(!TestTrue(TEXT("Simulate a stored wallet, paid cost and refund from before resource removal"),
+		Save->ApplyProfileCommand(FGuid::NewGuid(),[](auto& P)
+		{
+			const FName Medals(TEXT("RES-MEDALS"));
+			P.Resources.Add({FDYKResourceId(Medals).ToContentId(),100});
+			P.CityEconomy.ResearchQueue[0].Paid.Add({Medals,5});
+			P.CityEconomy.PendingRefunds.Add({Medals,10});
+			return true;
+		}))) return false;
 	auto* Reload=NewObject<UDYKSaveSubsystem>(Owner.Get()); FDYKCityResearchTestAccess::Open(*Reload,Prefix);
 	if(!TestNotNull(TEXT("Actual disk reload"),Reload->GetProfileSnapshot())) return false;
-	TestTrue(TEXT("Active work, unpaid work, costs and clocks restored exactly"),FDYKPlayerProfileSaveData::StaticStruct()->CompareScriptStruct(&Expected,Reload->GetProfileSnapshot(),0));
+	TestTrue(TEXT("Load removes all retired medals and preserves active and pending work"),FDYKPlayerProfileSaveData::StaticStruct()->CompareScriptStruct(&Expected,Reload->GetProfileSnapshot(),0));
 	TestTrue(TEXT("Complete both after restart"),DYKCityWork::Update(*Reload,ResearchTestTime+40));
 	const auto Final=*Reload->GetProfileSnapshot();
 	auto* Again=NewObject<UDYKSaveSubsystem>(Owner.Get()); FDYKCityResearchTestAccess::Open(*Again,Prefix);

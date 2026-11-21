@@ -107,13 +107,12 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 	}
 
 	const FVector2D FooterOrigin(191,824);
-	const FVector2D FooterSize(1067,188);
+	const FVector2D FooterSize(1067,140);
 	struct FResourcePriceSlot {FName Id; FVector2D Position; FVector2D Size;};
 	const FResourcePriceSlot PriceSlots[]={
 		{TEXT("RES-WOOD"),{96,90},{106,50}}, {TEXT("RES-STONE"),{306,90},{105,50}},
 		{TEXT("RES-IRON"),{526,90},{99,50}}, {TEXT("RES-GOLD"),{704,90},{133,50}},
-		{TEXT("RES-FOOD"),{949,90},{103,50}}, {TEXT("RES-MEDALS"),{529,153},{104,31}}};
-	Label(NSLOCTEXT("DYKCity","UnitUpgradeMedals","Медали"),{599,977},{120,31},22,false);
+		{TEXT("RES-FOOD"),{949,90},{103,50}}};
 	const auto BindCost=[&](UDYKCityActionButton* Button,const FDYKResearchDefinition& Research)
 	{
 		auto* Panel=WidgetTree->ConstructWidget<UCanvasPanel>();
@@ -127,10 +126,8 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 			if(!Cost) continue;
 			const int64 Owned=DYKCityEconomy::Balance(Profile,FDYKResourceId(Slot.Id));
 			const auto Amount=FText::FromString(FString::Printf(TEXT("%lld / %lld"),Owned,Cost->Amount));
-			const bool OnPlate=Slot.Id!=TEXT("RES-MEDALS");
-			auto* Value=DYKCityHUDArt::Label(WidgetTree,Panel,Amount,Slot.Position,Slot.Size,OnPlate ? 28 : 22,OnPlate);
-			Value->SetColorAndOpacity(Owned>=Cost->Amount ? (OnPlate ? Gold : FLinearColor(.23f,.13f,.06f))
-				: FLinearColor(.84f,.20f,.11f));
+			auto* Value=DYKCityHUDArt::Label(WidgetTree,Panel,Amount,Slot.Position,Slot.Size,28,true);
+			Value->SetColorAndOpacity(Owned>=Cost->Amount ? Gold : FLinearColor(.84f,.20f,.11f));
 		}
 		Button->BindHoverContent(Panel);
 	};

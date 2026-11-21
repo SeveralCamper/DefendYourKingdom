@@ -20,6 +20,18 @@ namespace
 	constexpr int32 HeaderSize = MetadataSize + DigestSize;
 	constexpr int32 MaxRecordSize = 16 * 1024 * 1024;
 
+	void RemoveRetiredMedals(FDYKPlayerProfileSaveData& Profile)
+	{
+		const FName MedalId(TEXT("RES-MEDALS"));
+		const auto IsMedalBalance = [MedalId](const FDYKResourceSaveData& Row) { return Row.ResourceId.Name == MedalId; };
+		const auto IsMedalCost = [MedalId](const FDYKCityWorkCost& Cost) { return Cost.Resource == MedalId; };
+		Profile.Resources.RemoveAll(IsMedalBalance);
+		Profile.CityEconomy.PendingRefunds.RemoveAll(IsMedalCost);
+		for (auto& Work : Profile.CityEconomy.Work) Work.Paid.RemoveAll(IsMedalCost);
+		for (auto& Work : Profile.CityEconomy.ResearchQueue) Work.Paid.RemoveAll(IsMedalCost);
+		for (auto& Reward : Profile.MissionRewards) Reward.Remaining.RemoveAll(IsMedalBalance);
+	}
+
 	bool ReadBoundedString(FMemoryReader& Reader, FString& Value, int32 MaxCharacters)
 	{
 		const int64 Start = Reader.Tell();
@@ -351,6 +363,7 @@ void UDYKSaveSubsystem::LoadOrCreateProfile()
 	}
 	if (ActiveProfile)
 	{
+		RemoveRetiredMedals(ActiveProfile->Profile);
 		const bool bRecovered = Records[0].State == ERecordState::Corrupt || Records[1].State == ERecordState::Corrupt;
 		LoadStatus = bRecovered ? EDYKProfileLoadStatus::Recovered : EDYKProfileLoadStatus::Loaded;
 		if (bRecovered)
@@ -405,6 +418,7 @@ void UDYKSaveSubsystem::LoadOrCreateProfile()
 			LoadError = TEXT("The legacy profile is incomplete or is not a supported canonical snapshot; the original was left untouched.");
 			return;
 		}
+		RemoveRetiredMedals(ActiveProfile->Profile);
 		LoadStatus = EDYKProfileLoadStatus::Loaded;
 	}
 	else
