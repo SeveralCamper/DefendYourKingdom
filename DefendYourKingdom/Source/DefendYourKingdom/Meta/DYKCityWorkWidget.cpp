@@ -1,4 +1,5 @@
 #include "DYKCityWorkWidget.h"
+#include "DYKHeroes.h"
 #include "../UI/DYKHUDButtonSlate.h"
 #include "Components/ButtonSlot.h"
 #include "DYKCityOrders.h"
@@ -240,6 +241,7 @@ void UDYKCityWorkWidget::RebuildModal()
 		}
 	}
 	const bool Detail=State.Window==EDYKCityWindow::Detail;
+	if(Detail && State.Building==TEXT("CITY-TAVERN")) {BuildPaladinDetail(*P); return;}
 	FName Art=DYKCityBuildingUI::Art(State.Building,Detail);
 	if(Detail)
 	{
@@ -469,6 +471,15 @@ void UDYKCityWorkWidget::Dispatch(EDYKCityUIAction Action,int32 Index,FName Key)
 	const auto* S=ScreenInstance(*P,State.Instance);
 	switch(Action)
 	{
+	case EDYKCityUIAction::HeroHire:
+		if(State.Building==TEXT("CITY-TAVERN") && State.Window==EDYKCityWindow::Detail && !DYKHeroes::Hire(*Save,FGuid::NewGuid(),Now)) Message=TEXT("Найм недоступен или не удалось сохранить."); break;
+	case EDYKCityUIAction::HeroBiography: bHeroBiography=!bHeroBiography; break;
+	case EDYKCityUIAction::HeroResearch:
+		if(State.Building==TEXT("CITY-TAVERN") && State.Window==EDYKCityWindow::Detail)
+		{
+			const auto* R=DYKCityResearch::Find(Key);
+			if(!R || R->Building!=State.Building || !DYKCityResearch::Enqueue(*Save,FGuid::NewGuid(),Key,Now)) Message=TEXT("Улучшение недоступно или не удалось сохранить.");
+		} break;
 	case EDYKCityUIAction::Close: State.Close(); break;
 	case EDYKCityUIAction::Back: if(State.Window==EDYKCityWindow::Detail) State.Window=EDYKCityWindow::Interior; else State.Window=EDYKCityWindow::Building; break;
 	case EDYKCityUIAction::BuildTab: State.BuildTab=static_cast<EDYKCityBuildTab>(FMath::Clamp(Index,0,3)); break;

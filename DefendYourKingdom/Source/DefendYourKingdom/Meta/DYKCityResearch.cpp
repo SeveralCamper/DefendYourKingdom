@@ -1,6 +1,7 @@
 #include "DYKCityResearch.h"
 #include "DYKCityEconomy.h"
 #include "DYKCityOrders.h"
+#include "DYKHeroes.h"
 #include "../Core/Content/DYKUnitCatalog.h"
 #include "../Saving/DYKProfileService.h"
 
@@ -140,6 +141,7 @@ const FDYKResearchConfig& DYKCityResearch::DEV_PLACEHOLDER()
 				PreviousTrap=D.Id; C.Definitions.Add(MoveTemp(D));
 			}
 		}
+		DYKHeroes::AppendResearchDEV_PLACEHOLDER(C);
 		return C;
 	}();
 	return Config;
@@ -155,7 +157,7 @@ bool DYKCityResearch::ValidateConfig(const FDYKResearchConfig& C)
 	TSet<FName> All;
 	for(const auto& D:C.Definitions)
 	{
-		if(D.Id.IsNone() || All.Contains(D.Id) || D.DurationSeconds<=0 || D.Bonus.HP<0 || D.Bonus.PhysicalArmor<0 || D.Bonus.Damage<0
+		if(D.Id.IsNone() || All.Contains(D.Id) || D.DurationSeconds<=0 || D.Bonus.HP<0 || D.Bonus.PhysicalArmor<0 || D.Bonus.Damage<0 || D.Bonus.MagicalArmor<0
 			|| (D.TargetLine!=EDYKUnitLine::None && D.TargetType.IsValid())) return false;
 		All.Add(D.Id);
 		TSet<FName> Costs;
@@ -283,6 +285,7 @@ FDYKResearchBonus DYKCityResearch::Bonus(const FDYKPlayerProfileSaveData& P,cons
 			: D->TargetType.IsValid() && D->TargetType==Unit.Id;
 		if(!Matches) continue;
 		Result.HP+=D->Bonus.HP; Result.PhysicalArmor+=D->Bonus.PhysicalArmor; Result.Damage+=D->Bonus.Damage;
+		Result.MagicalArmor+=D->Bonus.MagicalArmor;
 	}
 	return Result;
 }
@@ -294,6 +297,7 @@ FDYKUnitBaseStats DYKCityResearch::EffectiveStats(const FDYKPlayerProfileSaveDat
 	const auto PersonalBonus=Bonus(P,Unit,EDYKResearchScope::Type);
 	Stats.MaxHP.Value+=LineBonus.HP+PersonalBonus.HP;
 	Stats.PhysicalArmor.Value+=LineBonus.PhysicalArmor+PersonalBonus.PhysicalArmor;
+	Stats.MagicalArmor.Value+=LineBonus.MagicalArmor+PersonalBonus.MagicalArmor;
 	Stats.Attack.DamagePerHit.Value+=LineBonus.Damage+PersonalBonus.Damage;
 	return Stats;
 }

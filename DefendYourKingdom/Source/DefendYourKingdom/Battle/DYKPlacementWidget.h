@@ -16,6 +16,8 @@ class DEFENDYOURKINGDOM_API UDYKPlacementWidget : public UDYKScreenWidget
 	GENERATED_BODY()
 public:
 	UFUNCTION() void PlaceClicked();
+	UFUNCTION() void PaladinClicked();
+	UPROPERTY() TObjectPtr<UButton> PaladinButton;
 	UFUNCTION() void SellClicked();
 	UFUNCTION() void ResurrectClicked();
 	UFUNCTION() void StartClicked();

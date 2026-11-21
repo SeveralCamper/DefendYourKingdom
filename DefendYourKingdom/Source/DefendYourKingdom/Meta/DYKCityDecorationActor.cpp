@@ -1,4 +1,5 @@
 #include "DYKCityDecorationActor.h"
+#include "DYKHeroes.h"
 #include "../UI/DYKVisuals.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -14,7 +15,9 @@ ADYKCityDecorationActor::ADYKCityDecorationActor()
 	SetRootComponent(Roads);
 	Residents=CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("DecorativeResidents"));
 	Residents->SetupAttachment(Roads);
-	for (auto* Component:{Roads.Get(),Residents.Get()})
+	HeroResidents=CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("OwnedHeroResidents"));
+	HeroResidents->SetupAttachment(Roads);
+	for (auto* Component:{Roads.Get(),Residents.Get(),HeroResidents.Get()})
 	{
 		Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Component->SetCanEverAffectNavigation(false);
@@ -22,6 +25,7 @@ ADYKCityDecorationActor::ADYKCityDecorationActor()
 	// Already licensed Kenney CC0 meshes from the project's visual library.
 	Roads->SetStaticMesh(DYKVisuals::Mesh(TEXT("Town"),TEXT("road")));
 	Residents->SetStaticMesh(DYKVisuals::Mesh(TEXT("Dungeon"),TEXT("character_human")));
+	HeroResidents->SetStaticMesh(Residents->GetStaticMesh());
 	Roads->SetCastShadow(false);
 	Roads->SetRemoveSwap();
 }
@@ -74,6 +78,10 @@ void ADYKCityDecorationActor::Refresh(const FDYKPlayerProfileSaveData& Profile,c
 		}
 	}
 	Pedestrians.Reconcile(Network,Random);
+	HeroPedestrians.DEV_PLACEHOLDER.Population=DYKHeroes::Owns(Profile) ? 1 : 0;
+	HeroPedestrians.Reconcile(Network,Random);
+	HeroResidents->ClearInstances();
+	for(int32 I=0;I<HeroPedestrians.Walkers.Num();++I) HeroResidents->AddInstance(FTransform::Identity);
 	Residents->ClearInstances();
 	for (int32 I=0;I<Pedestrians.Walkers.Num();++I) Residents->AddInstance(FTransform::Identity);
 	UpdateResidents();
@@ -82,6 +90,7 @@ void ADYKCityDecorationActor::Refresh(const FDYKPlayerProfileSaveData& Profile,c
 void ADYKCityDecorationActor::UpdateResidents()
 {
 	const double Now=GetWorld()->GetTimeSeconds();
+	HeroPedestrians.Advance(Network,static_cast<float>(Now-LastUpdate),Random);
 	Pedestrians.Advance(Network,static_cast<float>(Now-LastUpdate),Random); LastUpdate=Now;
 	const UStaticMesh* Mesh=Residents->GetStaticMesh();
 	const double Bottom=Mesh ? Mesh->GetBoundingBox().Min.Z : 0;
@@ -96,4 +105,12 @@ void ADYKCityDecorationActor::UpdateResidents()
 		Residents->UpdateInstanceTransform(I,FTransform(FRotator(0,Yaw,0),Location,FVector(1.8)),false,false,true);
 	}
 	Residents->MarkRenderStateDirty();
+	for(int32 I=0;I<HeroPedestrians.Walkers.Num();++I)
+	{
+		const auto& W=HeroPedestrians.Walkers[I]; const auto P=W.Position();
+		const FVector Facing(W.Next.X-W.Cell.X,W.Next.Y-W.Cell.Y,0);
+		HeroResidents->UpdateInstanceTransform(I,FTransform(FRotator(0,Facing.Rotation().Yaw+90,0),
+			FVector((P.X-15)*200+100,(P.Y-15)*200+100,12-Bottom*2.2),FVector(2.2)),false,false,true);
+	}
+	HeroResidents->MarkRenderStateDirty();
 }

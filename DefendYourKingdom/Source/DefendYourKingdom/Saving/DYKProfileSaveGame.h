@@ -193,6 +193,8 @@ struct DEFENDYOURKINGDOM_API FDYKPlayerProfileSaveData
 	// Additive schema-1 fields; older local snapshots default to empty ledgers.
 	UPROPERTY(SaveGame) TArray<FDYKMissionCompletionSaveData> MissionCompletions;
 	UPROPERTY(SaveGame) TArray<FDYKMissionRewardSaveData> MissionRewards;
+	// Permanent ownership only. Levels/equipment use the durable Q40 research ledger.
+	UPROPERTY(SaveGame) TArray<FDYKContentId> OwnedHeroes;
 };
 
 UCLASS()

@@ -7,6 +7,7 @@ struct FDYKResearchBonus
 	int32 HP=0;
 	int32 PhysicalArmor=0;
 	int32 Damage=0;
+	int32 MagicalArmor=0;
 };
 
 enum class EDYKResearchScope : uint8 { Line, Type };

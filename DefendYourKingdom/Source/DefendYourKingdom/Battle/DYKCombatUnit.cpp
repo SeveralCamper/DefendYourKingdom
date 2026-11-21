@@ -101,7 +101,8 @@ void ADYKCombatUnit::BeginAttack()
 	const auto& Attack = Definition->Base.Attack;
 	NextAttackAt = GetWorld()->GetTimeSeconds() + Attack.IntervalSeconds.Value;
 	// The logical impact drives presentation later (M1.10); there is no projectile actor.
-	GetWorldTimerManager().SetTimer(HitTimer, this, &ThisClass::ResolveHit, Attack.FirstHitDelaySeconds.Value, false);
+	if(Attack.FirstHitDelaySeconds.Value<=0) ResolveHit();
+	else GetWorldTimerManager().SetTimer(HitTimer, this, &ThisClass::ResolveHit, Attack.FirstHitDelaySeconds.Value, false);
 	GetWorldTimerManager().SetTimer(SwingTimer, this, &ThisClass::RequestAttack, Attack.IntervalSeconds.Value, false);
 }
 

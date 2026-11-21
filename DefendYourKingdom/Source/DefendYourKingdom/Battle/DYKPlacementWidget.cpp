@@ -47,6 +47,8 @@ TSharedRef<SWidget> UDYKPlacementWidget::RebuildWidget()
 		};
 		PlaceButton = Button(FText::Format(NSLOCTEXT("DYKBattle", "PeasantCost", "Крестьянин • {0} припасов"), DYKUnitCatalog::Find(DYKUnitIds::Peasant())->Base.PlacementSupplies.Value));
 		SellButton = Button(NSLOCTEXT("DYKBattle", "SellButton", "Продать"));
+		PaladinButton=Button(NSLOCTEXT("DYKHeroes","PlacePaladin","Паладин • 12 припасов"));
+		PaladinButton->OnClicked.AddDynamic(this,&ThisClass::PaladinClicked);
 		ResurrectButton = Button(NSLOCTEXT("DYKBattle", "ResurrectButton", "Воскресить"));
 		StartButton = Button(NSLOCTEXT("DYKBattle", "StartButton", "Начать волну"));
 		ReturnButton = Button(NSLOCTEXT("DYKBattle", "ReturnButton", "В город"));
@@ -141,6 +143,7 @@ void UDYKPlacementWidget::Refresh()
 	SpeedOneButton->SetIsEnabled(bControls); SpeedTwoButton->SetIsEnabled(bControls); SpeedThreeButton->SetIsEnabled(bControls);
 	PauseButton->SetIsEnabled(!bTerminal); LeaveButton->SetVisibility(bTerminal ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	PlaceButton->SetVisibility(bTerminal ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+	PaladinButton->SetVisibility(bTerminal ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	SellButton->SetVisibility(bTerminal ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	ResurrectButton->SetVisibility(bTerminal ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
 	StartButton->SetVisibility(bTerminal ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
@@ -152,6 +155,7 @@ void UDYKPlacementWidget::Refresh()
 	const bool bPreparation = Battle.IsPreparation() && !UGameplayStatics::IsGamePaused(this);
 	const int32 Cost = DYKUnitCatalog::Find(DYKUnitIds::Peasant())->Base.PlacementSupplies.Value;
 	PlaceButton->SetIsEnabled(bPreparation && Placement && Placement->bPlayerEditable && !Unit && Battle.GetSupplies() >= Cost);
+	PaladinButton->SetIsEnabled(bPreparation && Placement && Placement->bPlayerEditable && !Unit && Battle.GetSupplies()>=12 && GameMode->CanDeployHero(DYKUnitIds::Paladin().GetName()));
 	SellButton->SetIsEnabled(bPreparation && Placement && Placement->bPlayerEditable && Unit);
 	ResurrectButton->SetIsEnabled(Unit && Unit->CanResurrect());
 	StartButton->SetIsEnabled(Battle.CanStartWave() && !UGameplayStatics::IsGamePaused(this));
@@ -180,7 +184,7 @@ void UDYKPlacementWidget::Refresh()
 		return;
 	}
 	const TCHAR* Phase = Battle.IsPreparation() ? TEXT("Подготовка") : Battle.IsTerminal() ? TEXT("Бой завершён") : TEXT("Волна идёт");
-	const FText Selection = Unit ? FText::Format(NSLOCTEXT("DYKBattle","SelectedPeasant","Крестьянин · HP {0} / {1}"),Unit->GetHP(),Unit->GetUnitDefinition()->Base.MaxHP.Value)
+	const FText Selection = Unit ? FText::Format(NSLOCTEXT("DYKBattle","SelectedUnit","{0} · HP {1} / {2}"),FText::FromString(Unit->IsHero() ? TEXT("Паладин") : TEXT("Крестьянин")),Unit->GetHP(),Unit->GetUnitDefinition()->Base.MaxHP.Value)
 		: Placement ? NSLOCTEXT("DYKBattle","EmptySlot","Свободная площадка") : NSLOCTEXT("DYKBattle","ChooseSlot","Выберите круглую площадку");
 	StatusText->SetText(FText::Format(NSLOCTEXT("DYKBattle","SelectionStatus","{0} · Припасы: {1}\n{2}"),FText::FromString(Phase),Battle.GetSupplies(),Selection));
 }
@@ -193,6 +197,11 @@ void UDYKPlacementWidget::PlaceClicked()
 void UDYKPlacementWidget::SellClicked()
 {
 	if (auto* GameMode = GetWorld()->GetAuthGameMode<ADYKPolygonGameMode>()) GameMode->SellDefender(SelectedSlot.Get(), DisplayedPreparation);
+	Refresh();
+}
+void UDYKPlacementWidget::PaladinClicked()
+{
+	if(auto* GameMode=GetWorld()->GetAuthGameMode<ADYKPolygonGameMode>()) GameMode->PlaceDefender(SelectedSlot.Get(),DisplayedPreparation,true);
 	Refresh();
 }
 void UDYKPlacementWidget::ResurrectClicked()

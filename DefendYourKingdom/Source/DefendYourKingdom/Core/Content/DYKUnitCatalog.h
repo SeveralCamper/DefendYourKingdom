@@ -8,6 +8,7 @@ namespace DYKUnitIds
 	// Stable keys: never derive them from display names or reuse them for another type.
 	DEFENDYOURKINGDOM_API const FDYKUnitTypeId& Peasant();
 	DEFENDYOURKINGDOM_API const FDYKUnitTypeId& Archer();
+	DEFENDYOURKINGDOM_API const FDYKUnitTypeId& Paladin();
 	DEFENDYOURKINGDOM_API const FDYKUnitTypeId& Goblin();
 	DEFENDYOURKINGDOM_API const FDYKUnitTypeId& GoblinAssassin();
 }

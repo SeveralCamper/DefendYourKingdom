@@ -20,10 +20,12 @@ public:
 	const FDYKCityPedestrians& GetPedestrians() const { return Pedestrians; }
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> Roads;
 	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> Residents;
+	UPROPERTY(VisibleAnywhere) TObjectPtr<UInstancedStaticMeshComponent> HeroResidents;
 private:
 	void UpdateResidents();
 	FDYKCityRoadNetwork Network;
 	FDYKCityPedestrians Pedestrians;
+	FDYKCityPedestrians HeroPedestrians;
 	TArray<FIntPoint> RenderedCells;
 	FRandomStream Random;
 	FTimerHandle Timer;

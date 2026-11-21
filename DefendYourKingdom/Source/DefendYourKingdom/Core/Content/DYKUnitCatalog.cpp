@@ -27,6 +27,13 @@ namespace
 			NotApplicable(0.f), NotApplicable(0.f), DevPlaceholder(0.01f)},
 		{0.f}, {7}, {30.f}, NotApplicable(0)
 	};
+	// spec/catalog/allies/07-paladin.md; no hit delay means immediate impact.
+	constexpr FDYKUnitBaseStats PaladinBase = {
+		{70}, {2}, {2},
+		{{10}, {1}, EDYKDamageType::Physical, {3.f}, {5.f}, EDYKHitTiming::FixedDelay,
+			{0.f}, NotApplicable(0.f), NotApplicable(0.f)},
+		{0.f}, {12}, {60.f}, NotApplicable(0)
+	};
 	// Authored base metadata is also used by the clickable barracks cards.
 	constexpr FDYKUnitBaseStats GuardBase=[] {auto S=PeasantBase; S.MaxHP.Value=25; S.PhysicalArmor.Value=1; S.Attack.DamagePerHit.Value=7; return S;}();
 	constexpr FDYKUnitBaseStats RoyalGuardBase=[] {auto S=PeasantBase; S.MaxHP.Value=35; S.PhysicalArmor.Value=2; S.Attack.DamagePerHit.Value=10; return S;}();
@@ -51,6 +58,8 @@ namespace
 	{
 		// FName is not constexpr; only this small ID layer requires runtime construction.
 		static const FDYKUnitDefinition Entries[] = {
+			{DYKUnitIds::Paladin(), EDYKUnitSide::Defender, EDYKUnitLine::None,
+				1, EDYKUnitMovement::Stationary, PaladinBase},
 			{DYKUnitIds::Peasant(), EDYKUnitSide::Defender, EDYKUnitLine::Infantry,
 				1, EDYKUnitMovement::Stationary, PeasantBase},
 			{DYKUnitIds::Archer(), EDYKUnitSide::Defender, EDYKUnitLine::Ranged,
@@ -107,6 +116,12 @@ const FDYKUnitTypeId& DYKUnitIds::Peasant()
 const FDYKUnitTypeId& DYKUnitIds::Archer()
 {
 	static const FDYKUnitTypeId Id(TEXT("DYK-ARCHER"));
+	return Id;
+}
+
+const FDYKUnitTypeId& DYKUnitIds::Paladin()
+{
+	static const FDYKUnitTypeId Id(TEXT("DYK-PALADIN"));
 	return Id;
 }
 

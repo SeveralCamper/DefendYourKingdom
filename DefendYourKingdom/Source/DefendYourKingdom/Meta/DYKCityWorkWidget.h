@@ -12,7 +12,7 @@ class UDYKCityWorkWidget;
 struct FDYKCityResearchWorkSaveData;
 UENUM()
 enum class EDYKCityUIAction : uint8
-{Close,Back,BuildTab,LibraryTab,Build,Visit,Move,Rotate,Upgrade,CancelWork,Collect,Order,Item,Previous,Next,Research,CancelResearch,ResearchPrevious,ResearchNext};
+{Close,Back,BuildTab,LibraryTab,Build,Visit,Move,Rotate,Upgrade,CancelWork,Collect,Order,Item,Previous,Next,Research,CancelResearch,ResearchPrevious,ResearchNext,HeroHire,HeroResearch,HeroBiography};
 UCLASS()
 class DEFENDYOURKINGDOM_API UDYKCityActionButton : public UButton
 {
@@ -66,6 +66,8 @@ private:
 	bool BuildRecruitmentCatalog(const FDYKPlayerProfileSaveData& P,const FText& Title,TConstArrayView<FDYKCityInteriorItem> Items);
 	void BuildDetail(const FDYKPlayerProfileSaveData& P);
 	bool BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData& P,const FDYKCityInteriorItem& Item);
+	void BuildPaladinDetail(const FDYKPlayerProfileSaveData& P);
+	bool bHeroBiography=false;
 	static FText ResearchTimerText(const FDYKPlayerProfileSaveData& P,const FDYKCityResearchWorkSaveData& Work,int64 Now);
 	UFUNCTION() void ResourceAction(EDYKResourceAction Action,int32 Index);
 	FDYKResourceBuildingView ResourceView(const FDYKPlayerProfileSaveData& P) const;

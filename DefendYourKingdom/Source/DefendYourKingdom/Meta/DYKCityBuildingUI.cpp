@@ -1,4 +1,5 @@
 #include "DYKCityBuildingUI.h"
+#include "DYKHeroes.h"
 #include "../Saving/DYKProfileService.h"
 
 EDYKCityBuildTab DYKCityBuildingUI::Tab(FName Type)
@@ -114,6 +115,8 @@ TArray<FDYKCityInteriorItem> DYKCityBuildingUI::Items(FName Type,int32 LibraryTa
 			FDYKCityInteriorItem Item; Item.Key=FName(*FString::Printf(TEXT("LIBRARY-FUTURE-%d-%d"),LibraryTab,I));
 			Item.Name=TEXT("Будущее исследование"); Item.Description=TEXT("Это исследование пока недоступно.");
 			Item.Art=TEXT("WorkshopHUD"); Item.ImageRegion=Region(4); Item.bFuture=true; Result.Add(Item);
+			if(Kind==EDYKCityInterior::Tavern)
+			{Result.Last().bFuture=false; Result.Last().Art=TEXT("BarraksHUD"); Result.Last().ImageRegion=Region(1); Result.Last().Description=TEXT("Уникальный герой. Найм навсегда и постоянное развитие в таверне.");}
 		}
 	}
 	else if(Kind==EDYKCityInterior::Tavern || Kind==EDYKCityInterior::Magic)
@@ -133,6 +136,7 @@ TArray<FDYKCityInteriorItem> DYKCityBuildingUI::Items(FName Type,int32 LibraryTa
 bool DYKCityBuildingUI::IsLocked(const FDYKPlayerProfileSaveData& P,const FDYKCityInteriorItem& Item)
 {
 	if(Item.bFuture) return true;
+	if(Item.Key==TEXT("CITY-TAVERN-0")) return !DYKHeroes::Owns(P) && !DYKHeroes::HireBlockReason(P).IsEmpty();
 	const auto* Root=DYKCityResearch::Find(Item.ResearchRoot);
 	if(!Root) return true;
 	for(const auto Prerequisite:Root->Prerequisites) if(!P.CityEconomy.CompletedResearch.Contains(Prerequisite)) return true;

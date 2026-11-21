@@ -5,6 +5,7 @@
 #include "DYKDefenderActor.h"
 #include "DYKUnitSlot.h"
 #include "DYKPlacementWidget.h"
+#include "DYKCombatRules.h"
 #include "../Core/DYKGameInstance.h"
 #include "../Meta/DYKMissionRewards.h"
 #include "../Meta/DYKCityEconomy.h"
@@ -34,6 +35,11 @@ namespace
 	constexpr float ReleaseSecondsDEV_PLACEHOLDER = 1.f;
 }
 
+ADYKPolygonGameMode::ADYKPolygonGameMode()
+{
+	BattleSession.OnWaveCompleted.AddUObject(this,&ThisClass::RestoreDefenders);
+}
+
 void ADYKPolygonGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
 	Super::InitGame(MapName, Options, ErrorMessage);
@@ -47,7 +53,6 @@ void ADYKPolygonGameMode::InitGame(const FString& MapName, const FString& Option
 	}
 	BattleSession.OnResolutionRequested.AddUObject(this, &ThisClass::QueueWaveResolution);
 	BattleSession.OnWaveStarted.AddUObject(this, &ThisClass::QueueEmission);
-	BattleSession.OnWaveCompleted.AddUObject(this, &ThisClass::RestoreDefenders);
 	CombatStepHandle = FWorldDelegates::OnWorldPostActorTick.AddUObject(this, &ThisClass::RefreshCombatTargets);
 	BattleSession.OnWaveStarted.AddLambda([](const FGuid& Token)
 	{
@@ -135,20 +140,46 @@ bool ADYKPolygonGameMode::IsEditableSlot(const ADYKUnitSlot* Slot) const
 	return true;
 }
 
-ADYKDefenderActor* ADYKPolygonGameMode::PlaceDefender(ADYKUnitSlot* Slot, const FGuid& PreparationToken)
+ADYKDefenderActor* ADYKPolygonGameMode::PlaceDefender(ADYKUnitSlot* Slot, const FGuid& PreparationToken, bool bPaladin)
 {
 	if (!IsEditableSlot(Slot) || Slot->GetOccupant() || !BattleSession.IsPreparation() ||
 		PreparationToken != BattleSession.GetPreparationToken() || UGameplayStatics::IsGamePaused(this)) return nullptr;
-	const int32 Cost = DYKUnitCatalog::Find(DYKUnitIds::Peasant())->Base.PlacementSupplies.Value;
+	if(bPaladin && !CanDeployHero(DYKUnitIds::Paladin().GetName())) return nullptr;
+	const int32 Cost = DYKUnitCatalog::Find(bPaladin ? DYKUnitIds::Paladin() : DYKUnitIds::Peasant())->Base.PlacementSupplies.Value;
 	if (BattleSession.GetSupplies() < Cost) return nullptr;
 	auto* Unit = GetWorld()->SpawnActor<ADYKDefenderActor>(Slot->GetActorLocation(), Slot->GetActorRotation());
 	if (!Unit) return nullptr;
+	if(bPaladin) Unit->HeroType=DYKUnitIds::Paladin().GetName();
 	const FGuid Id = FGuid::NewGuid();
+	if(!Unit->Initialize(this,Id)) {Unit->Destroy(); return nullptr;}
 	if (!BattleSession.PurchaseDefense(Id, Cost, PreparationToken)) { Unit->Destroy(); return nullptr; }
-	Unit->Initialize(this, Id);
 	Slot->Occupant = Unit;
 	Slot->UpdateMarker();
 	return Unit;
+}
+
+bool ADYKPolygonGameMode::CanDeployHero(FName Hero,bool bStory) const
+{
+	TArray<FName> Player,Story;
+	for(const auto& Weak:CombatUnits) if(const auto* Unit=Cast<ADYKDefenderActor>(Weak.Get()); Unit && !Unit->IsActorBeingDestroyed() && Unit->IsHero())
+		(Unit->bMissionPlaced ? Story : Player).Add(Unit->HeroType);
+	if(!DYKHeroes::CanDeploy(Hero,Player,Story,bStory)) return false;
+	if(bStory) return true;
+	const auto* Save=GetGameInstance() ? GetGameInstance()->GetSubsystem<UDYKSaveSubsystem>() : nullptr;
+	const auto* P=Save ? Save->GetProfileSnapshot() : nullptr;
+	return bAllowPlayerHeroes && (AllowedHeroIds.IsEmpty() || AllowedHeroIds.Contains(Hero))
+		&& Hero==DYKUnitIds::Paladin().GetName() && P && DYKHeroes::Owns(*P);
+}
+
+void ADYKPolygonGameMode::ApplyHeroAreaDamage(FVector Center,float Radius,int32 Damage,EDYKDamageType Type)
+{
+	if(BattleSession.GetPhase()!=EDYKBattlePhase::ActiveWave || UGameplayStatics::IsGamePaused(this)) return;
+	// Snapshot recipients before death callbacks update the registry.
+	const auto Units=CombatUnits;
+	for(const auto& Weak:Units) if(auto* Unit=Weak.Get(); Unit && Unit->IsAlive() && Unit->GetUnitDefinition()
+		&& Unit->GetUnitDefinition()->Side==EDYKUnitSide::Enemy
+		&& FVector::DistSquared(Unit->GetActorLocation(),Center)<=FMath::Square(Radius*DYKCombatRules::CentimetersPerUnitDEV_PLACEHOLDER))
+		Unit->ApplyDamage(Damage,Type);
 }
 
 bool ADYKPolygonGameMode::SellDefender(ADYKUnitSlot* Slot, const FGuid& PreparationToken)
