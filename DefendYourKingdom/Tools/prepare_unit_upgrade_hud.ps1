@@ -166,10 +166,34 @@ function Save-StudySprite($Reference,$Name,[double[]]$Outline)
 }
 
 Save-StudySprite 'LearnUnitReference.png' 'UnitStudyLearn' @(
-    8,55, 24,42, 33,49, 39,40, 46,32, 56,25, 68,22, 275,22, 285,18, 296,10,
-    305,17, 319,22, 525,22, 538,25, 549,33, 559,48, 570,42, 584,55, 571,68, 559,63,
-    552,75, 543,84, 532,89, 320,89, 308,96, 296,106, 284,96, 272,89, 66,89,
-    54,87, 44,81, 36,70, 33,63, 24,68)
+    7,55, 22,42, 32,48, 38,37, 46,29, 55,22, 271,22, 284,18, 295,11,
+    304,18, 317,22, 535,22, 545,28, 553,37, 560,49, 569,42, 583,55, 569,68, 560,62,
+    554,73, 546,82, 535,90, 317,90, 305,94, 295,103, 285,94, 273,90, 55,90,
+    46,85, 38,77, 31,65, 22,68)
+
+$studyLearn=[Drawing.Bitmap]::new((Join-Path $folder 'UnitStudyLearn.png'))
+$studyHover=$studyLearn.Clone()
+try {
+    $edgeSamples=@(@(-4,0),@(4,0),@(0,-4),@(0,4),@(-3,-3),@(3,-3),@(-3,3),@(3,3))
+    for($y=4;$y -lt $studyLearn.Height-4;++$y){
+        for($x=4;$x -lt $studyLearn.Width-4;++$x){
+            $pixel=$studyLearn.GetPixel($x,$y)
+            if($pixel.A -eq 0){continue}
+            foreach($sample in $edgeSamples){
+                if($studyLearn.GetPixel($x+$sample[0],$y+$sample[1]).A -ge 128){continue}
+                $studyHover.SetPixel($x,$y,[Drawing.Color]::FromArgb($pixel.A,
+                    [int]($pixel.R+(255-$pixel.R)*.38),[int]($pixel.G+(221-$pixel.G)*.38),
+                    [int]($pixel.B+(118-$pixel.B)*.38)))
+                break
+            }
+        }
+    }
+    $studyHover.Save((Join-Path $folder 'UnitStudyLearnHover.png'),[Drawing.Imaging.ImageFormat]::Png)
+} finally {
+    $studyHover.Dispose()
+    $studyLearn.Dispose()
+}
+
 Save-StudySprite 'UnitStudiedReference.png' 'UnitStudyComplete' @(
     10,74, 59,43, 154,43, 172,46, 175,35, 184,26, 190,35, 199,24, 215,15, 214,27,
     242,26, 258,20, 276,18, 294,18, 310,22, 323,27, 750,27, 745,15, 762,21, 774,34,

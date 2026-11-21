@@ -105,6 +105,10 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		FMath::IsNearlyEqual(LearnSlot->GetPosition().X+LearnSlot->GetSize().X*.5,724.));
 	if(const auto* Art=Learn->GetStyle().Normal.GetResourceObject();TestNotNull(TEXT("Study has visible button artwork"),Art))
 		TestEqual(TEXT("Study uses the authored image"),Art->GetFName(),FName(TEXT("UnitStudyLearn")));
+	if(const auto* HoverArt=Learn->GetStyle().Hovered.GetResourceObject();TestNotNull(TEXT("Study has its own hover artwork"),HoverArt))
+		TestEqual(TEXT("Study hover uses the cutout contour"),HoverArt->GetFName(),FName(TEXT("UnitStudyLearnHover")));
+	TestEqual(TEXT("Study hover preserves the button size"),Learn->GetStyle().Hovered.ImageSize,Learn->GetStyle().Normal.ImageSize);
+	TestTrue(TEXT("Study hover has no duplicate tooltip"),Learn->GetToolTipText().IsEmpty());
 	TestEqual(TEXT("Study points to the selected guard"),Learn->Key,Guard);
 	TestFalse(TEXT("The unstudied guard has no studied banner"),HasStudiedBanner());
 	UI->FindAction(EDYKCityUIAction::Research,3)->Invoke();

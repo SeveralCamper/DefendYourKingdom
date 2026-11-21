@@ -243,8 +243,8 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		if(Art)
 		{
 			const auto Normal=DYKCityHUDArt::TextureBrush(Art);
-			auto Hover=Normal;
-			Hover.TintColor=FLinearColor(1.18f,1.12f,1.0f);
+			auto* HoverArt=LoadObject<UTexture2D>(nullptr,TEXT("/Game/DefendYourKingdom/Art/CityHUD/UnitUpgrade/UnitStudyLearnHover.UnitStudyLearnHover"));
+			const auto Hover=HoverArt ? DYKCityHUDArt::TextureBrush(HoverArt) : Normal;
 			auto Muted=Normal;
 			Muted.TintColor=FLinearColor(.60f,.63f,.55f);
 			FButtonStyle Style;
@@ -252,7 +252,7 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 			Style.SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
 			Learn->SetStyle(Style);
 		}
-		Learn->SetToolTipText(Locked ? NSLOCTEXT("DYKCity","PreviousUnitRequired","Требуется изучить предыдущего бойца") : Caption);
+		Learn->SetToolTipText(Locked ? NSLOCTEXT("DYKCity","PreviousUnitRequired","Требуется изучить предыдущего бойца") : FText::GetEmpty());
 		if(!Locked && !Root->Costs.IsEmpty()) BindCost(Learn,*Root);
 	}
 	return true;

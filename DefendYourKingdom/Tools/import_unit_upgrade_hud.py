@@ -4,7 +4,7 @@ import unreal as ue
 
 project = Path(ue.Paths.convert_relative_path_to_full(ue.Paths.project_dir()))
 artwork = {
-    "UnitUpgrade": ("UnitUpgradeBase", "UnitUpgradeParts", "UnitStudyLearn", "UnitStudyComplete"),
+    "UnitUpgrade": ("UnitUpgradeBase", "UnitUpgradeParts", "UnitStudyLearn", "UnitStudyLearnHover", "UnitStudyComplete"),
     "Recruitment": ("RecruitmentBase", "RecruitmentParts"),
 }
 for group, names in artwork.items():
