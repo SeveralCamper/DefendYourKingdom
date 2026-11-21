@@ -14,7 +14,7 @@
 namespace
 {
 	const FVector2D AtlasSize(1448,1086);
-	const FVector2D BoardSize(1448,1170);
+	const FVector2D BoardSize(1448,1218);
 	const FLinearColor Gold(1.f,.82f,.12f);
 
 	FBox2D AtlasRegion(FVector2D Start,FVector2D Size)
@@ -83,7 +83,8 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		Block->SetWrapTextAt(0);
 		return Block;
 	};
-	const bool Locked=DYKCityBuildingUI::IsLocked(Profile,Item);
+	const bool Known=DYKCityResearch::IsUnlocked(Profile,Unit->Id);
+	const bool Locked=!Known && DYKCityBuildingUI::IsLocked(Profile,Item);
 	Label(FText::FromString(Item.Name),{420,106},{608,76},58);
 	const auto Portrait=FVector2D(225,205),PortraitSize=FVector2D(401,312);
 	if(!Locked)
@@ -201,11 +202,10 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 	}
 	for(const FName Key:Options)
 	{
-		if(StatResearch.Contains(Key)) continue;
+		if(Key==Root->Id || StatResearch.Contains(Key)) continue;
 		const auto* Research=DYKCityResearch::Find(Key);
 		if(!Research) continue;
-		ResearchAction(Research,3,{951,421},{276,44},Research->Unlock.IsValid()
-			? NSLOCTEXT("DYKCity","LearnUnit","Изучить бойца") : NSLOCTEXT("DYKCity","ImproveUnitStat","Улучшить"));
+		ResearchAction(Research,4,{951,421},{276,44},NSLOCTEXT("DYKCity","ImproveUnitStat","Улучшить"));
 		break;
 	}
 	const FDYKCityResearchWorkSaveData* DisplayedJob=nullptr;
@@ -217,7 +217,7 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 	}
 	if(DisplayedJob)
 	{
-		auto* Cancel=ActionButton(EDYKCityUIAction::CancelResearch,0,FText::GetEmpty(),{333,1019},{365,76},
+		auto* Cancel=ActionButton(EDYKCityUIAction::CancelResearch,0,FText::GetEmpty(),{333,1037},{365,76},
 			FName(*DisplayedJob->WorkId.ToString()),true,true);
 		const auto Normal=DYKCityHUDArt::TextureBrush(Parts,AtlasRegion({0,0},{422,88}));
 		auto Hover=Normal;
@@ -228,7 +228,35 @@ bool UDYKCityWorkWidget::BuildUnitUpgradeDetail(const FDYKPlayerProfileSaveData&
 		Cancel->SetStyle(Style);
 		Cancel->SetToolTipText(NSLOCTEXT("DYKCity","CancelUnitUpgrade","Отменить работу"));
 		LiveResearch=DisplayedJob->ResearchId;
-		LiveStatus=Label(ResearchTimerText(Profile,*DisplayedJob,FDateTime::UtcNow().ToUnixTimestamp()),{717,1027},{397,60},32,false);
+		LiveStatus=Label(ResearchTimerText(Profile,*DisplayedJob,FDateTime::UtcNow().ToUnixTimestamp()),{717,1045},{397,60},32,false);
+	}
+	else if(Known)
+	{
+		if(auto* Banner=LoadObject<UTexture2D>(nullptr,TEXT("/Game/DefendYourKingdom/Art/CityHUD/UnitUpgrade/UnitStudyComplete.UnitStudyComplete")))
+			DYKCityHUDArt::Texture(WidgetTree,DesignCanvas,Banner,{274,1013},{900,125});
+		else Label(NSLOCTEXT("DYKCity","UnitStudied","Боец изучен"),{274,1013},{900,125},50,false);
+	}
+	else
+	{
+		const bool Available=!Locked && DYKCityResearch::CanEnqueue(Profile,Root->Id);
+		const auto Caption=NSLOCTEXT("DYKCity","LearnUnit","Изучить бойца");
+		auto* Art=LoadObject<UTexture2D>(nullptr,TEXT("/Game/DefendYourKingdom/Art/CityHUD/UnitUpgrade/UnitStudyLearn.UnitStudyLearn"));
+		auto* Learn=ActionButton(EDYKCityUIAction::Research,3,Art ? FText::GetEmpty() : Caption,{364,1006},{720,138},
+			Root->Id,Available,Art!=nullptr,!Locked && !Root->Costs.IsEmpty());
+		if(Art)
+		{
+			const auto Normal=DYKCityHUDArt::TextureBrush(Art);
+			auto Hover=Normal;
+			Hover.TintColor=FLinearColor(1.18f,1.12f,1.0f);
+			auto Muted=Normal;
+			Muted.TintColor=FLinearColor(.60f,.63f,.55f);
+			FButtonStyle Style;
+			Style.SetNormal(Available ? Normal : Muted).SetHovered(Available ? Hover : Muted).SetPressed(Normal).SetDisabled(Muted);
+			Style.SetNormalPadding(FMargin(0)).SetPressedPadding(FMargin(0));
+			Learn->SetStyle(Style);
+		}
+		Learn->SetToolTipText(Locked ? NSLOCTEXT("DYKCity","PreviousUnitRequired","Требуется изучить предыдущего бойца") : Caption);
+		if(!Locked && !Root->Costs.IsEmpty()) BindCost(Learn,*Root);
 	}
 	return true;
 }

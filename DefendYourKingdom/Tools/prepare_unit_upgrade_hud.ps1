@@ -76,7 +76,7 @@ function Clear-Title($target, $source)
 
 function Extend-UnitBoard($Source)
 {
-    $extra=84
+    $extra=132
     $board=[Drawing.Bitmap]::new($Source.Width,$Source.Height+$extra,[Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $graphics=[Drawing.Graphics]::FromImage($board)
     $graphics.DrawImageUnscaled($Source,0,0)
@@ -91,7 +91,7 @@ function Extend-UnitBoard($Source)
         for($y=$seam;$y -lt $board.Height;++$y){
             $offset=$y-$seam
             $sourceY=if($offset -ge $extra){$y-$extra}else{
-                $seam-1-[int]($depth*[Math]::Min($offset,$extra-1-$offset)/41.0)
+                $seam-1-[int]($depth*[Math]::Min($offset,$extra-1-$offset)/(($extra-2)/2.0))
             }
             $board.SetPixel($x,$y,$Source.GetPixel($x,$sourceY))
         }
@@ -150,3 +150,29 @@ try {
     $parchment.Dispose()
     $reference.Dispose()
 }
+
+function Save-StudySprite($Reference,$Name,[double[]]$Outline)
+{
+    $source=[Drawing.Bitmap]::new((Join-Path $folder $Reference))
+    $shape=New-HudPolygon $Outline
+    $sprite=Get-HudMaskedImage $source $shape
+    try {
+        $sprite.Save((Join-Path $folder "$Name.png"),[Drawing.Imaging.ImageFormat]::Png)
+    } finally {
+        $sprite.Dispose()
+        $shape.Dispose()
+        $source.Dispose()
+    }
+}
+
+Save-StudySprite 'LearnUnitReference.png' 'UnitStudyLearn' @(
+    8,55, 24,42, 33,49, 39,40, 46,32, 56,25, 68,22, 275,22, 285,18, 296,10,
+    305,17, 319,22, 525,22, 538,25, 549,33, 559,48, 570,42, 584,55, 571,68, 559,63,
+    552,75, 543,84, 532,89, 320,89, 308,96, 296,106, 284,96, 272,89, 66,89,
+    54,87, 44,81, 36,70, 33,63, 24,68)
+Save-StudySprite 'UnitStudiedReference.png' 'UnitStudyComplete' @(
+    10,74, 59,43, 154,43, 172,46, 175,35, 184,26, 190,35, 199,24, 215,15, 214,27,
+    242,26, 258,20, 276,18, 294,18, 310,22, 323,27, 750,27, 745,15, 762,21, 774,34,
+    780,27, 788,36, 793,48, 809,43, 915,43, 963,74, 915,106, 794,106, 782,111,
+    797,115, 785,121, 760,124, 728,121, 314,120, 298,125, 280,128, 262,126, 245,121,
+    215,125, 194,122, 179,117, 193,111, 177,106, 58,106)

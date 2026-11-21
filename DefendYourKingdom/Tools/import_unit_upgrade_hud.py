@@ -3,11 +3,14 @@ from pathlib import Path
 import unreal as ue
 
 project = Path(ue.Paths.convert_relative_path_to_full(ue.Paths.project_dir()))
-for group in ("UnitUpgrade", "Recruitment"):
+artwork = {
+    "UnitUpgrade": ("UnitUpgradeBase", "UnitUpgradeParts", "UnitStudyLearn", "UnitStudyComplete"),
+    "Recruitment": ("RecruitmentBase", "RecruitmentParts"),
+}
+for group, names in artwork.items():
     source = project / "SourceArt/CityHUD" / group
     destination = "/Game/DefendYourKingdom/Art/CityHUD/" + group
-    for suffix in ("Base", "Parts"):
-        name = group + suffix
+    for name in names:
         task = ue.AssetImportTask()
         task.filename = str(source / (name + ".png"))
         task.destination_path = destination

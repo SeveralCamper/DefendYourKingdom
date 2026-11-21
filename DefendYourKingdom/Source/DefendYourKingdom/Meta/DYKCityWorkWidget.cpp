@@ -384,6 +384,21 @@ TArray<FName> UDYKCityWorkWidget::ResearchOptions(const FDYKPlayerProfileSaveDat
 {
 	TArray<FName> Result; if(Item.bFuture) return Result;
 	const auto* Root=DYKCityResearch::Find(Item.ResearchRoot); if(!Root) return Result;
+	if(const auto Unit=FDYKUnitTypeId::FromContentId(Root->Unlock); Unit && State.Building==TEXT("CITY-BARRACKS"))
+	{
+		if(!DYKCityResearch::IsUnlocked(P,Unit.GetValue()))
+		{
+			if(!DYKCityBuildingUI::IsLocked(P,Item)) Result.Add(Root->Id);
+			return Result;
+		}
+		for(const auto& D:DYKCityResearch::DEV_PLACEHOLDER().Definitions)
+		{
+			if(D.Building!=State.Building || D.TargetType!=Unit.GetValue() || P.CityEconomy.CompletedResearch.Contains(D.Id)) continue;
+			if(!D.Prerequisites.ContainsByPredicate([&P](FName Key){return !P.CityEconomy.CompletedResearch.Contains(Key);}))
+				Result.Add(D.Id);
+		}
+		return Result;
+	}
 	if(!P.CityEconomy.CompletedResearch.Contains(Root->Id)) {Result.Add(Root->Id); return Result;}
 	TSet<FName> Family; Family.Add(Root->Id);
 	for(int32 Pass=0;Pass<4;++Pass) for(const auto& D:DYKCityResearch::DEV_PLACEHOLDER().Definitions)
@@ -391,7 +406,6 @@ TArray<FName> UDYKCityWorkWidget::ResearchOptions(const FDYKPlayerProfileSaveDat
 	for(const auto& D:DYKCityResearch::DEV_PLACEHOLDER().Definitions)
 	{
 		if(!Family.Contains(D.Id) || P.CityEconomy.CompletedResearch.Contains(D.Id)) continue;
-		if(D.TargetType.IsValid() && Root->Unlock.Kind==EDYKContentKind::Warrior && D.TargetType.ToContentId()!=Root->Unlock) continue;
 		bool Ready=true; for(const auto Dependency:D.Prerequisites) Ready&=P.CityEconomy.CompletedResearch.Contains(Dependency);
 		if(Ready) Result.Add(D.Id);
 	}

@@ -37,9 +37,6 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		Profile.Resources.Add({FDYKResourceId(TEXT("RES-MEDALS")).ToContentId(),70});
 		return true;
 	}))) return false;
-	if(!TestTrue(TEXT("Unlock the second infantry tier"),DYKCityResearch::Enqueue(*Save,FGuid::NewGuid(),Guard,Now-60)
-		&& DYKCityWork::Update(*Save,Now))) return false;
-
 	TStrongObjectPtr<UDYKCityWorkWidget> UI(NewObject<UDYKCityWorkWidget>(World));
 	UI->Initialize();
 	const auto Slate=UI->TakeWidget();
@@ -76,7 +73,20 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 				if(const auto* Texture=Art->GetBrush().GetResourceObject();Texture && Texture->GetFName()==TEXT("UnitUpgradeBase")) ++Pieces;
 		return Pieces;
 	};
+	const auto HasStudiedBanner=[&]()
+	{
+		return UI->DesignCanvas->GetAllChildren().ContainsByPredicate([](const UWidget* Child)
+		{
+			const auto* Art=Cast<UImage>(Child);
+			const auto* Texture=Art ? Art->GetBrush().GetResourceObject() : nullptr;
+			return Texture && Texture->GetFName()==TEXT("UnitStudyComplete") && Art->GetVisibility()==ESlateVisibility::HitTestInvisible;
+		});
+	};
 	SelectUnit(0);
+	TestTrue(TEXT("The starter peasant has a noninteractive studied banner"),HasStudiedBanner());
+	TestNull(TEXT("The starter peasant has no study action"),UI->FindAction(EDYKCityUIAction::Research,3));
+	UI->Dispatch(EDYKCityUIAction::Research,3,Guard);
+	TestTrue(TEXT("Even a direct action cannot queue Guard from the peasant card"),Save->GetProfileSnapshot()->CityEconomy.ResearchQueue.IsEmpty());
 	const auto* Peasant=DYKUnitCatalog::Find(FDYKUnitTypeId(TEXT("DYK-PEASANT")).ToContentId());
 	TestEqual(TEXT("Base attack comes from the peasant definition"),TextAt({565,538}),FString::FromInt(Peasant->Base.Attack.DamagePerHit.Value));
 	TestEqual(TEXT("Base HP comes from the peasant definition"),TextAt({565,631}),FString::FromInt(Peasant->Base.MaxHP.Value));
@@ -88,6 +98,32 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("Peasant has an available upgrade in this row"),UI->FindAction(EDYKCityUIAction::Research,Row)->GetIsEnabled());
 	TestTrue(TEXT("Description and rank caption areas are empty"),TextAt({662,244}).IsEmpty() && TextAt({648,418}).IsEmpty());
 	SelectUnit(1);
+	const auto* Learn=UI->FindAction(EDYKCityUIAction::Research,3);
+	if(!TestNotNull(TEXT("The unstudied guard has a study action"),Learn)) return false;
+	const auto* LearnSlot=CastChecked<UCanvasPanelSlot>(Learn->Slot);
+	TestTrue(TEXT("Study is centered below resources"),LearnSlot->GetPosition().Y>=1006 &&
+		FMath::IsNearlyEqual(LearnSlot->GetPosition().X+LearnSlot->GetSize().X*.5,724.));
+	if(const auto* Art=Learn->GetStyle().Normal.GetResourceObject();TestNotNull(TEXT("Study has visible button artwork"),Art))
+		TestEqual(TEXT("Study uses the authored image"),Art->GetFName(),FName(TEXT("UnitStudyLearn")));
+	TestEqual(TEXT("Study points to the selected guard"),Learn->Key,Guard);
+	TestFalse(TEXT("The unstudied guard has no studied banner"),HasStudiedBanner());
+	UI->FindAction(EDYKCityUIAction::Research,3)->Invoke();
+	TestNull(TEXT("The study action disappears during research"),UI->FindAction(EDYKCityUIAction::Research,3));
+	TestEqual(TEXT("The same footer then shows the time"),TextAt({717,1045}),FString(TEXT("Осталось: < 01 мин")));
+	if(auto* Cancel=UI->FindAction(EDYKCityUIAction::CancelResearch,0);TestNotNull(TEXT("The same footer offers cancellation"),Cancel)) Cancel->Invoke();
+	if(auto* Retry=UI->FindAction(EDYKCityUIAction::Research,3);TestNotNull(TEXT("Cancellation returns the study action"),Retry)) Retry->Invoke();
+	if(!TestTrue(TEXT("Put the guard at its deadline"),Save->ApplyProfileCommand(FGuid::NewGuid(),[Guard](auto& Profile)
+	{
+		auto* Work=Profile.CityEconomy.ResearchQueue.FindByPredicate([Guard](const auto& Pending){return Pending.ResearchId==Guard;});
+		if(!Work || Work->StartedAtUnix<=0) return false;
+		Work->CompletesAtUnix=FDateTime::UtcNow().ToUnixTimestamp();
+		Work->EnqueuedAtUnix=Work->StartedAtUnix=Work->CompletesAtUnix-20;
+		return true;
+	}))) return false;
+	UI->Refresh();
+	TestTrue(TEXT("The already open guard card displays the studied banner after completion"),HasStudiedBanner());
+	TestNull(TEXT("The studied guard does not offer to study the royal guard"),UI->FindAction(EDYKCityUIAction::Research,3));
+	TestNull(TEXT("The studied guard no longer offers cancellation"),UI->FindAction(EDYKCityUIAction::CancelResearch,0));
 	const auto* Damage=UI->FindAction(EDYKCityUIAction::Research,0);
 	const auto* Armor=UI->FindAction(EDYKCityUIAction::Research,2);
 	if(!TestNotNull(TEXT("Independent attack research"),Damage) || !TestNotNull(TEXT("Independent armor research"),Armor))return false;
@@ -152,7 +188,7 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		Native->OnMouseLeave(Pointer);
 	}
 	TestEqual(TEXT("Queued stage has its own marker"),TextAt({1054,532}),FString(TEXT("…")));
-	TestEqual(TEXT("A twenty-second improvement shows the subminute label next to cancel"),TextAt({717,1027}),FString(TEXT("Осталось: < 01 мин")));
+	TestEqual(TEXT("A twenty-second improvement shows the subminute label next to cancel"),TextAt({717,1045}),FString(TEXT("Осталось: < 01 мин")));
 	if(!TestTrue(TEXT("Move the paid research close to its deadline"),Save->ApplyProfileCommand(FGuid::NewGuid(),[DamageKey](auto& Profile)
 	{
 		auto* Job=Profile.CityEconomy.ResearchQueue.FindByPredicate([DamageKey](const auto& Work){return Work.ResearchId==DamageKey;});
@@ -161,7 +197,7 @@ bool FDYKUnitUpgradeDetailTest::RunTest(const FString& Parameters)
 		return Job->CompletesAtUnix>Job->StartedAtUnix;
 	}))) return false;
 	UI->Refresh();
-	const FString Timer=TextAt({717,1027});
+	const FString Timer=TextAt({717,1045});
 	TestEqual(TEXT("The open detail HUD refreshes hours and minutes"),Timer,FString(TEXT("Осталось: 01 ч 05 мин")));
 	if(!TestTrue(TEXT("Complete the queued attack"),DYKCityWork::Update(*Save,FDateTime::UtcNow().ToUnixTimestamp()+4000)))return false;
 	SelectUnit(1);
